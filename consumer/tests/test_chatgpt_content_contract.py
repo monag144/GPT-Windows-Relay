@@ -158,7 +158,12 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertNotIn("resetRecoveryPacketWatch();",no_unit)
         self.assertIn("maybeScheduleRecoveryRefresh(recoveryPacketId,now)",no_unit)
 
-    def test_content_runtime_reports_owner_generation(self):\n        for path in FILES:\n            src=path.read_text(encoding="utf-8-sig")\n            self.assertIn("owner-v1",src,path)\n\n    def test_late_packet_cursor_is_scoped_to_conversation_owner_and_explicit_op_token(self):
+    def test_content_runtime_reports_owner_generation(self):
+        for path in FILES:
+            src=path.read_text(encoding="utf-8-sig")
+            self.assertIn("owner-v1",src,path)
+
+    def test_late_packet_cursor_is_scoped_to_conversation_owner_and_explicit_op_token(self):
         workers=(
             ROOT/"windows-relay"/"extension"/"service_worker.js",
             ROOT/"windows-relay"/"extension-persistent"/"service_worker.js",
