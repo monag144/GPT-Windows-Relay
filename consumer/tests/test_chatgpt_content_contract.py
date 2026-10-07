@@ -132,7 +132,11 @@ class ChatGPTContentContractTests(unittest.TestCase):
             self.assertIn("method:'user_result_turn'", confirm, path)
             self.assertIn("relay_result_send_progress", confirm, path)
             self.assertIn("relay_result_send_unconfirmed", confirm, path)
-            self.assertEqual(confirm.count("return true;"), 1, path)
+            self.assertEqual(confirm.count("return 'confirmed';"), 1, path)
+            self.assertEqual(confirm.count("return 'accepted';"), 2, path)
+            self.assertEqual(confirm.count("return 'rejected';"), 1, path)
+            self.assertEqual(confirm.count("return 'timeout';"), 1, path)
+            self.assertNotIn("return true;", confirm, path)
             recovery = src.split("/* GPT_WINDOWS_STALE_OWNER_RELEASE_V1 */", 1)[1].split(
                 "// GPT_WINDOWS_CHATGPT_IMAGE_ATTACHMENT_V1", 1
             )[0]
