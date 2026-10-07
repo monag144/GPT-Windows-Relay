@@ -1,5 +1,7 @@
 # Incident: PCE9 operation-budget breach, wrong-repo drift, and repeated Firefox proof
 
+Observed: `2026-10-07T2034Z`
+
 ## Proof
 
 - Canonical rule: `docs/RELAY_OPERATIONAL_RULES.md` requires managed-chat rotation every 100 operations.
@@ -22,7 +24,7 @@ The per-operation discipline was not enforced from canonical Windows documentati
 1. Windows work must fail closed unless the canonical repository is `monag144/GPT-Windows-Relay`.
 2. Before issuing an operation ID, enforce the 100-operation series budget. No managed series may emit OP101.
 3. Reuse established proof. Re-probe Firefox restart/temporary-extension facts only after a dependency-changing browser mutation or contradictory evidence.
-4. Keep incidents compact. Incident files should remain under 16 KiB; general documentation above 64 KiB is a split/rotation candidate.
+4. Keep incidents compact. Maintained documentation targets <=10 KiB. When a subject grows past that boundary, split sideways by subject/component; freeze oversized historical files instead of extending them.
 5. Freeze the oversized historical engineering log and continue chronology in a new bounded log rather than appending indefinitely.
 
 ## Impact
