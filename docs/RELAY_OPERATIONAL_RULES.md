@@ -1,5 +1,7 @@
 # Relay Operational Rules
 
+Snapshot: `2026-10-07T2034Z`
+
 These are persistent operating rules for the GPT Windows Relay. Keep this list compact and implementation-linked.
 
 1. Sandwich every relay action: ordinary visible header → bare Markdown fence containing only the `[GPT_WINDOWS_ACTION]` packet → ordinary visible footer. Never end a response at the fence. Relay-command stdout ends with `Reply to this with the sandwich technique`.
@@ -29,4 +31,6 @@ Every operation must read roadmap/facts/incidents/log, prove net-new progress, p
 15. **Canonical Windows repository gate:** Windows relay engineering targets `monag144/GPT-Windows-Relay`. The old `monag144/GPT-Termux-Relay` is migration provenance only. Before any mutation or push, verify the repository/remote and fail closed on the Termux destination.
 16. **Series budget is checked before naming:** a managed engineering series may not emit an operation ordinal above 100. Rotate before the next operation and restart the successor series at `OP001`.
 17. **Established-proof reuse:** read established facts before probing. Do not repeat Firefox restart, temporary-extension identity, profile archaeology, or equivalent continuity proofs unless a browser-affecting mutation occurred, contradictory evidence appeared, or the acceptance test explicitly requires that proof.
-18. **Documentation size discipline:** incident reports target <=16 KiB. Documentation above 64 KiB must be treated as a split/rotation candidate; do not grow an already-oversized chronology when a new bounded log can carry current work.
+18. **Documentation size discipline:** every maintained documentation file targets <=10 KiB. When a subject would exceed the limit, split sideways by subject/component rather than append indefinitely. Oversized historical files become frozen legacy references and receive compact timestamped replacements/index entries.
+19. **Timestamped source-of-truth naming:** new source-of-truth docs use a descriptive type + UTC timestamp + subject (for example `AUDIT_2026-10-07T2034Z_TERMUX_CONTAMINATION.md`). Avoid untimestamped authority labels such as CURRENT, ACTIVE, LATEST, LOOK HERE, MASTER, or AUTHORITATIVE. Compatibility filenames may remain only as small pointers to timestamped truth.
+20. **Repository-map first:** before broad forensics, consult the timestamped repository/documentation index. Do not rediscover canonical paths, browser lifecycle facts, or repo ownership when the index already proves them.
