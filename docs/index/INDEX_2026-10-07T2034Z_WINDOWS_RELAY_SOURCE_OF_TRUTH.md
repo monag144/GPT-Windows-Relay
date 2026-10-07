@@ -1,0 +1,58 @@
+# Windows Relay source-of-truth index — 2026-10-07T2034Z
+
+## Canonical repository
+
+- GitHub: `monag144/GPT-Windows-Relay`
+- Canonical branch: `main`
+- Canonical local clone target: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`
+- Live runtime tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
+- Old `monag144/GPT-Termux-Relay`: Android/Termux project plus migration provenance. It is not a Windows development destination.
+
+## Read order for an engineering agent
+
+1. This index.
+2. `docs/policy/POLICY_2026-10-07T2034Z_DOCUMENTATION_STRUCTURE.md`.
+3. `docs/RELAY_OPERATIONAL_RULES.md`.
+4. `docs/windows-relay-established-facts.md`.
+5. `windows-relay/TASKS.md`.
+6. The newest timestamped audit/incident/handoff relevant to the subject.
+
+Do not start by rereading the giant historical engineering log. Use it only when the compact index/facts do not answer the question.
+
+## Current repository reconciliation state
+
+The Windows split used old Termux r29 snapshot `d69666da530390146ba093dc1138dc794541b861`.
+The old r29 branch later advanced to `249e3bb46c6ea57968d9ecf5157d73867a7f918d`.
+
+That post-split Windows drift is bounded:
+- 35 commits after the migration snapshot;
+- 63 changed files;
+- 4,779 additions / 354 deletions;
+- 32 `windows-relay/` files, 5 `consumer/` files, 26 `docs/` files.
+
+Against current Windows `main`, those 63 files classify as:
+- 10 already byte-identical;
+- 24 divergent and requiring merge/reconciliation;
+- 29 absent from Windows and requiring review/import if valid.
+
+Do not copy the old branch wholesale. Reconcile the bounded post-split change set into Windows `main`, preserving newer Windows-only work.
+
+Detailed move set: `docs/audits/AUDIT_2026-10-07T2034Z_TERMUX_WINDOWS_CONTAMINATION.md`.
+
+## Current high-priority product state
+
+- Result-confirmation selector/role-gate repair: live-proven.
+- Browser stop-generation/quiescence protocol: live-proven.
+- Rich HUD START/STOP/RESTART/OFF/KILL/MINIMIZE: present in the divergent PCE9 line.
+- RETRY: already exists in canonical Windows source and must survive HUD reconciliation.
+- Dedicated 8766 `run-control.ps1`: present in divergent PCE9 line and requires canonical reconciliation.
+- Full Firefox/Windows restart acceptance: still blocked on the signed persistent Firefox XPI/policy path.
+- Chrome/Edge clean-consumer matrix: still open.
+
+## Documentation authority
+
+New maintained source-of-truth docs use descriptive titles plus UTC timestamps in filename and heading.
+Untimestamped compatibility names may remain only as small pointers during cleanup.
+No file named or titled CURRENT, ACTIVE, LATEST, LOOK HERE, MASTER, or AUTHORITATIVE is allowed to become authority by implication.
+
+Documentation target: <=10 KiB per maintained file. Split sideways by subject/component when the limit is approached.
