@@ -164,3 +164,21 @@ OP045 then completed targeted recovery:
 - no v17 reattempt occurred.
 
 **Recovery status:** complete. The machine is back in the known recovered pre-cutover state. The incident remains open solely for the failed v17 activation/proof path and the need for a bounded, invisible end-user cutover design.
+
+
+## Forensic update — OP047 through OP050
+
+OP047 confirmed the repository's intended Firefox layout: `extension/manifest.json` is the temporary `about:debugging` development path, while `extension-persistent` is reserved for the signed/force-installed production path. Therefore the temporary Firefox card pointing at `Client/Relay/extension/` is expected and should not be replaced with the persistent tree during development cutover.
+
+OP049 ruled out the temporary worker's generated `extension/config.js` as the activation failure. The live config exists, targets port 8766, identifies Firefox, and its redacted token hash exactly matches the main 8766 bridge token. The config file is intentionally ignored by Git and is a local runtime secret/config artifact.
+
+OP050 identified an uncovered Firefox-manifest regression in canonical source. The recovered working temporary Firefox manifest contains both:
+
+- `background.scripts = ["service_worker.js"]`
+- `background.service_worker = "service_worker.js"`
+
+Canonical `extension/manifest.json`, imported in the sanitized Windows-repository snapshot, contains only `background.service_worker`. The canonical persistent Firefox manifest still contains both declarations. Existing tests exercise worker source contracts but do not assert the temporary Firefox manifest background declaration.
+
+This is now the leading explanation for OP042's activation symptom: after the temporary add-on was reloaded from canonical source, Firefox could load the content script but the background bridge contract was no longer guaranteed to start in the same way as the recovered working Firefox manifest. Without a functioning background port, `content_script_started` telemetry cannot reach the 8766 backend, causing the helper's v17 proof gate to time out.
+
+Before another live cutover, canonical source must restore the Firefox-compatible temporary background declaration and add regression coverage. The helper also still requires hard process-tree timeout/finalization guarantees so a failed rollback cannot remain user-visible for minutes.
