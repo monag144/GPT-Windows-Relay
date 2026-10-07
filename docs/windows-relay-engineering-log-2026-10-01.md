@@ -2735,3 +2735,7 @@ Repair the exact-delivery boundary isolated by OP096: accept current element-agn
 ## 2026-10-07 — PCE8 OP098 result-recognition activation
 Marker: `PCE8_OP098_RESULT_RECOGNITION_ACTIVATION`
 Activate the OP097 element-agnostic exact-result recognition fix in the temporary Firefox extension. OP098 is intentionally non-triggering. Live activation acceptance uses fresh `content_script_started` plus content/integration telemetry after delayed add-on reload and PCE8 refresh; transient tab title is informational only. OP099 remains the first eligible automatic PCE8→PCE9 rotation trigger.
+
+## 2026-10-07 — PCE8 OP099 final rotation trigger
+Marker: `PCE8_OP099_FINAL_ROTATION_TRIGGER`
+OP098 telemetry-based activation is green. Live source contains the OP099 engineering threshold, durable fresh-chat/rename handler, and repaired element-agnostic exact-result recognition. OP099 performs no browser mutation. Its exact visible result delivery is the final PCE8 live acceptance trigger. PCE9 must verify `op099-rotation-acceptance.json` before further engineering mutation.
