@@ -1,0 +1,2 @@
+# Incident: OP095 exact visible result was not recognized
+OP095 executed and its result Send was accepted, but the post-submit watchdog expired after 120 seconds and `relay_operation_delivered` was never emitted. OP096 proved the packet was not counted and rotation never became due. The exact user-result recognizer still constrained fallback conversation-turn wrappers to `article`/`section` and constrained `data-turn` role recognition to `article`. OP097 broadens those selectors to current element-agnostic ChatGPT attributes. Live proof is still required after reload.

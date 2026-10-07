@@ -18,7 +18,7 @@ const ASSISTANT_SELECTOR=[
 const USER_SELECTOR=[
   '[data-message-role="user"]',
   '[data-message-author-role="user"]',
-  'article[data-turn="user"]',
+  '[data-turn="user"]',
   '[data-conversation-role="user"]',
   '[data-markdown-text-style="user-message"]'
 ].join(',');
@@ -148,15 +148,15 @@ function hydrateAttemptedHistory(){
    Result de-duplication may inspect current conversation-turn wrappers, but
    action execution remains strictly assistant-only. Explicit assistant turns
    and anything containing/inside the composer are rejected here. */
-const RESULT_TURN_SELECTOR=USER_SELECTOR+',article[data-testid^="conversation-turn-"],section[data-testid^="conversation-turn-"]';
+const RESULT_TURN_SELECTOR=USER_SELECTOR+',[data-testid^="conversation-turn-"]';
 function resultPacketIdFromUserUnit(unit){
   const text=unit?.textContent||'';
   if(!text.includes('[GPT_WINDOWS_RESULT]'))return null;
   const composer=findComposer();
   if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  const explicitUser=unit.matches?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]') ||
+  const explicitUser=unit.matches?.('[data-message-role="user"],[data-message-author-role="user"],[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]') ||
     !!unit.querySelector?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]');
-  const explicitAssistant=unit.matches?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]') ||
+  const explicitAssistant=unit.matches?.('[data-message-role="assistant"],[data-message-author-role="assistant"],[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]') ||
     !!unit.querySelector?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]');
   if(explicitAssistant && !explicitUser)return null;
   const m=text.match(/"id"\s*:\s*"([^"]+)"/);

@@ -2727,3 +2727,7 @@ Source trigger/handler are promoted and fully gated. OP094 stages only the tempo
 ## 2026-10-07 — PCE8 OP096 rotation forensics
 Marker: `PCE8_OP096_ROTATION_FORENSICS`
 Non-trigger diagnostic operation. OP094 Reload/refresh calls were successful; its final-title acceptance was a transient-title false negative. OP095 post-delivery classification: **OP095_NOT_COUNTED_AFTER_EXACT_VISIBLE_RESULT**. Current Firefox URL observed by UIA: `None`. No rotation-triggering PCE8BOOT ID is used in OP096.
+
+## 2026-10-07 — PCE8 OP097 result-turn recognition
+Marker: `PCE8_OP097_RESULT_TURN_RECOGNITION`
+Repair the exact-delivery boundary isolated by OP096: accept current element-agnostic `[data-turn=user]` and `[data-testid^=conversation-turn-]` wrappers while preserving explicit assistant rejection and composer exclusion. Move the first eligible engineering trigger to OP099 so OP098 can activate/prove the repaired runtime without retroactively rotating on OP095.

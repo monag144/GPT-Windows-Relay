@@ -17,7 +17,7 @@ let lastBrowserHeartbeatAt=0;
 const CHAT_ROTATION_KEY='gptRelayChatRotationV1';
 const CHAT_ROTATION_EVERY=100;
 const ENGINEERING_ROTATION_KEY='gptEngineeringRotationV1';
-const ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=95;
+const ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=99;
 /* GPT_ENGINEERING_ROTATION_TRIGGER_V1 */
 function engineeringGeneration(id){const m=String(id||'').match(/PCE(\d+)/i);return m?Number(m[1]):null;}
 function engineeringOperation(id){const m=String(id||'').match(/PCE\d+BOOT-OP(\d+)/i);return m?Number(m[1]):null;}
