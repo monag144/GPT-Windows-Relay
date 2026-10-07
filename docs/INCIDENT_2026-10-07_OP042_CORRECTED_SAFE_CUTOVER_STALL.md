@@ -100,3 +100,43 @@ If the helper/task is still running, terminate it only after collecting its log/
 **Not yet determined.**
 
 The important confirmed fact is operational: the corrected cutover path remained user-visible and unresolved for more than ten minutes. The next step is forensic localization, not another cutover attempt.
+
+
+## Forensic update — OP043 localization
+
+OP043 localized the OP042 stall sequence precisely.
+
+The helper log shows the corrected pre-cutover gate worked and the cutover itself progressed through the intended active phases:
+
+- `helper_started`
+- `send_accepted_observed`
+- `backend_restarted`
+- `hud_rotated`
+- `addon_reloaded` (Firefox PID 18160)
+- `chat_refreshed`
+- failure after the v17 proof gate: `RuntimeError: v17 owner runtime not observed`
+- rollback began and `snapshot_restored` was logged
+
+No final cutover report was written. The scheduled task still reported **Running**, and the helper process tree remained alive, proving the rollback/finalization path did not terminate normally.
+
+OP043 also exposed an additional operational regression: two visible relay supervisor stacks were present concurrently. One PowerShell `run.ps1` window was titled **GPT Windows Relay** and another was titled **GPT One-Click Go Relay**. Corresponding backend Python processes were present under both supervisor trees. This matches the user-supplied screenshot showing two relay console previews and explains why visible relay/supervisor UI remained after rollback.
+
+### Updated failure chain
+
+1. The corrected Firefox gate succeeded.
+2. Backend/HUD rotation succeeded.
+3. The existing temporary Firefox add-on was reloaded.
+4. The ChatGPT tab was refreshed.
+5. The helper failed to observe the expected v17 + owner-v1 `content_script_started` telemetry within its 45-second proof window.
+6. Rollback restored the OP041 snapshot.
+7. Rollback/finalization then failed to terminate cleanly: no final report, scheduled task remained running, helper remained alive, and duplicate visible supervisor/backend stacks remained.
+
+### Operational conclusion
+
+This is not a delivery-gate failure. The dominant defects are now:
+
+- the post-reload v17 runtime proof mechanism did not observe the expected runtime despite the add-on reload and ChatGPT refresh;
+- rollback/finalization is not hard-bounded and can hang after restoring files;
+- supervisor restart logic can create a second visible relay stack instead of converging to one hidden canonical stack.
+
+The next recovery step must first identify which backend stack owns the live listener and then normalize to one supervisor/listener before any further cutover work.
