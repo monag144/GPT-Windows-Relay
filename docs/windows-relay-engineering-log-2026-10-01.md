@@ -2723,3 +2723,7 @@ Back up before cache cleanup, remove generated Python cache, restore the protect
 ## 2026-10-07 — PCE8 OP094 rotation runtime activation
 Marker: `PCE8_OP094_ROTATION_RUNTIME_ACTIVATION`
 Source trigger/handler are promoted and fully gated. OP094 stages only the temporary Firefox extension worker/content into the live tree, preserves rollback copies, and schedules a delayed temporary-addon reload plus PCE8 tab refresh so OP094 result delivery is not disrupted. OP095 must first verify the activation receipt before serving as live rotation acceptance.
+
+## 2026-10-07 — PCE8 OP096 rotation forensics
+Marker: `PCE8_OP096_ROTATION_FORENSICS`
+Non-trigger diagnostic operation. OP094 Reload/refresh calls were successful; its final-title acceptance was a transient-title false negative. OP095 post-delivery classification: **OP095_NOT_COUNTED_AFTER_EXACT_VISIBLE_RESULT**. Current Firefox URL observed by UIA: `None`. No rotation-triggering PCE8BOOT ID is used in OP096.

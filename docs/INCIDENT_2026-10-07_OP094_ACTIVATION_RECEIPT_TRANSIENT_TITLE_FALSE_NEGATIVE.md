@@ -1,0 +1,3 @@
+# Incident: OP094 activation receipt used a transient Firefox title as a hard gate
+
+OP094 successfully invoked temporary-addon Reload and refreshed the PCE8 tab, but sampled the tab only three seconds later and required its title already to contain `PC Engineering 8`. The sample still read `ChatGPT`, so the receipt set `ok=false`. OP095 subsequently executed through the refreshed browser relay, proving the title sample was not sufficient evidence that activation failed. Future activation proof must use content/integration telemetry and exact URL/conversation identity rather than a short-delay title alone.
