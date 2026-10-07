@@ -24,3 +24,9 @@ A valid relay packet was visibly rendered while the HUD reported relay online/ar
 ## PCE8 per-operation discipline
 Marker: `PCE8_PER_OPERATION_DISCIPLINE_V1`
 Every operation must read roadmap/facts/incidents/log, prove net-new progress, preserve rollback before mutation, log failures/manual rescue, update the engineering log, and check the PCE8→PCE9 operation budget. Repeating a disproven approach is an incident.
+
+## PCE9 corrective controls
+15. **Canonical Windows repository gate:** Windows relay engineering targets `monag144/GPT-Windows-Relay`. The old `monag144/GPT-Termux-Relay` is migration provenance only. Before any mutation or push, verify the repository/remote and fail closed on the Termux destination.
+16. **Series budget is checked before naming:** a managed engineering series may not emit an operation ordinal above 100. Rotate before the next operation and restart the successor series at `OP001`.
+17. **Established-proof reuse:** read established facts before probing. Do not repeat Firefox restart, temporary-extension identity, profile archaeology, or equivalent continuity proofs unless a browser-affecting mutation occurred, contradictory evidence appeared, or the acceptance test explicitly requires that proof.
+18. **Documentation size discipline:** incident reports target <=16 KiB. Documentation above 64 KiB must be treated as a split/rotation candidate; do not grow an already-oversized chronology when a new bounded log can carry current work.
