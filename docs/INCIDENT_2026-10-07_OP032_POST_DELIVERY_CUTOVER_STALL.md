@@ -141,3 +141,50 @@ Recovery is complete only when all of the following are demonstrated with live e
 **Not yet determined.**
 
 The debugging-screen observation is evidence of the failure location, not a confirmed root cause. Do not close this incident until the helper report/log and live browser/process state are reconciled.
+
+
+## Forensic update — OP033 recovery assessment
+
+OP033 performed the first read-only post-stall inspection. The results show that a **partial recovery is required**, but a full filesystem rollback is not: the helper already restored the OP030 snapshot and rotated the backend before becoming stuck in its own rollback path.
+
+Confirmed observations:
+
+- No cutover report exists yet: `pce8-op032-cutover-report.json` is missing.
+- The helper log exists and records:
+  - `cutover_failed: RuntimeError: OP032 delivery completion not observed`;
+  - `rollback_start`;
+  - `files_restored`;
+  - backend listener rotation from PID 16356 to PID 12644.
+- The rollback then attempted Firefox recovery using the restored pre-cutover `firefox_adapter.py`.
+- That restored adapter does **not** support the newer `--firefox-pid` CLI option. Repeated recovery calls therefore failed with:
+  - `firefox_adapter.py: error: unrecognized arguments: --firefox-pid 18160`
+- The rollback subsequently logged `rollback_browser_error: RuntimeError('debugging tab not observed')`.
+- The scheduled task `GPTWindowsRelay-PCE8-OP032-LiveCutover` still reports **Running**.
+- Two helper-process entries are still present for `pce8-op031-cutover-helper.py`, indicating the helper did not self-terminate normally.
+- The backend is currently listening again on PID 12644, under its normal supervisor ancestry.
+- Firefox is no longer visibly stranded on the debugging tab; the selected tab is the PC Engineering 8 conversation. The debugging tab remains open but unselected.
+- The rollback killed the prior HUD processes (PIDs 2260 and 19136) and launched a replacement HUD process chain. OP033 observed two `pythonw.exe` entries associated with `hud.py`, so HUD cardinality still requires normalization/proof.
+
+### Refined root-cause chain
+
+The initial cutover did **not** begin because the helper never observed `relay_result_delivery_complete` for OP032 within its 240-second gate. It therefore entered rollback.
+
+The rollback then restored the pre-cutover runtime files **before** running its Firefox recovery code. That created a version-skew bug inside the recovery path: the helper continued invoking the newer adapter CLI contract (`--firefox-pid`) against the restored older adapter, which rejected the arguments. This prevented the rollback's browser-recovery phase from completing cleanly and left the helper/task hanging.
+
+The primary unresolved issue is therefore two-part:
+
+1. Why OP032's result reached the user but did not produce the expected `relay_result_delivery_complete` event seen by the helper.
+2. Why rollback was not self-contained against version skew after restoring older adapter files.
+
+### Recovery decision
+
+A **targeted partial recovery** is required before another cutover attempt:
+
+- terminate the stale OP032 scheduled task/helper process tree;
+- verify the restored v16 live tree is coherent and healthy;
+- normalize HUD cardinality;
+- leave Firefox on the ChatGPT conversation and close/ignore the residual debugging tab as appropriate;
+- verify backend, supervisor, browser bridge, and current runtime identity;
+- preserve the OP030 backup and helper logs as evidence.
+
+Do **not** attempt the v17 cutover again until the post-delivery completion gate and rollback adapter-version dependency are redesigned.
