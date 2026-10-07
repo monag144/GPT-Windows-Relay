@@ -106,10 +106,12 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("GPT_RELAY_CHAT_ROTATION_100_V1",src)
         self.assertIn("CHAT_ROTATION_EVERY=100",src)
         self.assertIn("noteDeliveredOperation",src)
-        self.assertIn("GPT_ENGINEERING_ROTATION_TRIGGER_V1",src)
+        self.assertIn("GPT_ENGINEERING_ROTATION_TRIGGER_V2",src)
         self.assertIn("type:'relay_chat_rotation_start'",src)
-        self.assertIn("title:'💻PC Engineering 9🔧'",src)
-        self.assertIn("session:'pce9.1'",src)
+        self.assertIn("function engineeringSuccessorTarget(generation)",src)
+        self.assertIn("engineeringSeriesBudgetExceeded",src)
+        self.assertIn("engineering_series_budget_exceeded",src)
+        self.assertNotIn("function pce9Target",src)
         self.assertNotIn("chrome.tabs.update(tabId,{url:'https://chatgpt.com/'})",src)
 
     def test_recovery_advice_has_secondary_observer_contract(self):
