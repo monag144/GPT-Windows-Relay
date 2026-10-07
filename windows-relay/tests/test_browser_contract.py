@@ -500,5 +500,14 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("relay_stale_owner_superseded_by_newer",src)
         self.assertIn("relay_deferred_superseded_by_newer",src)
 
+
+    def test_result_turn_confirmation_falls_back_to_exact_visible_packet_id(self):
+        start=self.src.index("function userTurnContainsPacketId(packetId){")
+        end=self.src.index("function composerContainsPacketId(packetId){",start)
+        body=self.src[start:end]
+        self.assertIn("resultPacketIdFromUserUnit(nodes[i])===packetId",body)
+        self.assertIn("elementText(nodes[i]).includes(packetId)",body)
+        self.assertIn("emitResultTurnMatchDiagnostic(packetId,nodes,false)",body)
+
 if __name__=="__main__":
     unittest.main()
