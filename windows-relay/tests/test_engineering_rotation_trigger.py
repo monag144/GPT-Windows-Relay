@@ -6,7 +6,7 @@ class EngineeringRotationTriggerTests(unittest.TestCase):
   a=(ROOT/'extension'/'service_worker.js').read_text(encoding='utf-8')
   p=(ROOT/'extension-persistent'/'service_worker.js').read_text(encoding='utf-8')
   self.assertIn('GPT_ENGINEERING_ROTATION_TRIGGER_V1',a)
-  self.assertIn('ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=92',a)
+  self.assertIn('ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=95',a)
   self.assertIn("type:'relay_chat_rotation_start'",a)
   self.assertIn("title:'💻PC Engineering 9🔧'",a)
   self.assertIn("session:'pce9.1'",a)

@@ -2711,3 +2711,11 @@ Normalize the persistent worker back to exact promoted Git bytes, retain rotatio
 ## 2026-10-07 — PCE8 OP090 consumer rotation contract
 Marker: `PCE8_OP090_CONSUMER_ROTATION_CONTRACT`
 OP089 reached 401/401 Windows green. Consumer acceptance still asserted the retired generic-home rotation mechanism. OP090 changes that test to require the durable exact PCE9 trigger instead: exact title/session, `relay_chat_rotation_start`, and no generic-home `chrome.tabs.update`. Full Windows + consumer suites gate promotion.
+
+## 2026-10-07 — PCE8 OP091 durable rotation handler
+Marker: `PCE8_OP091_ROTATION_HANDLER`
+Build the content-side handler for the already-promoted PCE9 trigger. Rotation state survives same-origin navigation in sessionStorage; the handler opens fresh ChatGPT, submits the handoff once, waits for a new `/c/...` identity, renames that exact conversation to `💻PC Engineering 9🔧`, and emits `chat_rotation_verified` only after exact title/path verification. No live reload occurs in this operation.
+
+## 2026-10-07 — PCE8 OP093 rotation-handler promotion
+Marker: `PCE8_OP093_HANDLER_PROMOTION`
+Back up before cache cleanup, remove generated Python cache, restore the protected relay bootstrap ordering, and gate the durable fresh-chat/handoff/exact-rename handler through complete Windows and consumer suites. First eligible live rotation moves to OP095 so OP094 can stage/reload the promoted extension safely.

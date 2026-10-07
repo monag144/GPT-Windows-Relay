@@ -1,0 +1,2 @@
+# Incident: OP092 dirty gate counted generated Python cache
+OP092 stopped before source mutation because complete-suite `__pycache__` and `.pyc` files from OP091 were included in its exact dirty-set assertion. Those files were generated test artifacts, not source divergence. OP093 backs up the source tree first, removes only untracked generated cache, then verifies the exact remaining handler dirty set before continuing.
