@@ -16,7 +16,7 @@ Historical chronology is frozen in:
 
 - GitHub repository: `monag144/GPT-Windows-Relay`
 - Active branch: `main`
-- Canonical local clone: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Termux-Relay`
+- Canonical local clone: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`
 - Active live relay tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
 - Temporary Firefox manifest: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay\extension\manifest.json`
 - Persistent-extension source: `...\Client\Relay\extension-persistent`
