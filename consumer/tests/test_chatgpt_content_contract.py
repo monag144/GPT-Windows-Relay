@@ -78,15 +78,18 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("GPT_CHATGPT_TOOL_APPROVAL_PROMPT_DETECTOR_V1",src)
         self.assertIn("chatgpt_tool_approval_prompt_detected",src)
         self.assertIn("always allow",src.lower())
-        self.assertIn("MutationObserver(scheduleToolApprovalPromptInspect)",src)
+        self.assertIn("setInterval(scheduleToolApprovalPromptInspect,2000)",src)
         self.assertIn("bindToolApprovalPromptDetector();",src)
         self.assertGreater(
             src.index("bindToolApprovalPromptDetector();"),
             src.index("connectBackgroundPort();"),
         )
         self.assertIn("for(let depth=0;depth<8 && node;depth++,node=node.parentElement)",src)
-        self.assertIn("approval_detector_bound:!!approvalPromptObserver",src)
-        self.assertIn("collapse-recovery-approval-v2",src)
+        self.assertIn("GPT_CHATGPT_GITHUB_APPROVAL_AUTOCLICK_V1",src)
+        self.assertIn("chatgpt_tool_approval_autoapproved",src)
+        self.assertIn("exactGitHubCard && approvalAtBottom && visibleEnabled",src)
+        self.assertIn("alwaysAllow.click();",src)
+        self.assertIn("owner-v1",src)
 
     def test_discovered_packet_reacquires_if_chatgpt_remounts_during_settle(self):
         src=(ROOT/"windows-relay"/"extension"/"content.js").read_text(encoding="utf-8-sig")
