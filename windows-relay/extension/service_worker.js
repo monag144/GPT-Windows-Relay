@@ -17,12 +17,42 @@ let lastBrowserHeartbeatAt=0;
 const CHAT_ROTATION_KEY='gptRelayChatRotationV1';
 const CHAT_ROTATION_EVERY=100;
 const ENGINEERING_ROTATION_KEY='gptEngineeringRotationV1';
-const ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=99;
-/* GPT_ENGINEERING_ROTATION_TRIGGER_V1 */
-function engineeringGeneration(id){const m=String(id||'').match(/PCE(\d+)/i);return m?Number(m[1]):null;}
-function engineeringOperation(id){const m=String(id||'').match(/PCE\d+BOOT-OP(\d+)/i);return m?Number(m[1]):null;}
-function pce9Target(){return {title:'💻PC Engineering 9🔧',session:'pce9.1'};}
-function pce9Handoff(id){return `[GPT_ENGINEERING_ROTATION_HANDOFF_V1]\nTarget title: 💻PC Engineering 9🔧\nTarget relay session: pce9.1\nSource packet: ${id}\nRead docs/HANDOFF_2026-10-07_PCE8_TO_PCE9.md, roadmap, established facts, recent incidents, and engineering log. Continue autonomously; do not restart the audit. First relay operation: PCE9BOOT-OP001 with owner_claim true.\n[/GPT_ENGINEERING_ROTATION_HANDOFF_V1]`;}
+/* GPT_ENGINEERING_ROTATION_TRIGGER_V2 */
+/* GPT_ENGINEERING_SERIES_BUDGET_V1 */
+function engineeringSeriesInfo(id){
+  const text=String(id||'');
+  const generationMatch=text.match(/^PCE(\d+)(?=$|[-.])/i);
+  if(!generationMatch)return null;
+  let operationMatch=text.match(/(?:BOOT-)?OP(\d+)([A-Za-z]*)(?=$|[-.])/i);
+  if(!operationMatch)operationMatch=text.match(/^PCE\d+\.(\d+)([A-Za-z]*)(?=$|[-.])/i);
+  const generation=Number(generationMatch[1]);
+  if(!Number.isSafeInteger(generation)||generation<1)return null;
+  if(!operationMatch)return {generation,ordinal:null,suffix:''};
+  const ordinal=Number(operationMatch[1]);
+  if(!Number.isSafeInteger(ordinal)||ordinal<0)return {generation,ordinal:null,suffix:''};
+  return {generation,ordinal,suffix:String(operationMatch[2]||'').toLowerCase()};
+}
+function engineeringSuccessorTarget(generation){
+  const next=Number(generation)+1;
+  if(!Number.isSafeInteger(next)||next<2)return null;
+  return {generation:next,title:`💻PC Engineering ${next}🔧`,session:`pce${next}.1`};
+}
+function engineeringHandoff(id,target){
+  const next=target.generation;
+  return `[GPT_ENGINEERING_ROTATION_HANDOFF_V1]\nTarget title: ${target.title}\nTarget relay session: ${target.session}\nSource packet: ${id}\nYou are PCE${next}, successor Windows Relay engineering agent. FIRST operation: PCE${next}.000. Semantically rename this ChatGPT conversation through the visible UI to exactly ${target.title} and positively verify the visible title. Establish session ${target.session}. Allowed operation range is PCE${next}.000 through PCE${next}.100 inclusive; PCE${next}.101 is forbidden and requires rotation to PCE${next+1}. Before repository mutation read the newest timestamped source-of-truth index, documentation policy, Termux contamination audit, and Codex workspace-discovery report in monag144/GPT-Windows-Relay/main. Canonical Windows development belongs only in GPT-Windows-Relay. After the identity gate continue the recorded safe reconciliation order autonomously; do not stop merely to ask the user to continue.\n[/GPT_ENGINEERING_ROTATION_HANDOFF_V1]`;
+}
+function engineeringSeriesBudgetExceeded(id){
+  const info=engineeringSeriesInfo(id);
+  return !!info && Number.isFinite(info.ordinal) && info.ordinal>CHAT_ROTATION_EVERY;
+}
+function operationOrdinal(id){
+  const engineering=engineeringSeriesInfo(id);
+  if(engineering&&Number.isFinite(engineering.ordinal))return engineering.ordinal;
+  const matches=[...String(id||'').matchAll(/(?:^|[-.])(\d{2,})(?=[-.]|$)/g)];
+  if(!matches.length)return null;
+  const n=Number(matches[matches.length-1][1]);
+  return Number.isSafeInteger(n) && n>0?n:null;
+}
 
 function extensionStorageGet(key){
   return new Promise(resolve=>{
@@ -52,7 +82,10 @@ let operationCursorChain=Promise.resolve();
 let relayOwnerChain=Promise.resolve();
 
 function operationSeriesPosition(id){
-  const m=String(id||'').match(/(?:^|[-.])OP(\d+)([a-z]*)(?=[-.]|$)/i);
+  const engineering=engineeringSeriesInfo(id);
+  const m=engineering&&Number.isFinite(engineering.ordinal)
+    ? [null,String(engineering.ordinal),engineering.suffix||'']
+    : String(id||'').match(/(?:^|[-.])OP(\d+)([a-z]*)(?=[-.]|$)/i);
   if(!m)return null;
   const ordinal=Number(m[1]);
   if(!Number.isSafeInteger(ordinal)||ordinal<0)return null;
@@ -181,13 +214,13 @@ async function noteDeliveredOperation(port,id){
   const count=Math.max(0,Number(state.delivered_count)||0)+1;
   let fallbackSinceRotation=Math.max(0,Number(state.fallback_since_rotation)||0)+1;
   let lastRotationOrdinal=Number(state.last_rotation_ordinal)||0;
-  const eg=engineeringGeneration(id),eop=engineeringOperation(id);
-  const engineeringDue=eg===8 && Number.isFinite(eop) && eop>=ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP;
+  const engineering=engineeringSeriesInfo(id);
+  const engineeringDue=!!engineering && Number.isFinite(engineering.ordinal) && engineering.ordinal>=CHAT_ROTATION_EVERY;
   let rotationDue=engineeringDue;
-  if(ordinal && !rotationDue){
+  if(!engineering && ordinal && !rotationDue){
     rotationDue=ordinal%CHAT_ROTATION_EVERY===0 && ordinal!==lastRotationOrdinal;
     if(rotationDue)lastRotationOrdinal=ordinal;
-  }else if(!ordinal && !rotationDue && fallbackSinceRotation>=CHAT_ROTATION_EVERY){
+  }else if(!engineering && !ordinal && !rotationDue && fallbackSinceRotation>=CHAT_ROTATION_EVERY){
     rotationDue=true;
     fallbackSinceRotation=0;
   }
@@ -203,8 +236,13 @@ async function noteDeliveredOperation(port,id){
   browserEvent('relay_operation_counted',{packet_id:id,ordinal,delivered_count:count,rotation_due:rotationDue,engineering_due:engineeringDue}).catch(()=>{});
   const tabId=port?.sender?.tab?.id;
   if(!rotationDue || RELAY_BROWSER_ID!=='firefox' || !Number.isInteger(tabId))return;
-  const target=pce9Target();
-  const rotation={source_packet_id:id,target_title:target.title,target_session:target.session,handoff:pce9Handoff(id),phase:'requested',requested_at:new Date().toISOString()};
+  if(!engineering){
+    browserEvent('chat_rotation_due_unmanaged',{packet_id:id,ordinal,tab_id:tabId}).catch(()=>{});
+    return;
+  }
+  const target=engineeringSuccessorTarget(engineering.generation);
+  if(!target)return;
+  const rotation={source_packet_id:id,target_title:target.title,target_session:target.session,handoff:engineeringHandoff(id,target),phase:'requested',requested_at:new Date().toISOString()};
   await extensionStorageSet({[ENGINEERING_ROTATION_KEY]:rotation});
   browserEvent('chat_rotation_due',{packet_id:id,ordinal,tab_id:tabId,target}).catch(()=>{});
   try{port.postMessage({type:'relay_chat_rotation_start',...rotation});}catch{}
@@ -248,6 +286,12 @@ function transientActionError(e){
     /^http_5\d\d$/.test(code) || /fetch|network|connection|aborted|reset|refused/i.test(msg);
 }
 async function callAction(packet){
+  const budgetMeta=relayPacketMeta(packet);
+  if(engineeringSeriesBudgetExceeded(budgetMeta.id)){
+    const e=new Error('engineering_series_budget_exceeded');
+    e.code='engineering_series_budget_exceeded';
+    throw e;
+  }
   const deadline=Date.now()+ACTION_RETRY_WINDOW_MS;
   while(true){
     try{
@@ -429,6 +473,12 @@ chrome.runtime.onConnect.addListener(port=>{
       const meta=relayPacketMeta(m.packet);
       const packetId=meta.id;
       try{
+        if(engineeringSeriesBudgetExceeded(packetId)){
+          browserEvent('engineering_series_budget_blocked',{packet_id:packetId,session:meta.session,max_ordinal:CHAT_ROTATION_EVERY}).catch(()=>{});
+          const e=new Error('engineering_series_budget_exceeded');
+          e.code='engineering_series_budget_exceeded';
+          throw e;
+        }
         const ownerDecision=await checkAndClaimRelayOwner(port,m,meta);
         if(!ownerDecision.ok){
           browserEvent('relay_cross_conversation_suppressed',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:normalizeConversationKey(m.conversation_key||m.conversation_href||port?.sender?.tab?.url),error:ownerDecision.error,owner:ownerDecision.owner}).catch(()=>{});
