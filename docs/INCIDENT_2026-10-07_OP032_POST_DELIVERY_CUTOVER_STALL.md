@@ -188,3 +188,30 @@ A **targeted partial recovery** is required before another cutover attempt:
 - preserve the OP030 backup and helper logs as evidence.
 
 Do **not** attempt the v17 cutover again until the post-delivery completion gate and rollback adapter-version dependency are redesigned.
+
+
+## Recovery update — OP034 targeted partial recovery
+
+OP034 completed the targeted recovery successfully.
+
+Confirmed:
+
+- stale scheduled task `GPTWindowsRelay-PCE8-OP032-LiveCutover` was removed;
+- stale helper processes were terminated and no helper processes remained;
+- the OP030 pre-cutover snapshot was proven fully restored:
+  - `RESTORE_MISSING=0`
+  - `RESTORE_MISMATCH=0`
+  - `RESTORE_UNEXPECTED=0`
+- backend/control health is restored:
+  - `RUNNING PID=12644 PAUSED=False`
+  - listener is present on PID 12644;
+- HUD process topology is one logical launcher/root with one interpreter child:
+  - raw pythonw count 2;
+  - logical root count 1;
+- Firefox is back on the intended **PC Engineering 8** tab;
+- the debugging tab remains open but is unselected and retained as incident evidence;
+- v17 was **not** reattempted.
+
+The runtime event probe reported `v11-scroll-v5-delivery-v11-collapse-recovery`, but that event timestamp was 2026-10-05 and therefore is not accepted as proof of the currently loaded extension runtime. A follow-up read-only inspection is required to identify the active browser runtime before any new cutover design is armed.
+
+**Recovery status:** targeted partial recovery complete; machine returned to a stable pre-cutover state. No additional rollback is currently indicated. The incident remains open because the failed post-delivery gate and rollback version-skew defects still require correction before a v17 reattempt.
