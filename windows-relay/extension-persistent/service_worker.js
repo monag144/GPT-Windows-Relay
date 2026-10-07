@@ -79,6 +79,142 @@ async function badge(){
 chrome.runtime.onInstalled.addListener(badge);
 chrome.runtime.onStartup.addListener(badge);
 
+function extensionStorageGet(key){
+  return new Promise(resolve=>{
+    try{chrome.storage.local.get([key],v=>resolve(v||{}));}
+    catch{resolve({});}
+  });
+}
+function extensionStorageSet(value){
+  return new Promise(resolve=>{
+    try{chrome.storage.local.set(value,()=>resolve());}
+    catch{resolve();}
+  });
+}
+
+/* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
+/* GPT_RELAY_CONVERSATION_OWNER_V1 */
+/* GPT_RELAY_OP_TOKEN_CURSOR_V1 */
+const OPERATION_CURSOR_KEY='gptRelayOperationCursorV2';
+const RELAY_OWNER_KEY='gptRelayConversationOwnerV1';
+let operationCursorChain=Promise.resolve();
+let relayOwnerChain=Promise.resolve();
+
+function operationSeriesPosition(id){
+  const m=String(id||'').match(/(?:^|[-.])OP(\d+)([a-z]*)(?=[-.]|$)/i);
+  if(!m)return null;
+  const ordinal=Number(m[1]);
+  if(!Number.isSafeInteger(ordinal)||ordinal<0)return null;
+  let suffix_rank=0;
+  for(const ch of String(m[2]||'').toLowerCase()){
+    suffix_rank=suffix_rank*26+(ch.charCodeAt(0)-96);
+    if(!Number.isSafeInteger(suffix_rank))return null;
+  }
+  return {ordinal,suffix_rank,id:String(id)};
+}
+function compareOperationPosition(a,b){
+  for(const key of ['ordinal','suffix_rank']){
+    const d=Number(a?.[key]||0)-Number(b?.[key]||0);
+    if(d)return d<0?-1:1;
+  }
+  return 0;
+}
+function relayPacketMeta(packet){
+  const text=String(packet||'');
+  const a=text.indexOf('[GPT_WINDOWS_ACTION]');
+  const b=text.lastIndexOf('[/GPT_WINDOWS_ACTION]');
+  if(a<0||b<=a)return {id:null,session:'default',owner_claim:false};
+  try{
+    const body=text.slice(a+'[GPT_WINDOWS_ACTION]'.length,b).trim();
+    const parsed=JSON.parse(body);
+    return {
+      id:typeof parsed?.id==='string'?parsed.id:null,
+      session:typeof parsed?.session==='string'&&parsed.session.trim()?parsed.session.trim():'default',
+      owner_claim:parsed?.owner_claim===true
+    };
+  }catch{return {id:null,session:'default',owner_claim:false};}
+}
+function normalizeConversationKey(value){
+  try{
+    const u=new URL(String(value||''));
+    if(u.origin!=='https://chatgpt.com')return null;
+    return u.origin+u.pathname.replace(/\/+$/,'');
+  }catch{return null;}
+}
+function relaySessionVersion(session){
+  const m=String(session||'').trim().match(/^(?:pce|pceng)(\d+)(?:\.(\d+))?$/i);
+  if(!m)return null;
+  return {major:Number(m[1]),minor:Number(m[2]||0)};
+}
+function compareSessionVersion(a,b){
+  if(!a||!b)return 0;
+  if(a.major!==b.major)return a.major<b.major?-1:1;
+  if(a.minor!==b.minor)return a.minor<b.minor?-1:1;
+  return 0;
+}
+async function activeFocusedTabId(){
+  try{
+    const tabs=await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    const tab=tabs.find(x=>Number.isInteger(x?.id));
+    return tab?.id??null;
+  }catch{return null;}
+}
+function checkAndClaimRelayOwner(port,message,meta){
+  const task=relayOwnerChain.then(async()=>{
+    const tabId=port?.sender?.tab?.id;
+    const conversationKey=normalizeConversationKey(message?.conversation_key||message?.conversation_href||port?.sender?.tab?.url);
+    if(!Number.isInteger(tabId)||!conversationKey)return {ok:false,error:'conversation_identity_missing',owner:null};
+    const activeTabId=await activeFocusedTabId();
+    const isActive=activeTabId===tabId;
+    const raw=await extensionStorageGet(RELAY_OWNER_KEY);
+    const saved=raw?.[RELAY_OWNER_KEY];
+    const owner=saved&&typeof saved==='object'?saved:null;
+    const session=String(meta?.session||'default');
+    if(!owner){
+      if(!isActive)return {ok:false,error:'relay_owner_unclaimed_inactive_tab',owner:null};
+      const next={conversation_key:conversationKey,session,tab_id:tabId,updated_at:new Date().toISOString()};
+      await extensionStorageSet({[RELAY_OWNER_KEY]:next});
+      return {ok:true,claimed:true,transferred:false,owner:next};
+    }
+    if(owner.conversation_key===conversationKey){
+      if(owner.session==='default'&&session!=='default'){
+        const next={...owner,session,tab_id:tabId,updated_at:new Date().toISOString()};
+        await extensionStorageSet({[RELAY_OWNER_KEY]:next});
+        return {ok:true,claimed:false,transferred:false,upgraded:true,owner:next};
+      }
+      return {ok:true,claimed:false,transferred:false,owner};
+    }
+    if(!isActive)return {ok:false,error:'relay_owner_mismatch_inactive_tab',owner};
+    if(session==='default')return {ok:false,error:'legacy_default_session_blocked',owner};
+    const incomingVersion=relaySessionVersion(session);
+    const ownerVersion=relaySessionVersion(owner.session);
+    const newer=!!incomingVersion&&!!ownerVersion&&compareSessionVersion(incomingVersion,ownerVersion)>0;
+    if(session===owner.session&&!meta?.owner_claim)return {ok:false,error:'relay_owner_same_session_different_conversation',owner};
+    if(!meta?.owner_claim&&!newer&&owner.session!=='default')return {ok:false,error:'relay_owner_transfer_requires_claim',owner};
+    const next={conversation_key:conversationKey,session,tab_id:tabId,updated_at:new Date().toISOString(),previous_conversation_key:owner.conversation_key,previous_session:owner.session};
+    await extensionStorageSet({[RELAY_OWNER_KEY]:next});
+    return {ok:true,claimed:false,transferred:true,owner:next,previous:owner};
+  });
+  relayOwnerChain=task.catch(()=>{});
+  return task;
+}
+function checkAndAdvanceOperationCursor(id,owner){
+  const task=operationCursorChain.then(async()=>{
+    const pos=operationSeriesPosition(id);
+    if(!pos)return {late:false,position:null,cursor:null};
+    const ownerKey=String(owner?.session||'default')+'|'+String(owner?.conversation_key||'');
+    const raw=await extensionStorageGet(OPERATION_CURSOR_KEY);
+    const cursor=raw?.[OPERATION_CURSOR_KEY];
+    if(cursor&&typeof cursor==='object'&&cursor.owner_key===ownerKey&&compareOperationPosition(pos,cursor)<0){
+      return {late:true,position:pos,cursor};
+    }
+    const next={...pos,owner_key:ownerKey,session:owner?.session||'default',conversation_key:owner?.conversation_key||null,updated_at:new Date().toISOString()};
+    await extensionStorageSet({[OPERATION_CURSOR_KEY]:next});
+    return {late:false,position:pos,cursor:next};
+  });
+  operationCursorChain=task.catch(()=>{});
+  return task;
+}
 
 chrome.runtime.onConnect.addListener(port=>{
   if(port?.name!=='gpt-windows-relay-content')return;
@@ -90,21 +226,47 @@ chrome.runtime.onConnect.addListener(port=>{
     }
     if(m?.type==='relay_attachment_cleanup'){cleanupManagedAttachments(Array.isArray(m.names)?m.names:[]).catch(()=>{});return;}
     if(m?.type!=='relay_action' || typeof m.request_id!=='string')return;
-    browserEvent('action_received',{request_id:m.request_id}).catch(()=>{});
     (async()=>{
       let reply;
+      const meta=relayPacketMeta(m.packet);
+      const packetId=meta.id;
       try{
-        const d=await callAction(m.packet);
-        if(/\"status\"\s*:\s*\"DUPLICATE_IGNORED\"/.test(String(d.result||''))){
-          reply={ok:false,error:'duplicate_suppressed'};
+        const ownerDecision=await checkAndClaimRelayOwner(port,m,meta);
+        if(!ownerDecision.ok){
+          browserEvent('relay_cross_conversation_suppressed',{
+            request_id:m.request_id,
+            packet_id:packetId,
+            session:meta.session,
+            conversation_key:normalizeConversationKey(m.conversation_key||m.conversation_href||port?.sender?.tab?.url),
+            error:ownerDecision.error,
+            owner:ownerDecision.owner
+          }).catch(()=>{});
+          reply={ok:false,error:ownerDecision.error};
         }else{
-          const attachments=await hydratedAttachments(d.result);
-          reply={ok:true,result:d.result,attachments};
+          if(ownerDecision.claimed||ownerDecision.transferred||ownerDecision.upgraded){
+            browserEvent(ownerDecision.transferred?'relay_conversation_owner_transferred':'relay_conversation_owner_claimed',{
+              packet_id:packetId,session:meta.session,owner:ownerDecision.owner,previous:ownerDecision.previous||null
+            }).catch(()=>{});
+          }
+          const cursorDecision=await checkAndAdvanceOperationCursor(packetId,ownerDecision.owner);
+          if(cursorDecision.late){
+            browserEvent('relay_late_packet_suppressed',{packet_id:packetId,position:cursorDecision.position,cursor:cursorDecision.cursor}).catch(()=>{});
+            reply={ok:false,error:'late_packet_suppressed'};
+          }else{
+            browserEvent('action_received',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:ownerDecision.owner?.conversation_key||null}).catch(()=>{});
+            const d=await callAction(m.packet);
+            if(/\"status\"\s*:\s*\"DUPLICATE_IGNORED\"/.test(String(d.result||''))){
+              reply={ok:false,error:'duplicate_suppressed'};
+            }else{
+              const attachments=await hydratedAttachments(d.result);
+              reply={ok:true,result:d.result,attachments};
+            }
+          }
         }
       }catch(e){
         reply={ok:false,error:e.code||e.message||String(e)};
       }
-      browserEvent('action_result',{request_id:m.request_id,ok:!!reply?.ok}).catch(()=>{});
+      browserEvent('action_result',{request_id:m.request_id,packet_id:packetId,ok:!!reply?.ok,error:reply?.error||null}).catch(()=>{});
       try{
         port.postMessage({
           type:'relay_handoff_scroll',
