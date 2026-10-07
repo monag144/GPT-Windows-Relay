@@ -52,6 +52,7 @@ const MAX_DEFERRED_ACTIONS=16;
 /* GPT_WINDOWS_DEFERRED_ACTION_QUEUE_V1 */
 const attempted=new Set(), attemptedOrder=[], inflight=new Set(), pending=new Map();
 const submittedResults=new Map(), submittedWatchTimers=new Map();
+const resultMatcherDiagnosticsReported=new Set();
 const deferredActions=new Map();
 let deferredDrainTimer=null;
 let relayDisarmedUntil=0;
@@ -148,15 +149,15 @@ function hydrateAttemptedHistory(){
    Result de-duplication may inspect current conversation-turn wrappers, but
    action execution remains strictly assistant-only. Explicit assistant turns
    and anything containing/inside the composer are rejected here. */
-const RESULT_TURN_SELECTOR=USER_SELECTOR+',[data-testid^="conversation-turn-"]';
+const RESULT_TURN_SELECTOR=USER_SELECTOR+',article[data-testid^="conversation-turn-"],section[data-testid^="conversation-turn-"],div[data-testid^="conversation-turn-"],div[class~=bg-user-message]';
 function resultPacketIdFromUserUnit(unit){
   const text=unit?.textContent||'';
   if(!text.includes('[GPT_WINDOWS_RESULT]'))return null;
   const composer=findComposer();
   if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  const explicitUser=unit.matches?.('[data-message-role="user"],[data-message-author-role="user"],[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]') ||
+  const explicitUser=unit.matches?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]') ||
     !!unit.querySelector?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]');
-  const explicitAssistant=unit.matches?.('[data-message-role="assistant"],[data-message-author-role="assistant"],[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]') ||
+  const explicitAssistant=unit.matches?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]') ||
     !!unit.querySelector?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]');
   if(explicitAssistant && !explicitUser)return null;
   const m=text.match(/"id"\s*:\s*"([^"]+)"/);
@@ -262,6 +263,7 @@ function trackSubmittedResult(packetId){
       return;
     }
     if(Date.now()>=deadline){
+      emitResultTurnMatchDiagnostic(packetId,document.querySelectorAll(RESULT_TURN_SELECTOR),true);
       emitRelayEvent('relay_result_turn_end_watchdog_expired',{
         packet_id:packetId,
         submitted_at:submittedAt,
@@ -792,11 +794,102 @@ function scheduleDraftRecovery(delay=1000){
   },delay);
 }
 
+function textContainsResultPacketEnvelope(text,packetId){
+  const value=String(text||'');
+  let idIndex=value.indexOf(packetId);
+  while(idIndex>=0){
+    const resultOpen=value.lastIndexOf('[GPT_WINDOWS_RESULT]',idIndex);
+    const actionOpen=value.lastIndexOf('[GPT_WINDOWS_ACTION]',idIndex);
+    if(resultOpen>=0 && resultOpen>actionOpen)return true;
+    idIndex=value.indexOf(packetId,idIndex+Math.max(1,packetId.length));
+  }
+  return false;
+}
+
+function safeResultDiagnosticNode(node){
+  const attr=(name)=>node?.getAttribute?.(name)||null;
+  const className=typeof node?.className==='string'?node.className.slice(0,240):null;
+  return {
+    tag:node?.tagName||null,
+    class_name:className,
+    role:attr('role'),
+    testid:attr('data-testid'),
+    message_role:attr('data-message-role'),
+    author_role:attr('data-message-author-role'),
+    turn:attr('data-turn'),
+    conversation_role:attr('data-conversation-role'),
+    markdown_style:attr('data-markdown-text-style'),
+    scroll_anchor:attr('data-scroll-anchor')
+  };
+}
+
+function resultDiagnosticAncestorChain(node,maxDepth=8){
+  const chain=[];
+  let current=node;
+  for(let depth=0;current && depth<maxDepth;depth++,current=current.parentElement){
+    chain.push({depth,...safeResultDiagnosticNode(current)});
+  }
+  return chain;
+}
+
+function emitResultTurnMatchDiagnostic(packetId,nodes,force=false){
+  if(resultMatcherDiagnosticsReported.has(packetId))return;
+  const bodyText=document.body?.textContent||'';
+  const bodyPacketVisible=bodyText.includes(packetId);
+  const bodyResultMarkerVisible=bodyText.includes('[GPT_WINDOWS_RESULT]');
+  const exactResultPacketVisible=textContainsResultPacketEnvelope(bodyText,packetId);
+  const candidates=Array.from(nodes||[]);
+  let candidatePacketHits=0, candidateResultHits=0, candidateEnvelopeHits=0;
+  for(const node of candidates){
+    const text=node?.textContent||'';
+    if(text.includes(packetId))candidatePacketHits++;
+    if(text.includes(packetId) && text.includes('[GPT_WINDOWS_RESULT]'))candidateResultHits++;
+    if(textContainsResultPacketEnvelope(text,packetId))candidateEnvelopeHits++;
+  }
+  if(!force && !exactResultPacketVisible)return;
+  let carrier=null, carrierTextLength=Number.MAX_SAFE_INTEGER;
+  if(exactResultPacketVisible){
+    const all=document.querySelectorAll('*');
+    for(const node of all){
+      const text=node?.textContent||'';
+      if(!textContainsResultPacketEnvelope(text,packetId))continue;
+      if(text.length<carrierTextLength){carrier=node;carrierTextLength=text.length;}
+    }
+  }
+  const attr=(node,name)=>node?.getAttribute?.(name)||null;
+  const parent=carrier?.parentElement||null;
+  resultMatcherDiagnosticsReported.add(packetId);
+  emitRelayEvent('relay_result_turn_match_diagnostic',{
+    packet_id:packetId,
+    trigger:exactResultPacketVisible?'visible_result_envelope':'watchdog_deadline',
+    body_packet_visible:bodyPacketVisible,
+    body_result_marker_visible:bodyResultMarkerVisible,
+    exact_result_packet_visible:exactResultPacketVisible,
+    result_candidate_count:candidates.length,
+    result_candidate_packet_hits:candidatePacketHits,
+    result_candidate_result_hits:candidateResultHits,
+    candidate_envelope_hits:candidateEnvelopeHits,
+    carrier_tag:carrier?.tagName||null,
+    carrier_testid:attr(carrier,'data-testid'),
+    carrier_message_role:attr(carrier,'data-message-role'),
+    carrier_author_role:attr(carrier,'data-message-author-role'),
+    carrier_turn:attr(carrier,'data-turn'),
+    carrier_conversation_role:attr(carrier,'data-conversation-role'),
+    carrier_markdown_style:attr(carrier,'data-markdown-text-style'),
+    parent_tag:parent?.tagName||null,
+    parent_testid:attr(parent,'data-testid'),
+    parent_message_role:attr(parent,'data-message-role'),
+    parent_author_role:attr(parent,'data-message-author-role'),
+    carrier_ancestors:resultDiagnosticAncestorChain(carrier,8)
+  });
+}
+
 function userTurnContainsPacketId(packetId){
   const nodes=document.querySelectorAll(RESULT_TURN_SELECTOR);
   for(let i=nodes.length-1;i>=0 && i>=nodes.length-32;i--){
-    if(resultPacketIdFromUserUnit(nodes[i])===packetId)return true;
+    if(resultPacketIdFromUserUnit(nodes[i])===packetId || elementText(nodes[i]).includes(packetId))return true;
   }
+  emitResultTurnMatchDiagnostic(packetId,nodes,false);
   return false;
 }
 
