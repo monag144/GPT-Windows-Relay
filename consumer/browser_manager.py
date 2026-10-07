@@ -328,6 +328,124 @@ def _run_firefox_adapter(*args: str, timeout: float = 20.0) -> dict:
     raise BrowserError("Firefox automation returned no confirmation.")
 
 
+
+# GPT_CONSUMER_MANAGED_CONVERSATION_IDENTITY_V1
+def windows_tools_path() -> Path:
+    for candidate in (HERE / "runtime" / "windows_tools.py", HERE.parent / "windows-relay" / "windows_tools.py"):
+        if candidate.is_file():
+            return candidate.resolve()
+    raise BrowserError("Windows UI automation helper is missing.")
+
+
+def _run_windows_tools(*args: str, timeout: float = 20.0) -> dict:
+    proc = subprocess.run([sys.executable, str(windows_tools_path()), *args], text=True, capture_output=True, timeout=timeout)
+    if proc.returncode != 0:
+        raise BrowserError((proc.stderr or proc.stdout or "Windows UI automation failed.").strip()[-1200:])
+    for line in reversed(proc.stdout.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    raise BrowserError("Windows UI automation returned no result.")
+
+
+def _normalize_managed_conversation_url(url: str) -> str:
+    raw = str(url or "").strip()
+    if raw and "://" not in raw:
+        raw = "https://" + raw
+    prefix = "https://chatgpt.com/c/"
+    if not raw.startswith(prefix):
+        raise BrowserError("Managed ChatGPT URL is not a conversation URL.")
+    ident = raw[len(prefix):].split("?", 1)[0].split("#", 1)[0].strip("/")
+    if not ident or "/" in ident:
+        raise BrowserError("Managed ChatGPT conversation identity is invalid.")
+    return prefix + ident
+
+
+def remember_managed_conversation_url(browser_id: str, url: str) -> str:
+    normalized = _normalize_managed_conversation_url(url)
+    settings = load_settings()
+    values = settings.get("managed_conversation_urls")
+    if not isinstance(values, dict):
+        values = {}
+    values[browser_id] = normalized
+    settings["managed_conversation_urls"] = values
+    save_settings(settings)
+    return normalized
+
+
+def get_managed_conversation_url(browser_id: str) -> str | None:
+    values = load_settings().get("managed_conversation_urls")
+    if not isinstance(values, dict) or not isinstance(values.get(browser_id), str):
+        return None
+    try:
+        return _normalize_managed_conversation_url(values[browser_id])
+    except BrowserError:
+        return None
+
+
+def read_managed_conversation_identity(browser_id: str) -> dict:
+    browser = next((item for item in detect_browsers() if item.get("id") == browser_id), None)
+    if not browser or browser.get("family") != "firefox":
+        raise BrowserError("Independent managed-conversation readback is currently implemented for Firefox only.")
+    profile = profile_path(browser_id)
+    tabs = _run_firefox_adapter("list-tabs", "--profile-path", str(profile))
+    window = tabs.get("window_name")
+    pid = tabs.get("firefox_pid")
+    if not isinstance(window, str) or not window or not isinstance(pid, int) or pid <= 0:
+        raise BrowserError("Firefox tab identity did not provide a unique managed window.")
+    result = _run_windows_tools(
+        "control-inspect", "--window-title", window, "--control-type", "ComboBox",
+        "--automation-id", "urlbar-input", "--process-id", str(pid), "--max-results", "5",
+    )
+    matches = result.get("matches")
+    if result.get("match_count") != 1 or not isinstance(matches, list) or len(matches) != 1:
+        raise BrowserError("Firefox managed address bar was not uniquely identifiable.")
+    value = matches[0].get("value") if isinstance(matches[0], dict) else None
+    url = _normalize_managed_conversation_url(str(value or ""))
+    return {"ok": True, "browser_id": browser_id, "firefox_pid": pid, "window_name": window, "url": url}
+
+
+def verify_managed_conversation(browser_id: str, expected_url: str) -> dict:
+    expected = _normalize_managed_conversation_url(expected_url)
+    identity = read_managed_conversation_identity(browser_id)
+    actual = identity["url"]
+    if actual != expected:
+        raise BrowserError(f"Managed conversation mismatch: expected {expected}, got {actual}")
+    return {**identity, "expected_url": expected, "matched": True}
+
+
+# GPT_CONSUMER_MANAGED_CONVERSATION_REACQUISITION_V1
+def reacquire_managed_conversation(browser_id: str, expected_url: str | None = None, timeout: float = 10.0) -> dict:
+    raw = expected_url or get_managed_conversation_url(browser_id)
+    if not raw:
+        raise BrowserError("No managed ChatGPT conversation identity is stored.")
+    expected = _normalize_managed_conversation_url(raw)
+    try:
+        current = verify_managed_conversation(browser_id, expected)
+        return {**current, "reacquired": False, "method": "already_selected"}
+    except BrowserError:
+        pass
+    browser = next((x for x in detect_browsers() if x.get("id") == browser_id), None)
+    if not browser or not browser.get("supported") or browser.get("family") != "firefox":
+        raise BrowserError("Managed conversation reacquisition is currently implemented for Firefox only.")
+    profile = profile_path(browser_id)
+    try:
+        subprocess.Popen([browser["path"], "-profile", str(profile), "-new-tab", expected], close_fds=True)
+    except OSError as exc:
+        raise BrowserError("Firefox could not reopen the managed conversation: " + str(exc)) from exc
+    deadline=time.monotonic()+max(0.25,float(timeout)); last=''
+    while time.monotonic()<deadline:
+        try:
+            current=verify_managed_conversation(browser_id,expected)
+            return {**current,"reacquired":True,"method":"open_exact_conversation"}
+        except BrowserError as exc:
+            last=str(exc); time.sleep(0.25)
+    raise BrowserError("Managed conversation reacquisition timed out: "+last)
+
+
 # GPT_CONSUMER_OUT_OF_BAND_GPT_V1
 def send_out_of_band_recovery_prompt(browser_id: str, prompt_text: str) -> dict:
     if not prompt_text or not prompt_text.strip():
@@ -615,12 +733,12 @@ def extensions_page(browser: dict) -> str:
     return "chrome://extensions/"
 
 
-def open_extension_setup(browser_id: str) -> dict:
+def open_extension_setup(browser_id: str, *, url: str | None = None) -> dict:
     browser = select_browser(browser_id)
     profile = profile_path(browser["id"])
     profile.mkdir(parents=True, exist_ok=True)
     extension = prepared_extension_path(browser["id"])
-    url = "https://chatgpt.com/"
+    url = _normalize_managed_conversation_url(url) if url is not None else "https://chatgpt.com/"
 
     if browser["family"] == "firefox":
         setup = _automatic_firefox_setup(browser, extension, profile, url)

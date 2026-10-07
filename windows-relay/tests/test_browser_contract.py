@@ -164,7 +164,7 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("beginRelayHandoffScroll();",self.src)
 
     def test_content_runtime_identity_is_emitted(self):
-        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1-owner-v1'",self.src)
+        self.assertIn("runtime:'v11-scroll-v5-delivery-v17-whole-stop-v1-submit-once-scoped-recovery-draft-owner-release-approval-v3-uierror-v1-owner-v1'",self.src)
 
     def test_content_start_event_occurs_outside_connect_function(self):
         connect_start=self.src.index("function connectBackgroundPort()")
@@ -181,7 +181,21 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("root?.scrollTo?.({top:root.scrollHeight",self.src)
         self.assertIn("root.scrollTop=root.scrollHeight",self.src)
         self.assertIn("emitRelayEvent('handoff_scroll_tick'",self.src)
-        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1-owner-v1'",self.src)
+        self.assertIn("runtime:'v11-scroll-v5-delivery-v17-whole-stop-v1-submit-once-scoped-recovery-draft-owner-release-approval-v3-uierror-v1-owner-v1'",self.src)
+
+    def test_durable_recovery_is_scoped_and_expires(self):
+        self.assertIn("RECOVERY_WATCH_MAX_AGE_MS=RELAY_STALL_PATIENCE_MS*3",self.src)
+        self.assertIn("function recoveryConversationKey()",self.src)
+        self.assertIn("conversation_key:recoveryConversationKey()",self.src)
+        h=self.src[self.src.index("function hydrateRecoveryPacketWatch()"):self.src.index("function armRecoveryPacketWatch")]
+        self.assertIn("storedKey!==currentKey",h)
+        self.assertIn("age>RECOVERY_WATCH_MAX_AGE_MS",h)
+
+    def test_recovery_refresh_cannot_run_off_conversation_or_after_expiry(self):
+        b=self.src[self.src.index("function maybeScheduleRecoveryRefresh"):self.src.index("function forceRecoveryPacketInspect")]
+        self.assertIn("if(!currentKey)",b)
+        self.assertIn("stalledFor>RECOVERY_WATCH_MAX_AGE_MS",b)
+        self.assertIn("relay_recovery_obligation_expired",b)
 
     def test_result_delivery_submits_once_then_waits_for_exact_turn(self):
         self.assertIn("GPT_WINDOWS_RESULT_DELIVERY_RECOVERY_V1",self.src)
@@ -245,6 +259,12 @@ class BrowserContractTests(unittest.TestCase):
         self.assertNotIn("send(",track)
         self.assertNotIn("backgroundAction(",track)
 
+    def test_backend_completed_action_is_retired_before_result_delivery(self):
+        run_start=self.src.index("async function run(p)")
+        received=self.src.index("emitRelayEvent('relay_result_received'",run_start)
+        delivery=self.src.index("const deliveryState=await injectConfirmed",received)
+        retired=self.src.index("rememberAttempted(p.id);",received)
+        self.assertLess(retired,delivery,"backend-completed action must retire before browser delivery begins")
     def test_existing_user_result_prevents_backend_replay(self):
         run_start=self.src.index("async function run(p)")
         action_call=self.src.index("r=await backgroundAction(p.packet);",run_start)
@@ -325,7 +345,7 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("relay_result_draft_detected",self.src)
         self.assertIn("relay_result_draft_cleared",self.src)
         self.assertIn("relay_result_draft_recovered",self.src)
-        self.assertIn("setTimeout(()=>{recoverExistingRelayDraft().catch(()=>{});},150);",self.src)
+        self.assertIn("setTimeout(()=>{if(!operatorPaused)recoverExistingRelayDraft().catch(()=>{});},150);",self.src)
 
     def test_draft_recovery_defers_while_normal_delivery_is_inflight(self):
         start=self.src.index("async function recoverExistingRelayDraft()")
@@ -344,6 +364,22 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("await send(draft.id,0)",block)
         self.assertIn("await waitForDeliveryConfirmation(draft.id,0)",block)
         self.assertNotIn("setText(",block)
+
+    def test_draft_recovery_releases_owner_after_any_attempt(self):
+        start=self.src.index("async function recoverExistingRelayDraft()")
+        end=self.src.index("async function injectConfirmed(text,packetId,attachments=[])",start)
+        recovery=self.src[start:end]
+        finally_start=recovery.rindex("}finally{")
+        finally_block=recovery[finally_start:]
+        self.assertIn("draftRecoveryInFlight=false;",finally_block)
+        self.assertIn("if(activeRelayOperationId===draft.id)",finally_block)
+        self.assertIn("activeRelayOperationId=null;",finally_block)
+        self.assertIn("reason:'draft_recovery_attempt_finished'",finally_block)
+        self.assertIn("scheduleDeferredDrain(100);",finally_block)
+        self.assertIn("setTimeout(scheduleWatchedInspect,100);",finally_block)
+        self.assertLess(recovery.index("reason:'chat_not_idle'"),finally_start)
+        self.assertLess(recovery.index("visibleSendFailure()||'delivery_not_confirmed'"),finally_start)
+        self.assertLess(recovery.index("draft_recovery_error"),finally_start)
 
     def test_delivery_v7_accepts_generation_start_as_positive_ack(self):
         self.assertIn("GPT_WINDOWS_GENERATION_START_ACK_V1",self.src)
@@ -404,49 +440,48 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("browser_integration_disconnected",self.live_worker)
 
 
-    def test_relay_actions_carry_conversation_identity(self):
-        for path in (
-            ROOT/"content.js",
-            ROOT/"extension"/"content.js",
-            ROOT/"extension-persistent"/"content.js",
-        ):
+    def test_outbound_owner_defaults_browser_and_updates_only_from_valid_online_control(self):
+        self.assertIn("let outboundOwner='browser';",self.src)
+        start=self.src.index("function applyOperatorControlState(")
+        end=self.src.index("function pollOperatorControlState(",start)
+        block=self.src[start:end]
+        self.assertIn("if(m?.online!==true)return;",block)
+        self.assertIn("const owner=m?.outbound_owner;",block)
+        self.assertIn("if(owner==='browser'||owner==='windows')outboundOwner=owner;",block)
+        self.assertLess(block.index("if(m?.online!==true)return;"),block.index("const owner=m?.outbound_owner;"))
+
+    def test_windows_owner_delegates_before_browser_injection_without_attachment_cleanup(self):
+        start=self.src.index("async function run(p)")
+        delegated=self.src.index("if(outboundOwner==='windows')",start)
+        injection=self.src.index("const deliveryState=await injectConfirmed",delegated)
+        self.assertLess(delegated,injection)
+        block=self.src[delegated:injection]
+        self.assertIn("inflight.delete(p.id);",block)
+        self.assertIn("if(activeRelayOperationId===p.id)activeRelayOperationId=null;",block)
+        self.assertIn("relay_result_delivery_delegated_windows",block)
+        self.assertIn("scheduleDeferredDrain(100);",block)
+        self.assertIn("return;",block)
+        self.assertNotIn("injectConfirmed(",block)
+        self.assertNotIn("cleanupRelayAttachments",block)
+
+
+    def test_relay_conversation_owner_v17_contract(self):
+        for path in (ROOT/"content.js",ROOT/"extension"/"content.js",ROOT/"extension-persistent"/"content.js"):
             src=path.read_text(encoding="utf-8-sig")
             self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",src,path)
-            self.assertIn("function relayConversationKey()",src,path)
             self.assertIn("conversation_key:relayConversationKey()",src,path)
             self.assertIn("conversation_href:location.href",src,path)
-
-    def test_workers_enforce_persisted_conversation_owner(self):
-        for src in (self.live_worker,self.persistent_worker):
-            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",src)
-            self.assertIn("RELAY_OWNER_KEY='gptRelayConversationOwnerV1'",src)
-            self.assertIn("checkAndClaimRelayOwner",src)
-            self.assertIn("chrome.tabs.query({active:true,lastFocusedWindow:true})",src)
-            self.assertIn("relay_owner_unclaimed_inactive_tab",src)
-            self.assertIn("legacy_default_session_blocked",src)
-            self.assertIn("relay_owner_same_session_different_conversation",src)
-            self.assertIn("relay_owner_transfer_requires_claim",src)
-            self.assertIn("relay_cross_conversation_suppressed",src)
-            self.assertIn("relay_conversation_owner_transferred",src)
-
-    def test_late_packet_cursor_uses_explicit_op_token_per_owner(self):
+            self.assertIn("delivery-v17-whole-stop-v1",src,path)
+            self.assertIn("owner-v1",src,path)
         for src in (self.live_worker,self.persistent_worker):
             self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V2",src)
+            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",src)
             self.assertIn("GPT_RELAY_OP_TOKEN_CURSOR_V1",src)
-            self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV2'",src)
-            self.assertIn("match(/(?:^|[-.])OP(\\d+)([a-z]*)(?=[-.]|$)/i)",src)
+            self.assertIn("legacy_default_session_blocked",src)
+            self.assertIn("relay_cross_conversation_suppressed",src)
             self.assertIn("cursor.owner_key===ownerKey",src)
             self.assertIn("checkAndAdvanceOperationCursor(packetId,ownerDecision.owner)",src)
-            self.assertNotIn("for(const key of ['generation','ordinal','suffix_rank'])",src)
-
-    def test_default_session_cannot_take_over_existing_owner(self):
-        for src in (self.live_worker,self.persistent_worker):
-            owner=src[src.index("function checkAndClaimRelayOwner"):src.index("function checkAndAdvanceOperationCursor")]
-            self.assertIn("if(session==='default')return {ok:false,error:'legacy_default_session_blocked',owner};",owner)
-            self.assertLess(
-                owner.index("if(session==='default')"),
-                owner.index("const incomingVersion=relaySessionVersion(session)")
-            )
+            self.assertIn("operator_quiesced_ack",src)
 
 
 if __name__=="__main__":

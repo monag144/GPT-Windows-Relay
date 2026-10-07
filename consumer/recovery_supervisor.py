@@ -383,6 +383,17 @@ def _repair_browser(browser_id: str | None) -> tuple[bool, str]:
     if not browser.get("supported"):
         return False, f"{browser_id} is not supported by this consumer build"
     try:
+        if browser.get("family") == "firefox":
+            url = browser_manager.get_managed_conversation_url(browser_id)
+            if not url:
+                return False, f"{browser_id} browser repair refused: no managed ChatGPT conversation identity"
+            result = browser_manager.open_extension_setup(browser_id, url=url)
+            if not result.get("connected"):
+                return False, f"{browser_id} browser integration did not reconnect"
+            verified = browser_manager.reacquire_managed_conversation(browser_id, url)
+            if not verified.get("matched"):
+                return False, f"{browser_id} exact managed conversation was not verified"
+            return True, f"{browser_id} browser integration rebuilt; exact managed conversation verified"
         result = browser_manager.open_extension_setup(browser_id)
     except Exception as exc:
         return False, f"browser repair failed: {type(exc).__name__}: {str(exc)[:300]}"
@@ -417,7 +428,7 @@ def _build_gpt_recovery_prompt(s: Snapshot, d: Decision, incident_id: str) -> st
         "The ordinary browser-extension relay transport is unhealthy. Do NOT send a GPT_WINDOWS_ACTION "
         "through that broken transport. Read the consumer instructions and newest compatible timestamped "
         "audit/incident/recovery documents in GitHub for monag144/GPT-Windows-Relay, branch "
-        "main. Diagnose the evidence. Do not generate shell commands. "
+        "consumer/r29-firefox-offline-tray. Diagnose the evidence. Do not generate shell commands. "
         "Return exactly one bounded recovery-advice envelope. The opening marker is the token "
         "GPT_RELAY_RECOVERY_ADVICE inside square brackets; the closing marker is the same token preceded "
         "by a slash inside square brackets. Between those markers return one JSON object with integer "

@@ -17,6 +17,7 @@ GPT_WINDOWS_CLIPBOARD_V1 = True
 GPT_WINDOWS_UIA_FIELD_ENTRY_V1 = True
 GPT_WINDOWS_UIA_CONTROL_ADAPTER_V1 = True
 GPT_WINDOWS_SCREENSHOT_CAPTURE_V1 = True
+GPT_WINDOWS_COPY_ALL_CAPTURE_V1 = True
 CF_UNICODETEXT = 13
 GMEM_MOVEABLE = 0x0002
 
@@ -208,6 +209,77 @@ def control_set_toggle(window_title: str, checked: bool, *, control_type: str = 
     return _uia_control_action(window_title, "set-toggle", control_type=control_type, control_name=control_name, automation_id=automation_id, process_id=process_id, desired_state=checked)
 
 
+
+VK_CONTROL=0x11
+VK_A=0x41
+VK_C=0x43
+KEYEVENTF_KEYUP=0x0002
+SW_RESTORE=9
+
+def _visible_window_matches(window_title: str, process_id: int | None = None) -> list[tuple[int,str,int]]:
+    _require_windows()
+    if not isinstance(window_title,str) or not window_title.strip(): raise ValueError("window_title is required")
+    matches=[]
+    CALLBACK=ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HWND,wintypes.LPARAM)
+    def visit(hwnd,_):
+        if not user32.IsWindowVisible(hwnd): return True
+        n=user32.GetWindowTextLengthW(hwnd)
+        if n<=0: return True
+        buf=ctypes.create_unicode_buffer(n+1); user32.GetWindowTextW(hwnd,buf,n+1); title=buf.value
+        pid=wintypes.DWORD(); user32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+        if window_title.casefold() in title.casefold() and (process_id is None or int(pid.value)==int(process_id)):
+            matches.append((int(hwnd),title,int(pid.value)))
+        return True
+    cb=CALLBACK(visit); user32.EnumWindows(cb,0); return matches
+
+def _native_key(vk:int, up:bool=False) -> None:
+    user32.keybd_event(int(vk),0,KEYEVENTF_KEYUP if up else 0,0)
+
+def _native_chord(ctrl_key:int) -> None:
+    _native_key(VK_CONTROL); _native_key(ctrl_key); _native_key(ctrl_key,True); _native_key(VK_CONTROL,True)
+
+def text_capture_dir(root: Path | None = None) -> Path:
+    out=(root or (Path(os.environ.get("LOCALAPPDATA",Path.home()))/"GPTWindowsRelay"/"captures")); out.mkdir(parents=True,exist_ok=True); return out
+
+def store_text_capture(text:str, *, source:str, root:Path|None=None) -> dict:
+    if not isinstance(text,str): raise TypeError("capture text must be str")
+    raw=text.encode("utf-8"); digest=hashlib.sha256(raw).hexdigest(); base=text_capture_dir(root); data=base/(digest+".txt"); meta=base/(digest+".json"); now=time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())
+    duplicate=data.is_file() and data.read_bytes()==raw
+    if not duplicate: data.write_bytes(raw)
+    m={"sha256":digest,"bytes":len(raw),"source":source,"first_seen":now,"last_seen":now,"duplicate_count":0}
+    if meta.is_file():
+        try:
+            old=json.loads(meta.read_text(encoding="utf-8")); m["first_seen"]=old.get("first_seen",now); m["duplicate_count"]=int(old.get("duplicate_count",0))+(1 if duplicate else 0)
+        except Exception: pass
+    meta.write_text(json.dumps(m,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+    return {"accepted":not duplicate,"duplicate":duplicate,"sha256":digest,"bytes":len(raw),"chars":len(text),"duplicate_count":m["duplicate_count"],"capture_path":str(data.resolve())}
+
+def copy_all_capture(window_title:str, *, process_id:int|None=None, timeout_ms:int=2500, capture_root:Path|None=None) -> dict:
+    _require_windows()
+    if timeout_ms<250 or timeout_ms>10000: raise ValueError("timeout_ms must be 250..10000")
+    matches=_visible_window_matches(window_title,process_id)
+    if len(matches)!=1: raise RuntimeError(f"WINDOW_MATCH_COUNT_{len(matches)}")
+    hwnd,title,pid=matches[0]; previous_hwnd=int(user32.GetForegroundWindow()); previous_clip=clipboard_read_text()
+    try:
+        user32.ShowWindow(hwnd,SW_RESTORE)
+        if not user32.SetForegroundWindow(hwnd): raise RuntimeError("SET_FOREGROUND_FAILED")
+        time.sleep(0.18); clipboard_clear(); _native_chord(VK_A); time.sleep(0.08); _native_chord(VK_C)
+        until=time.monotonic()+timeout_ms/1000.0; captured=None
+        while time.monotonic()<until:
+            time.sleep(0.05); captured=clipboard_read_text()
+            if captured is not None: break
+        if captured is None: raise RuntimeError("CLIPBOARD_CAPTURE_TIMEOUT")
+        stored=store_text_capture(captured,source=f"window:{title}",root=capture_root)
+        return {"ok":True,"window_title":title,"process_id":pid,**stored,"text":captured if stored["accepted"] else None}
+    finally:
+        try:
+            if previous_clip is None: clipboard_clear()
+            else: clipboard_write_text(previous_clip)
+        except Exception: pass
+        try:
+            if previous_hwnd and previous_hwnd!=hwnd: user32.SetForegroundWindow(previous_hwnd)
+        except Exception: pass
+
 def screenshot_dir() -> Path:
     root = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "GPTWindowsRelay" / "screenshots"
     root.mkdir(parents=True, exist_ok=True)
@@ -284,6 +356,10 @@ def main(argv: list[str] | None = None) -> int:
         cp.add_argument("--automation-id")
         cp.add_argument("--process-id", type=int)
         cp.add_argument("--max-results", type=int, default=50)
+    ca = sub.add_parser("copy-all-capture")
+    ca.add_argument("--window-title", required=True)
+    ca.add_argument("--process-id", type=int)
+    ca.add_argument("--timeout-ms", type=int, default=2500)
     sc = sub.add_parser("screenshot-capture")
     sc.add_argument("--target", choices=["screen","window","region"], required=True)
     sc.add_argument("--window-title")
@@ -317,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(control_select(ns.window_title, control_type=ns.control_type, control_name=ns.control_name, automation_id=ns.automation_id, process_id=ns.process_id), ensure_ascii=False)); return 0
     if ns.command in {"control-check", "control-uncheck"}:
         print(json.dumps(control_set_toggle(ns.window_title, ns.command == "control-check", control_type=ns.control_type or "CheckBox", control_name=ns.control_name, automation_id=ns.automation_id, process_id=ns.process_id), ensure_ascii=False)); return 0
+    if ns.command == "copy-all-capture":
+        print(json.dumps(copy_all_capture(ns.window_title,process_id=ns.process_id,timeout_ms=ns.timeout_ms),ensure_ascii=False)); return 0
     if ns.command == "screenshot-capture":
         result=screenshot_capture(ns.target,window_title=ns.window_title,process_id=ns.process_id,x=ns.x,y=ns.y,width=ns.width,height=ns.height,max_files=ns.max_files,max_age_hours=ns.max_age_hours)
         print(json.dumps(result,ensure_ascii=False)); return 0

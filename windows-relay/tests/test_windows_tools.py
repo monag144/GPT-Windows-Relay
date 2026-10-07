@@ -56,6 +56,12 @@ class WindowsToolsContractTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             mod.control_set_toggle("Harness", 1, control_name="X")
 
+    def test_control_inspect_exposes_valuepattern_readback_when_available(self):
+        src=(HERE/"uia_control_action.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("GPT_WINDOWS_UIA_INSPECT_VALUE_READBACK_V1",src)
+        self.assertIn("TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern",src)
+        self.assertIn("value=$value",src)
+
     def test_control_adapter_is_semantic_pattern_based_and_no_sendkeys(self):
         src=(HERE/"uia_control_action.ps1").read_text(encoding="utf-8-sig")
         self.assertIn("WINDOW_MATCH_COUNT_", src)

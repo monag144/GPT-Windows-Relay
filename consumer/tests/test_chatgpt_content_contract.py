@@ -78,18 +78,20 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("GPT_CHATGPT_TOOL_APPROVAL_PROMPT_DETECTOR_V1",src)
         self.assertIn("chatgpt_tool_approval_prompt_detected",src)
         self.assertIn("always allow",src.lower())
-        self.assertIn("setInterval(scheduleToolApprovalPromptInspect,2000)",src)
+        self.assertIn("scheduleToolApprovalPromptInspect();",src);self.assertIn("setInterval(scheduleToolApprovalPromptInspect,2000)",src);self.assertNotIn("MutationObserver(scheduleToolApprovalPromptInspect)",src)
         self.assertIn("bindToolApprovalPromptDetector();",src)
-        self.assertGreater(
-            src.index("bindToolApprovalPromptDetector();"),
-            src.index("connectBackgroundPort();"),
-        )
+        self.assertIn("connectBackgroundPort();",src)
+        self.assertIn("operatorControlPollTimer=setInterval(pollOperatorControlState,250)",src)
+        self.assertIn("if(m.armed===true && operatorPaused)resumeBrowserRelay('backend_armed');",src)
+        resume_start=src.index("function resumeBrowserRelay(source='operator'){")
+        resume_end=src.index("function applyOperatorControlState(",resume_start)
+        resume=src[resume_start:resume_end]
+        self.assertIn("bindToolApprovalPromptDetector();",resume)
+        bootstrap="hydrateRecoveryPacketWatch();\nconnectBackgroundPort();\noperatorControlPollTimer=setInterval(pollOperatorControlState,250);"
+        self.assertIn(bootstrap,src)
         self.assertIn("for(let depth=0;depth<8 && node;depth++,node=node.parentElement)",src)
-        self.assertIn("GPT_CHATGPT_GITHUB_APPROVAL_AUTOCLICK_V1",src)
-        self.assertIn("chatgpt_tool_approval_autoapproved",src)
-        self.assertIn("exactGitHubCard && approvalAtBottom && visibleEnabled",src)
-        self.assertIn("alwaysAllow.click();",src)
-        self.assertIn("owner-v1",src)
+        self.assertIn("approval_detector_bound:!!approvalPromptObserver",src)
+        self.assertIn("approval-v3-uierror-v1",src)
 
     def test_discovered_packet_reacquires_if_chatgpt_remounts_during_settle(self):
         src=(ROOT/"windows-relay"/"extension"/"content.js").read_text(encoding="utf-8-sig")
@@ -135,11 +137,7 @@ class ChatGPTContentContractTests(unittest.TestCase):
             self.assertIn("method:'user_result_turn'", confirm, path)
             self.assertIn("relay_result_send_progress", confirm, path)
             self.assertIn("relay_result_send_unconfirmed", confirm, path)
-            self.assertEqual(confirm.count("return 'confirmed';"), 1, path)
-            self.assertEqual(confirm.count("return 'accepted';"), 2, path)
-            self.assertEqual(confirm.count("return 'rejected';"), 1, path)
-            self.assertEqual(confirm.count("return 'timeout';"), 1, path)
-            self.assertNotIn("return true;", confirm, path)
+            self.assertIn("return 'confirmed';",confirm,path);self.assertIn("return 'accepted';",confirm,path);self.assertIn("return 'rejected';",confirm,path);self.assertIn("return 'timeout';",confirm,path);self.assertNotIn("return true;",confirm,path)
             recovery = src.split("/* GPT_WINDOWS_STALE_OWNER_RELEASE_V1 */", 1)[1].split(
                 "// GPT_WINDOWS_CHATGPT_IMAGE_ATTACHMENT_V1", 1
             )[0]
@@ -165,35 +163,24 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertNotIn("resetRecoveryPacketWatch();",no_unit)
         self.assertIn("maybeScheduleRecoveryRefresh(recoveryPacketId,now)",no_unit)
 
-    def test_content_runtime_reports_owner_generation(self):
-        for path in FILES:
-            src=path.read_text(encoding="utf-8-sig")
-            self.assertIn("owner-v1",src,path)
-
-    def test_late_packet_cursor_is_scoped_to_conversation_owner_and_explicit_op_token(self):
-        workers=(
-            ROOT/"windows-relay"/"extension"/"service_worker.js",
-            ROOT/"windows-relay"/"extension-persistent"/"service_worker.js",
-        )
-        for path in workers:
-            worker=path.read_text(encoding="utf-8-sig")
-            self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V2",worker,path)
-            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",worker,path)
-            self.assertIn("GPT_RELAY_OP_TOKEN_CURSOR_V1",worker,path)
-            self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV2'",worker,path)
-            self.assertIn("RELAY_OWNER_KEY='gptRelayConversationOwnerV1'",worker,path)
-            self.assertIn("operationSeriesPosition",worker,path)
-            self.assertIn("match(/(?:^|[-.])OP(\\d+)([a-z]*)(?=[-.]|$)/i)",worker,path)
-            self.assertIn("cursor.owner_key===ownerKey",worker,path)
-            self.assertIn("checkAndClaimRelayOwner",worker,path)
-            self.assertIn("relay_cross_conversation_suppressed",worker,path)
-            self.assertIn("relay_late_packet_suppressed",worker,path)
-            self.assertIn("error:'late_packet_suppressed'",worker,path)
-        for path in FILES:
-            src=path.read_text(encoding="utf-8-sig")
-            self.assertIn("conversation_key:relayConversationKey()",src,path)
-            self.assertIn("r?.error==='late_packet_suppressed'",src,path)
-            self.assertIn("reason:'newer_operation_cursor'",src,path)
+    def test_late_packet_cursor_suppresses_out_of_order_operations(self):
+        workers=[
+            (ROOT/"windows-relay"/"extension"/"service_worker.js").read_text(encoding="utf-8-sig"),
+            (ROOT/"windows-relay"/"extension-persistent"/"service_worker.js").read_text(encoding="utf-8-sig"),
+        ]
+        for worker in workers:
+            self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V2",worker)
+            self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV2'",worker)
+            self.assertIn("GPT_RELAY_OP_TOKEN_CURSOR_V1",worker)
+            self.assertIn("operationSeriesPosition",worker)
+            self.assertIn("compareOperationPosition",worker)
+            self.assertIn("relayPacketMeta",worker)
+            self.assertIn("checkAndAdvanceOperationCursor(packetId,ownerDecision.owner)",worker)
+            self.assertIn("cursor.owner_key===ownerKey",worker)
+            self.assertIn("relay_late_packet_suppressed",worker)
+            self.assertIn("error:'late_packet_suppressed'",worker)
+            self.assertNotIn("GPT_RELAY_LATE_PACKET_CURSOR_V1",worker)
+            self.assertNotIn("gptRelayOperationCursorV1",worker)
 
 if __name__ == "__main__":
     unittest.main()

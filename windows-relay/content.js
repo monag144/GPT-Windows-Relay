@@ -32,6 +32,7 @@ const CHAT_IDLE_POLL_MS=250;
 const RELAY_RECOVERY_INTERVAL_MS=15000;
 const RELAY_STALL_PATIENCE_MS=300000;
 const RELAY_REFRESH_GRACE_MS=2500;
+const RECOVERY_WATCH_MAX_AGE_MS=RELAY_STALL_PATIENCE_MS*3;
 const RECOVERY_WATCH_SESSION_KEY='gptWindowsRelayRecoveryWatchV1';
 /* GPT_WINDOWS_DURABLE_RECOVERY_OBLIGATION_V1 */
 /* GPT_WINDOWS_STALE_OWNER_LEASE_V1 */
@@ -100,6 +101,14 @@ const CONSUMER_RECOVERY_MAX=2;
 const CONSUMER_CLASSIFY_DELAY_MS=1800;
 let consumerClassificationTimer=null;
 let consumerRecoveryInFlight=false;
+/* GPT_WINDOWS_WHOLE_PRODUCT_STOP_V1 */
+let outboundOwner='browser';
+let operatorPaused=true;
+let operatorControlPollTimer=null;
+let uiErrorInspectInterval=null;
+let approvalInspectInterval=null;
+let recoveryRefreshTimer=null;
+let lastOperatorQuiescedGeneration=0;
 /* GPT_ONE_CLICK_RELAY_OUTPUT_CLASSIFIER_V1 */
 /* GPT_ONE_CLICK_COLLAPSE_AUTO_RECOVERY_V1 */
 /* GPT_ONE_CLICK_MISSION_VISIBLE_ACK_V1 */
@@ -478,6 +487,7 @@ function findReadySendButton(){
 }
 
 async function send(packetId=null,attempt=null){
+  assertOperatorActive();
   const started=Date.now();
   if(packetId){
     emitRelayEvent('relay_result_send_waiting',{
@@ -489,6 +499,7 @@ async function send(packetId=null,attempt=null){
 
   const until=started+SEND_READY_TIMEOUT_MS;
   while(Date.now()<until){
+    assertOperatorActive();
     const b=findReadySendButton();
     if(b){
       if(packetId){
@@ -498,6 +509,7 @@ async function send(packetId=null,attempt=null){
           waited_ms:Date.now()-started
         });
       }
+      assertOperatorActive();
       b.click();
       return;
     }
@@ -533,6 +545,86 @@ function emitRelayEvent(event,detail){
     });
   }catch{}
 }
+
+function assertOperatorActive(){
+  if(operatorPaused)throw new Error('operator_paused');
+}
+
+function quiesceBrowserRelay(source='operator'){
+  const changed=!operatorPaused;
+  operatorPaused=true;
+  for(const id of [deferredDrainTimer,watchedInspectTimer,scrollTimer,approvalInspectTimer,uiErrorInspectTimer,draftRecoveryTimer,consumerClassificationTimer,recoveryRefreshTimer]){
+    if(id!==null && id!==undefined)clearTimeout(id);
+  }
+  deferredDrainTimer=null;
+  watchedInspectTimer=null;
+  scrollTimer=null;
+  approvalInspectTimer=null;
+  uiErrorInspectTimer=null;
+  draftRecoveryTimer=null;
+  consumerClassificationTimer=null;
+  recoveryRefreshTimer=null;
+  if(recoveryTimer!==null){clearInterval(recoveryTimer);recoveryTimer=null;}
+  if(consumerMissionPollTimer!==null){clearInterval(consumerMissionPollTimer);consumerMissionPollTimer=null;}
+  if(approvalInspectInterval!==null){clearInterval(approvalInspectInterval);approvalInspectInterval=null;}
+  if(uiErrorInspectInterval!==null){clearInterval(uiErrorInspectInterval);uiErrorInspectInterval=null;}
+  for(const timer of submittedWatchTimers.values())clearTimeout(timer);
+  submittedWatchTimers.clear();
+  for(const [requestId,pendingRequest] of backgroundPending){
+    backgroundPending.delete(requestId);
+    clearTimeout(pendingRequest.timer);
+    try{pendingRequest.reject(new Error('operator_paused'));}catch{}
+  }
+  watchedObserver?.disconnect();watchedObserver=null;watchedUnit=null;
+  conversationObserver?.disconnect();conversationObserver=null;conversationRoot=null;
+  approvalPromptObserver?.disconnect();approvalPromptObserver=null;
+  uiErrorObserver?.disconnect();uiErrorObserver=null;
+  recoveryRefreshScheduled=false;
+  if(changed)emitRelayEvent('browser_operator_quiesced',{source});
+}
+
+function resumeBrowserRelay(source='operator'){
+  const changed=operatorPaused;
+  operatorPaused=false;
+  resumePersistedHandoff();
+  bindToolApprovalPromptDetector();
+  bindChatGPTUiErrorDetector();
+  if(consumerMissionPollTimer===null)consumerMissionPollTimer=setInterval(pollConsumerMission,1500);
+  if(recoveryTimer===null)recoveryTimer=setInterval(recoverLatestAssistant,15000);
+  if(changed)emitRelayEvent('browser_operator_resumed',{source});
+  setTimeout(()=>{if(!operatorPaused)recoverExistingRelayDraft().catch(()=>{});},150);
+  setTimeout(()=>{if(!operatorPaused)for(const id of submittedResults.keys())trackSubmittedResult(id);},500);
+  setTimeout(()=>{if(!operatorPaused)recoverLatestAssistant();},250);
+}
+
+function acknowledgeOperatorQuiescedGeneration(generation){
+  const g=Number(generation)||0;
+  if(g<=0 || g===lastOperatorQuiescedGeneration)return;
+  const port=connectBackgroundPort();
+  if(!port)return;
+  try{
+    port.postMessage({type:'operator_quiesced_ack',stop_generation:g});
+    lastOperatorQuiescedGeneration=g;
+  }catch{}
+}
+
+function applyOperatorControlState(m){
+  if(m?.online!==true)return;
+  const owner=m?.outbound_owner;
+  if(owner==='browser'||owner==='windows')outboundOwner=owner;
+  if(m.armed===false){
+    quiesceBrowserRelay('backend_disarmed');
+    acknowledgeOperatorQuiescedGeneration(m.stop_generation);
+    return;
+  }
+  if(m.armed===true && operatorPaused)resumeBrowserRelay('backend_armed');
+}
+
+function pollOperatorControlState(){
+  const port=connectBackgroundPort();
+  try{port?.postMessage({type:'operator_control_poll'});}catch{}
+}
+
 
 function newestConversationEdge(){
   const main=document.querySelector('main') || document;
@@ -691,6 +783,7 @@ function clearOwnedRelayDraft(packetId){
 }
 
 function scheduleDraftRecovery(delay=1000){
+  if(operatorPaused)return;
   if(draftRecoveryTimer!==null)return;
   draftRecoveryTimer=setTimeout(()=>{
     draftRecoveryTimer=null;
@@ -769,6 +862,7 @@ function chatBusyReason(){
 }
 
 async function waitForChatIdle(packetId,attempt){
+  assertOperatorActive();
   const started=Date.now();
   let lastReason=chatBusyReason();
   if(!lastReason)return true;
@@ -782,6 +876,7 @@ async function waitForChatIdle(packetId,attempt){
 
   const until=started+CHAT_IDLE_TIMEOUT_MS;
   while(Date.now()<until){
+    assertOperatorActive();
     const reason=chatBusyReason();
     if(!reason){
       emitRelayEvent('relay_result_idle_ready',{
@@ -806,11 +901,13 @@ async function waitForChatIdle(packetId,attempt){
 
 /* GPT_WINDOWS_EXACT_RESULT_CONFIRMATION_V1 */
 async function waitForDeliveryConfirmation(packetId,attempt){
+  assertOperatorActive();
   const until=Date.now()+DELIVERY_CONFIRM_MS;
   let clearedSince=0;
   let generationObserved=false;
   let clearObserved=false;
   while(Date.now()<until){
+    assertOperatorActive();
     if(userTurnContainsPacketId(packetId)){
       emitRelayEvent('relay_result_send_confirmed',{
         packet_id:packetId,
@@ -1019,6 +1116,15 @@ async function recoverExistingRelayDraft(){
     return false;
   }finally{
     draftRecoveryInFlight=false;
+    if(activeRelayOperationId===draft.id){
+      activeRelayOperationId=null;
+      emitRelayEvent('relay_operation_owner_released',{
+        packet_id:draft.id,
+        reason:'draft_recovery_attempt_finished'
+      });
+      scheduleDeferredDrain(100);
+      setTimeout(scheduleWatchedInspect,100);
+    }
   }
 }
 
@@ -1027,6 +1133,7 @@ const relayAttachmentPackets=new Set();
 function relayUploadInput(){const root=composerRoot();const local=[...(root.querySelectorAll?.('input[type="file"]')||[])];const all=local.length?local:[...document.querySelectorAll('input[type="file"]')];return all.find(e=>!e.disabled)||null;}
 function decodeBase64(s){const raw=atob(s),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}
 async function ensureRelayAttachments(list,packetId){
+  assertOperatorActive();
   if(!Array.isArray(list)||!list.length||relayAttachmentPackets.has(packetId))return;
   if(list.length!==1)throw new Error('relay_attachment_count_unsupported');const a=list[0];if(a?.kind!=='image'||a?.mime!=='image/png'||typeof a.base64!=='string')throw new Error('relay_attachment_invalid');
   const input=relayUploadInput();if(!input)throw new Error('chatgpt_file_input_not_found');const file=new File([decodeBase64(a.base64)],a.name,{type:'image/png'});const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));
@@ -1035,9 +1142,11 @@ async function ensureRelayAttachments(list,packetId){
 function cleanupRelayAttachments(list){const names=(Array.isArray(list)?list:[]).map(a=>a?.name).filter(Boolean);if(!names.length)return;try{backgroundPort?.postMessage({type:'relay_attachment_cleanup',names});}catch{}}
 
 async function injectConfirmed(text,packetId,attachments=[]){
+  assertOperatorActive();
   let lastError='delivery_not_confirmed';
 
   for(let attempt=1;attempt<=DELIVERY_ATTEMPTS;attempt++){
+    assertOperatorActive();
     if(userTurnContainsPacketId(packetId)){
       emitRelayEvent('relay_result_send_confirmed',{
         packet_id:packetId,
@@ -1053,6 +1162,7 @@ async function injectConfirmed(text,packetId,attachments=[]){
           throw new Error('chat_not_idle_before_injection');
         }
         await ensureRelayAttachments(attachments,packetId);
+        assertOperatorActive();
         setText(text);
         emitRelayEvent('relay_result_text_set',{
           packet_id:packetId,
@@ -1068,6 +1178,7 @@ async function injectConfirmed(text,packetId,attachments=[]){
         });
       }
 
+      assertOperatorActive();
       emitRelayEvent('relay_result_send_attempt',{packet_id:packetId,attempt});
       await send(packetId,attempt);
       emitRelayEvent('relay_result_send_clicked',{packet_id:packetId,attempt});
@@ -1080,6 +1191,7 @@ async function injectConfirmed(text,packetId,attachments=[]){
       }
       lastError=visibleSendFailure()||('delivery_'+deliveryState);
     }catch(e){
+      if(operatorPaused)throw e;
       lastError=String(e?.message||e||'delivery_error');
       emitRelayEvent('relay_result_send_exception',{
         packet_id:packetId,
@@ -1337,10 +1449,12 @@ async function deliverConsumerMission(mission){
 }
 
 function pollConsumerMission(){
+  if(operatorPaused)return;
   try{backgroundPort?.postMessage({type:'consumer_mission_poll'});}catch{}
 }
 
 async function inject(text){
+  assertOperatorActive();
   setText(text);
   await new Promise(r=>setTimeout(r,350));
   await send();
@@ -1350,6 +1464,7 @@ function scheduleBackgroundReconnect(){
   if(!backgroundPortUnavailableSince)backgroundPortUnavailableSince=Date.now();
   if(
     Date.now()-backgroundPortUnavailableSince>=RELAY_STALL_PATIENCE_MS &&
+    !operatorPaused &&
     !backgroundRuntimeReloadRequested
   ){
     backgroundRuntimeReloadRequested=true;
@@ -1374,7 +1489,9 @@ function connectBackgroundPort(){
     backgroundRuntimeReloadRequested=false;
 
     port.onMessage.addListener(m=>{
+      if(m?.type==='operator_control_state'){applyOperatorControlState(m);return;}
       if(m?.type==='consumer_mission'){
+        if(operatorPaused)return;
         deliverConsumerMission(m.mission).catch(()=>{});
         return;
       }
@@ -1421,6 +1538,7 @@ function relayConversationKey(){
 
 /* GPT_RELAY_CONVERSATION_OWNER_V1 */
 function backgroundAction(packet){
+  if(operatorPaused)return Promise.reject(new Error('operator_paused'));
   return new Promise((resolve,reject)=>{
     const port=connectBackgroundPort();
     if(!port){
@@ -1480,6 +1598,7 @@ function queueDeferredAction(p,reason,ownerId=null){
 }
 
 function scheduleDeferredDrain(delay=100){
+  if(operatorPaused)return;
   if(deferredDrainTimer!==null)return;
   deferredDrainTimer=setTimeout(()=>{
     deferredDrainTimer=null;
@@ -1488,6 +1607,7 @@ function scheduleDeferredDrain(delay=100){
 }
 
 function drainDeferredActions(){
+  if(operatorPaused)return;
   if(activeRelayOperationId || draftRecoveryInFlight)return;
   if(relayDraftFromComposer()){
     scheduleDraftRecovery(0);
@@ -1509,6 +1629,7 @@ function drainDeferredActions(){
 }
 
 async function run(p){
+  if(operatorPaused)return;
   if(attempted.has(p.id)||inflight.has(p.id))return;
   if(userTurnContainsPacketId(p.id)){
     rememberAttempted(p.id);
@@ -1601,9 +1722,16 @@ ${JSON.stringify({
     chars:String(r.result||'').length
   });
 
+  rememberAttempted(p.id);
+  if(outboundOwner==='windows'){
+    inflight.delete(p.id);
+    if(activeRelayOperationId===p.id)activeRelayOperationId=null;
+    emitRelayEvent('relay_result_delivery_delegated_windows',{packet_id:p.id});
+    scheduleDeferredDrain(100);
+    return;
+  }
   try{
     const deliveryState=await injectConfirmed(r.result,p.id,r.attachments||[]);
-    rememberAttempted(p.id);
     inflight.delete(p.id);
     if(activeRelayOperationId===p.id)activeRelayOperationId=null;
     if(deliveryState==='accepted'){
@@ -1684,8 +1812,7 @@ function inspectUnit(unit){
   if(prior?.timer)clearTimeout(prior.timer);
   emitRelayEvent('relay_packet_discovered',{
     packet_id:p.id,
-    source:unit===watchedUnit?'watched_turn':'recovery_scan',
-    conversation_key:relayConversationKey()
+    source:unit===watchedUnit?'watched_turn':'recovery_scan'
   });
 
   const timer=setTimeout(()=>{
@@ -1734,6 +1861,11 @@ function newestRelayCommandUnit(){
   return null;
 }
 
+function recoveryConversationKey(){
+  const m=String(location.pathname||"").match(/^\/c\/[^/?#]+/);
+  return m?(location.origin+m[0]):null;
+}
+
 function persistRecoveryPacketWatch(){
   try{
     if(!recoveryPacketId){
@@ -1742,6 +1874,7 @@ function persistRecoveryPacketWatch(){
     }
     sessionStorage.setItem(RECOVERY_WATCH_SESSION_KEY,JSON.stringify({
       id:recoveryPacketId,
+      conversation_key:recoveryConversationKey(),
       first_seen_at:recoveryPacketFirstSeenAt,
       last_refresh_at:recoveryPacketLastRefreshAt
     }));
@@ -1750,22 +1883,26 @@ function persistRecoveryPacketWatch(){
 
 function hydrateRecoveryPacketWatch(){
   try{
-    const raw=JSON.parse(sessionStorage.getItem(RECOVERY_WATCH_SESSION_KEY)||'null');
-    if(!raw || typeof raw.id!=='string' || !raw.id)return;
+    const raw=JSON.parse(sessionStorage.getItem(RECOVERY_WATCH_SESSION_KEY)||"null");
+    if(!raw||typeof raw.id!=="string"||!raw.id)return;
     const first=Number(raw.first_seen_at||0);
-    const refreshed=Number(raw.last_refresh_at||0);
+    const currentKey=recoveryConversationKey();
+    const storedKey=typeof raw.conversation_key==="string"?raw.conversation_key:"";
+    const age=first>0?Math.max(0,Date.now()-first):Number.POSITIVE_INFINITY;
+    if(!currentKey||!storedKey||storedKey!==currentKey||age>RECOVERY_WATCH_MAX_AGE_MS){
+      sessionStorage.removeItem(RECOVERY_WATCH_SESSION_KEY);
+      emitRelayEvent("relay_recovery_obligation_discarded",{packet_id:raw.id,age_ms:Number.isFinite(age)?age:null});
+      return;
+    }
     recoveryPacketId=raw.id;
-    recoveryPacketFirstSeenAt=Number.isFinite(first)&&first>0?first:Date.now();
-    recoveryPacketLastRefreshAt=Number.isFinite(refreshed)&&refreshed>0?refreshed:0;
-    emitRelayEvent('relay_recovery_obligation_restored',{
-      packet_id:recoveryPacketId,
-      first_seen_at:recoveryPacketFirstSeenAt,
-      last_refresh_at:recoveryPacketLastRefreshAt||null
-    });
+    recoveryPacketFirstSeenAt=first;
+    recoveryPacketLastRefreshAt=Number(raw.last_refresh_at||0)||0;
+    emitRelayEvent("relay_recovery_obligation_restored",{packet_id:recoveryPacketId,conversation_key:currentKey});
   }catch{}
 }
 
 function armRecoveryPacketWatch(packetId,now=Date.now()){
+  if(!recoveryConversationKey()){resetRecoveryPacketWatch();return;}
   if(recoveryPacketId===packetId && recoveryPacketFirstSeenAt)return;
   recoveryPacketId=packetId;
   recoveryPacketFirstSeenAt=now;
@@ -1809,8 +1946,12 @@ function expireStaleRelayOperationOwner(now=Date.now()){
 }
 
 function maybeScheduleRecoveryRefresh(packetId,now=Date.now()){
+  if(operatorPaused)return;
   if(!packetId || !recoveryPacketFirstSeenAt)return;
+  const currentKey=recoveryConversationKey();
+  if(!currentKey){resetRecoveryPacketWatch(packetId);return;}
   const stalledFor=Math.max(0,now-recoveryPacketFirstSeenAt);
+  if(stalledFor>RECOVERY_WATCH_MAX_AGE_MS){emitRelayEvent("relay_recovery_obligation_expired",{packet_id:packetId,age_ms:stalledFor,conversation_key:currentKey});resetRecoveryPacketWatch(packetId);return;}
   if(stalledFor<RELAY_STALL_PATIENCE_MS || recoveryRefreshScheduled)return;
   if(
     recoveryPacketLastRefreshAt &&
@@ -1826,7 +1967,9 @@ function maybeScheduleRecoveryRefresh(packetId,now=Date.now()){
     stalled_ms:stalledFor,
     recovery:'page_refresh_after_durable_obligation'
   });
-  setTimeout(()=>{
+  recoveryRefreshTimer=setTimeout(()=>{
+    recoveryRefreshTimer=null;
+    if(operatorPaused)return;
     recoveryRefreshScheduled=false;
     if(
       recoveryPacketId!==packetId ||
@@ -1848,6 +1991,7 @@ function maybeScheduleRecoveryRefresh(packetId,now=Date.now()){
 }
 
 function forceRecoveryPacketInspect(){
+  if(operatorPaused)return;
   const now=Date.now();
   expireStaleRelayOperationOwner(now);
   const unit=newestRelayCommandUnit();
@@ -1932,6 +2076,7 @@ function bindConversationRoot(){
 }
 
 function scheduleWatchedInspect(){
+  if(operatorPaused)return;
   if(watchedInspectTimer!==null)return;
   watchedInspectTimer=setTimeout(()=>{
     watchedInspectTimer=null;
@@ -1972,6 +2117,7 @@ function bindScrollRoot(unit){
 }
 
 function scheduleAutoScroll(){
+  if(operatorPaused)return;
   if(!scrollRoot || (!followBottom && Date.now()>=relayHandoffScrollUntil) || scrollTimer!==null)return;
   scrollTimer=setTimeout(()=>{
     scrollTimer=null;
@@ -1981,6 +2127,7 @@ function scheduleAutoScroll(){
 }
 
 function bindAssistantUnit(latest){
+  if(operatorPaused)return;
   if(!latest)return;
   if(latest===watchedUnit){
     scheduleWatchedInspect();
@@ -2003,6 +2150,7 @@ function bindAssistantUnit(latest){
 }
 
 function recoverLatestAssistant(){
+  if(operatorPaused)return;
   bindConversationRoot();
   hydrateAttemptedFromConversation();
   reconcileSubmittedResults();
@@ -2121,6 +2269,7 @@ function inspectChatGPTUiError(){
 }
 
 function scheduleChatGPTUiErrorInspect(){
+  if(operatorPaused)return;
   if(uiErrorInspectTimer!==null)return;
   uiErrorInspectTimer=setTimeout(()=>{
     uiErrorInspectTimer=null;
@@ -2129,15 +2278,17 @@ function scheduleChatGPTUiErrorInspect(){
 }
 
 function bindChatGPTUiErrorDetector(){
+  if(operatorPaused)return;
   if(!document.body){setTimeout(bindChatGPTUiErrorDetector,250);return;}
   uiErrorObserver?.disconnect();
   uiErrorObserver=null;
   scheduleChatGPTUiErrorInspect();
-  setInterval(scheduleChatGPTUiErrorInspect,2000);
+  if(uiErrorInspectInterval===null)uiErrorInspectInterval=setInterval(scheduleChatGPTUiErrorInspect,2000);
 }
 
 /* GPT_CHATGPT_TOOL_APPROVAL_PROMPT_DETECTOR_V1 */
 function scheduleToolApprovalPromptInspect(){
+  if(operatorPaused)return;
   if(approvalInspectTimer!==null)return;
   approvalInspectTimer=setTimeout(()=>{
     approvalInspectTimer=null;
@@ -2204,6 +2355,7 @@ function scheduleToolApprovalPromptInspect(){
             bottom:true,
             exact_surface:true
           });
+          if(operatorPaused)return;
           alwaysAllow.click();
         }
       }
@@ -2213,11 +2365,12 @@ function scheduleToolApprovalPromptInspect(){
 }
 
 function bindToolApprovalPromptDetector(){
+  if(operatorPaused)return;
   if(!document.body){setTimeout(bindToolApprovalPromptDetector,250);return;}
   approvalPromptObserver?.disconnect();
   approvalPromptObserver=null;
   scheduleToolApprovalPromptInspect();
-  setInterval(scheduleToolApprovalPromptInspect,2000);
+  if(approvalInspectInterval===null)approvalInspectInterval=setInterval(scheduleToolApprovalPromptInspect,2000);
 }
 
 // Persistent background channel:
@@ -2229,17 +2382,14 @@ hydrateAttemptedHistory();
 hydrateSubmittedResults();
 hydrateRecoveryPacketWatch();
 connectBackgroundPort();
-bindToolApprovalPromptDetector();
-bindChatGPTUiErrorDetector();
-setTimeout(pollConsumerMission,500);
-consumerMissionPollTimer=setInterval(pollConsumerMission,1500);
+operatorControlPollTimer=setInterval(pollOperatorControlState,250);
+setTimeout(pollOperatorControlState,25);
 emitRelayEvent('content_script_started',{
   href:location.href,
-  runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1-owner-v1'
+  runtime:'v11-scroll-v5-delivery-v17-whole-stop-v1-submit-once-scoped-recovery-draft-owner-release-approval-v3-uierror-v1-owner-v1',
+  stop_contract:'whole-stop-v1',
+  operator_paused:operatorPaused
 });
-resumePersistedHandoff();
-setTimeout(()=>{recoverExistingRelayDraft().catch(()=>{});},150);
-setTimeout(()=>{for(const id of submittedResults.keys())trackSubmittedResult(id);},500);
 
 // Relay UX scroll handoff:
 // - after the relay injects/sends a result, follow the newest conversation edge
@@ -2256,8 +2406,7 @@ setTimeout(()=>{for(const id of submittedResults.keys())trackSubmittedResult(id)
 //   into view exactly once; manual scrolling remains authoritative afterward
 // - attempted packet history is bounded
 // - smart bottom-follow is throttled to 1200 ms and yields to manual scrolling
-setTimeout(recoverLatestAssistant,250);
-recoveryTimer=setInterval(recoverLatestAssistant,15000);
+void operatorControlPollTimer;
 void recoveryTimer;
 void consumerMissionPollTimer;
 })();

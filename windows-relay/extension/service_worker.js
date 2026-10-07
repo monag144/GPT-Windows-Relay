@@ -6,6 +6,11 @@ const ACTION_RETRY_WINDOW_MS=45000;
 const ACTION_RETRY_DELAY_MS=1000;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const consumerMissionPorts=new Map();
+const relayContentPorts=new Set();
+let operatorStopAckGeneration=0;
+let operatorStopAckExpected=new Set();
+let operatorStopAckReceived=new Set();
+let operatorStopAckEmittedGeneration=0;
 let preferredConsumerMissionTabId=null;
 let lastBrowserHeartbeatAt=0;
 
@@ -51,7 +56,6 @@ function operationSeriesPosition(id){
   }
   return {ordinal,suffix_rank,id:String(id)};
 }
-
 function compareOperationPosition(a,b){
   for(const key of ['ordinal','suffix_rank']){
     const d=Number(a?.[key]||0)-Number(b?.[key]||0);
@@ -59,7 +63,6 @@ function compareOperationPosition(a,b){
   }
   return 0;
 }
-
 function relayPacketMeta(packet){
   const text=String(packet||'');
   const a=text.indexOf('[GPT_WINDOWS_ACTION]');
@@ -75,11 +78,7 @@ function relayPacketMeta(packet){
     };
   }catch{return {id:null,session:'default',owner_claim:false};}
 }
-
-function relayPacketId(packet){
-  return relayPacketMeta(packet).id;
-}
-
+function relayPacketId(packet){return relayPacketMeta(packet).id;}
 function normalizeConversationKey(value){
   try{
     const u=new URL(String(value||''));
@@ -87,20 +86,17 @@ function normalizeConversationKey(value){
     return u.origin+u.pathname.replace(/\/+$/,'');
   }catch{return null;}
 }
-
 function relaySessionVersion(session){
   const m=String(session||'').trim().match(/^(?:pce|pceng)(\d+)(?:\.(\d+))?$/i);
   if(!m)return null;
   return {major:Number(m[1]),minor:Number(m[2]||0)};
 }
-
 function compareSessionVersion(a,b){
   if(!a||!b)return 0;
   if(a.major!==b.major)return a.major<b.major?-1:1;
   if(a.minor!==b.minor)return a.minor<b.minor?-1:1;
   return 0;
 }
-
 async function activeFocusedTabId(){
   try{
     const tabs=await chrome.tabs.query({active:true,lastFocusedWindow:true});
@@ -108,28 +104,23 @@ async function activeFocusedTabId(){
     return tab?.id??null;
   }catch{return null;}
 }
-
 function checkAndClaimRelayOwner(port,message,meta){
   const task=relayOwnerChain.then(async()=>{
     const tabId=port?.sender?.tab?.id;
     const conversationKey=normalizeConversationKey(message?.conversation_key||message?.conversation_href||port?.sender?.tab?.url);
-    if(!Number.isInteger(tabId)||!conversationKey){
-      return {ok:false,error:'conversation_identity_missing',owner:null};
-    }
+    if(!Number.isInteger(tabId)||!conversationKey)return {ok:false,error:'conversation_identity_missing',owner:null};
     const activeTabId=await activeFocusedTabId();
     const isActive=activeTabId===tabId;
     const raw=await extensionStorageGet(RELAY_OWNER_KEY);
     const saved=raw?.[RELAY_OWNER_KEY];
     const owner=saved&&typeof saved==='object'?saved:null;
     const session=String(meta?.session||'default');
-
     if(!owner){
       if(!isActive)return {ok:false,error:'relay_owner_unclaimed_inactive_tab',owner:null};
       const next={conversation_key:conversationKey,session,tab_id:tabId,updated_at:new Date().toISOString()};
       await extensionStorageSet({[RELAY_OWNER_KEY]:next});
       return {ok:true,claimed:true,transferred:false,owner:next};
     }
-
     if(owner.conversation_key===conversationKey){
       if(owner.session==='default'&&session!=='default'){
         const next={...owner,session,tab_id:tabId,updated_at:new Date().toISOString()};
@@ -138,20 +129,13 @@ function checkAndClaimRelayOwner(port,message,meta){
       }
       return {ok:true,claimed:false,transferred:false,owner};
     }
-
     if(!isActive)return {ok:false,error:'relay_owner_mismatch_inactive_tab',owner};
     if(session==='default')return {ok:false,error:'legacy_default_session_blocked',owner};
-
     const incomingVersion=relaySessionVersion(session);
     const ownerVersion=relaySessionVersion(owner.session);
     const newer=!!incomingVersion&&!!ownerVersion&&compareSessionVersion(incomingVersion,ownerVersion)>0;
-    if(session===owner.session&&!meta?.owner_claim){
-      return {ok:false,error:'relay_owner_same_session_different_conversation',owner};
-    }
-    if(!meta?.owner_claim&&!newer&&owner.session!=='default'){
-      return {ok:false,error:'relay_owner_transfer_requires_claim',owner};
-    }
-
+    if(session===owner.session&&!meta?.owner_claim)return {ok:false,error:'relay_owner_same_session_different_conversation',owner};
+    if(!meta?.owner_claim&&!newer&&owner.session!=='default')return {ok:false,error:'relay_owner_transfer_requires_claim',owner};
     const next={conversation_key:conversationKey,session,tab_id:tabId,updated_at:new Date().toISOString(),previous_conversation_key:owner.conversation_key,previous_session:owner.session};
     await extensionStorageSet({[RELAY_OWNER_KEY]:next});
     return {ok:true,claimed:false,transferred:true,owner:next,previous:owner};
@@ -159,7 +143,6 @@ function checkAndClaimRelayOwner(port,message,meta){
   relayOwnerChain=task.catch(()=>{});
   return task;
 }
-
 function checkAndAdvanceOperationCursor(id,owner){
   const task=operationCursorChain.then(async()=>{
     const pos=operationSeriesPosition(id);
@@ -167,9 +150,7 @@ function checkAndAdvanceOperationCursor(id,owner){
     const ownerKey=String(owner?.session||'default')+'|'+String(owner?.conversation_key||'');
     const raw=await extensionStorageGet(OPERATION_CURSOR_KEY);
     const cursor=raw?.[OPERATION_CURSOR_KEY];
-    if(cursor&&typeof cursor==='object'&&cursor.owner_key===ownerKey&&compareOperationPosition(pos,cursor)<0){
-      return {late:true,position:pos,cursor};
-    }
+    if(cursor&&typeof cursor==='object'&&cursor.owner_key===ownerKey&&compareOperationPosition(pos,cursor)<0)return {late:true,position:pos,cursor};
     const next={...pos,owner_key:ownerKey,session:owner?.session||'default',conversation_key:owner?.conversation_key||null,updated_at:new Date().toISOString()};
     await extensionStorageSet({[OPERATION_CURSOR_KEY]:next});
     return {late:false,position:pos,cursor:next};
@@ -177,6 +158,8 @@ function checkAndAdvanceOperationCursor(id,owner){
   operationCursorChain=task.catch(()=>{});
   return task;
 }
+/* GPT_RELAY_CONVERSATION_OWNER_V1 */
+/* GPT_RELAY_OP_TOKEN_CURSOR_V1 */
 
 async function noteDeliveredOperation(port,id){
   const raw=await extensionStorageGet(CHAT_ROTATION_KEY);
@@ -298,6 +281,35 @@ async function browserEvent(event,detail=null){
   }catch{}
 }
 
+
+function clearOperatorStopGeneration(){
+  operatorStopAckGeneration=0;
+  operatorStopAckExpected=new Set();
+  operatorStopAckReceived=new Set();
+  operatorStopAckEmittedGeneration=0;
+}
+
+function beginOperatorStopGeneration(generation){
+  const g=Number(generation)||0;
+  if(g<=0 || g===operatorStopAckGeneration)return;
+  operatorStopAckGeneration=g;
+  operatorStopAckExpected=new Set(relayContentPorts);
+  operatorStopAckReceived=new Set();
+  operatorStopAckEmittedGeneration=0;
+}
+
+function maybeEmitOperatorStopQuiesced(generation){
+  const g=Number(generation)||0;
+  if(g<=0 || g!==operatorStopAckGeneration || operatorStopAckEmittedGeneration===g)return;
+  for(const p of operatorStopAckExpected){if(!operatorStopAckReceived.has(p))return;}
+  operatorStopAckEmittedGeneration=g;
+  browserEvent('browser_operator_quiesced_all',{
+    stop_generation:g,
+    expected_ports:operatorStopAckExpected.size,
+    acked_ports:operatorStopAckReceived.size
+  }).catch(()=>{});
+}
+
 function browserHeartbeat(force=false){
   const now=Date.now();
   if(!force && now-lastBrowserHeartbeatAt<5000)return;
@@ -322,6 +334,7 @@ installBrowserHeartbeatLifecycle();
 
 chrome.runtime.onConnect.addListener(port=>{
   if(port?.name!=='gpt-windows-relay-content')return;
+  relayContentPorts.add(port);
   const firstConsumerPort=consumerMissionPorts.size===0;
   const consumerTabId=rememberConsumerPort(port);
   browserHeartbeat(true);
@@ -330,6 +343,7 @@ chrome.runtime.onConnect.addListener(port=>{
     browserEvent('browser_integration_connected',{tab_id:consumerTabId}).catch(()=>{});
   }
   port.onDisconnect.addListener(()=>{
+    relayContentPorts.delete(port);
     if(Number.isInteger(consumerTabId) && consumerMissionPorts.get(consumerTabId)===port){
       consumerMissionPorts.delete(consumerTabId);
       browserHeartbeat(true);
@@ -341,6 +355,28 @@ chrome.runtime.onConnect.addListener(port=>{
     }
   });
   port.onMessage.addListener(m=>{
+    if(m?.type==='operator_control_poll'){
+      (async()=>{
+        try{
+          const st=await call('/status',{},1000);
+          const generation=Number(st?.stop_generation)||0;
+          if(st?.armed===false)beginOperatorStopGeneration(generation);
+          else if(st?.armed===true && operatorStopAckGeneration)clearOperatorStopGeneration();
+          port.postMessage({type:'operator_control_state',online:true,armed:!!st?.armed,stop_generation:generation,outbound_owner:st?.outbound_owner==='windows'?'windows':'browser'});
+        }catch{
+          try{port.postMessage({type:'operator_control_state',online:false});}catch{}
+        }
+      })();
+      return;
+    }
+    if(m?.type==='operator_quiesced_ack'){
+      const generation=Number(m.stop_generation)||0;
+      if(generation===operatorStopAckGeneration && operatorStopAckExpected.has(port)){
+        operatorStopAckReceived.add(port);
+        maybeEmitOperatorStopQuiesced(generation);
+      }
+      return;
+    }
     if(m?.type==='relay_event' && typeof m.event==='string'){
       browserEvent(m.event,m.detail??null).catch(()=>{});
       return;
@@ -377,35 +413,23 @@ chrome.runtime.onConnect.addListener(port=>{
       try{
         const ownerDecision=await checkAndClaimRelayOwner(port,m,meta);
         if(!ownerDecision.ok){
-          browserEvent('relay_cross_conversation_suppressed',{
-            request_id:m.request_id,
-            packet_id:packetId,
-            session:meta.session,
-            conversation_key:normalizeConversationKey(m.conversation_key||m.conversation_href||port?.sender?.tab?.url),
-            error:ownerDecision.error,
-            owner:ownerDecision.owner
-          }).catch(()=>{});
+          browserEvent('relay_cross_conversation_suppressed',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:normalizeConversationKey(m.conversation_key||m.conversation_href||port?.sender?.tab?.url),error:ownerDecision.error,owner:ownerDecision.owner}).catch(()=>{});
           reply={ok:false,error:ownerDecision.error};
         }else{
           if(ownerDecision.claimed||ownerDecision.transferred||ownerDecision.upgraded){
-            browserEvent(ownerDecision.transferred?'relay_conversation_owner_transferred':'relay_conversation_owner_claimed',{
-              packet_id:packetId,
-              session:meta.session,
-              owner:ownerDecision.owner,
-              previous:ownerDecision.previous||null
-            }).catch(()=>{});
+            browserEvent(ownerDecision.transferred?'relay_conversation_owner_transferred':'relay_conversation_owner_claimed',{packet_id:packetId,session:meta.session,owner:ownerDecision.owner,previous:ownerDecision.previous||null}).catch(()=>{});
           }
           const cursorDecision=await checkAndAdvanceOperationCursor(packetId,ownerDecision.owner);
-          if(cursorDecision.late){
-            browserEvent('relay_late_packet_suppressed',{
-              packet_id:packetId,
-              position:cursorDecision.position,
-              cursor:cursorDecision.cursor
-            }).catch(()=>{});
-            reply={ok:false,error:'late_packet_suppressed'};
-          }else{
-            browserEvent('action_received',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:ownerDecision.owner?.conversation_key||null}).catch(()=>{});
-            const d=await callAction(m.packet);
+        if(cursorDecision.late){
+          browserEvent('relay_late_packet_suppressed',{
+            packet_id:packetId,
+            position:cursorDecision.position,
+            cursor:cursorDecision.cursor
+          }).catch(()=>{});
+          reply={ok:false,error:'late_packet_suppressed'};
+        }else{
+          browserEvent('action_received',{request_id:m.request_id,packet_id:packetId}).catch(()=>{});
+          const d=await callAction(m.packet);
           if(/\"status\"\s*:\s*\"DUPLICATE_IGNORED\"/.test(String(d.result||''))){
             reply={ok:false,error:'duplicate_suppressed'};
             }else{
@@ -447,6 +471,3 @@ chrome.runtime.onMessage.addListener((m,_s,reply)=>{(async()=>{try{
 /* GPT_ONE_CLICK_BROWSER_HEARTBEAT_V1 */
 /* GPT_RELAY_CHAT_ROTATION_100_V1 */
 /* GPT_RELAY_DELIVERED_OPERATION_DEDUPE_V1 */
-
-/* GPT_RELAY_CONVERSATION_OWNER_V1 */
-/* GPT_RELAY_OP_TOKEN_CURSOR_V1 */

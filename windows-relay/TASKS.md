@@ -87,3 +87,59 @@
 - [x] **P2:** Build and validate current unsigned persistent XPI; add environment-only unlisted AMO signing automation.
 
 - [x] **P2:** Install/verify local Node + npx + web-ext signing toolchain without requiring elevation.
+
+- [ ] AUTONOMY: eliminate manual browser refresh after runtime deploy/rollback; relay must autonomously re-establish browser runtime ownership without duplicate delivery.
+
+
+  - PCE8.7 proof: fresh relay action succeeded without the requested manual refresh; manual refresh request was unnecessary user action. Keep the autonomy task open until browser-runtime ownership handoff is deterministic after every deploy/rollback.
+
+## PCE8 browser-session reliability gates — 2026-10-06
+- [x] PCE8.23B: retire backend-completed packet before result-delivery ambiguity.
+- [x] PCE8.29C: expire and conversation-scope durable recovery obligations; full suite 271/271.
+- [ ] PCE8.26B SESSION ESCAPE: deterministic managed-conversation reacquisition after extension reload, page reload, rollback, and tab/context loss.
+- [ ] Redesign canary so it owns its fresh discovery/execution/result proof instead of waiting for an unissued future packet.
+- [ ] Browser acceptance must verify the exact expected conversation in addition to runtime identity.
+- [ ] Do not deploy v15 until the three browser-session requirements above have regression coverage and source validation.
+- [ ] Whole-product STOP/quiescence remains open.
+
+## Reliability recovery checkpoint — 2026-10-06T2126Z
+
+- [x] Reproduce the Director-observed sustained-forward-progress failure on protected live v11.
+- [x] Prove PCE8.61 completed before stale draft recovery reacquired its packet ID.
+- [x] Prove failed draft recovery leaked `activeRelayOperationId` and blocked PCE8.62 for multiple minutes.
+- [x] Fix the general draft-recovery owner-release invariant in source runtime v16 (`694d47ab89596d5c3801f749caa352b951a2be52`).
+- [x] Regression validation: 55 browser-contract tests, 273 Windows-relay tests, 99 consumer tests PASS under canonical suite environments.
+- [ ] Guarded live v16 activation on the exact persisted engineering conversation.
+- [ ] Fresh v16 exact roundtrip with exact-route proof and no duplicate Windows execution.
+- [ ] Explicitly exercise a failed/deferred draft-recovery attempt and prove the next packet is not stranded behind stale ownership.
+- [ ] Sustained multi-operation v16 soak with intervention count recorded.
+- [ ] Promote v16 to protected live baseline only after the above runtime gates pass.
+- [ ] Restore/reconcile the modern HUD only after the browser reliability baseline is stable; live HUD remains the rollback-era implementation.
+- [ ] Close whole-product STOP so browser timers, result delivery, recovery refresh, deferred drains and watchdog resurrection all quiesce while stopped.
+
+**Priority note:** R0 sustained relay forward progress remains ahead of the signed-XPI / restart-validation P2 external gate. P2 is still required, but it is not the next engineering action while browser forward progress is not yet accepted.
+
+## PCE8 v16 acceptance status — 2026-10-06T22:19Z
+
+- [x] Guarded v16 live Firefox canary.
+- [x] Failed-draft owner-release path live proven.
+- [x] Post-release exact-once forward progress proven.
+- [x] Five-operation sustained soak proven with zero active-operation starvation.
+- [ ] General stale-owner lease/deadman acceptance.
+- [ ] Whole-product STOP semantics.
+- [ ] Restart/signing/browser-matrix acceptance.
+- [ ] Safe managed-conversation rotation.
+- [ ] Separately guarded modern-HUD recovery.
+- [ ] Audit local/remote divergence before any push.
+
+## PCE8 ownership recovery closure — 2026-10-06T22:36Z
+
+- [x] Failed-draft owner release live proven.
+- [x] General five-minute stale-owner lease/deadman live proven.
+- [x] Pre-expiry owner retention live proven.
+- [x] Exact-replay and exact-visible stale-owner release branches live proven.
+- [ ] Whole-product STOP semantics.
+- [ ] Restart/signing/browser-matrix acceptance.
+- [ ] Safe managed-conversation rotation.
+- [ ] Separately guarded modern-HUD recovery.
+- [ ] Audit local/remote divergence before any push.

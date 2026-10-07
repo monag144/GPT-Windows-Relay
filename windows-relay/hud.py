@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,ctypes,json,os,re,socket,subprocess,tkinter as tk,urllib.request
+import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -9,7 +9,7 @@ A=Path(os.environ.get("APPDATA",Path.home()))/"GPTWindowsRelay"
 L=Path(os.environ.get("LOCALAPPDATA",Path.home()))/"GPTWindowsRelay"
 POS=A/"hud-settings.json"
 HUD_LAYOUT_VERSION=3
-W,COMPACT_H,EXPANDED_H=560,184,386
+W,COMPACT_H,EXPANDED_H=460,154,356
 BG="#202124"; PANEL="#202124"; FG="#f1f3f4"; MUTED="#bdc1c6"; GOOD="#8ab4f8"; WARN="#fdd663"; BAD="#f28b82"; BORDER="#5f6368"
 
 def read_json(p,d):
@@ -126,9 +126,8 @@ def command_preview(command,limit=92):
     return text if len(text)<=limit else text[:limit-1]+"…"
 
 # GPT_RELAY_HUD_OPERATOR_STOP_START_V1
-# GPT_RELAY_HUD_OPERATOR_CONTROL_V2
 def relay_control(action):
-    if action not in {"start","stop","restart","off","kill"}:raise ValueError("unsupported relay control")
+    if action not in {"start","stop"}:raise ValueError("unsupported relay control")
     script=Path(__file__).with_name("relay-control.ps1")
     if not script.is_file():raise FileNotFoundError(script)
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
@@ -145,39 +144,12 @@ def request(path,timeout=.65):
     q=urllib.request.Request(f"http://127.0.0.1:{port}{path}",headers={"X-GPT-Windows-Relay-Token":str(token)})
     with urllib.request.urlopen(q,timeout=timeout) as r:return json.loads(r.read().decode())
 
-def control_state(root=None):
-    root=Path(root) if root is not None else Path(__file__).resolve().parent
-    if (root/".relay-kill-failed").exists():return "KILL FAILED"
-    if (root/".relay-kill-hud").exists():return "KILLING HUD"
-    if (root/".relay-kill").exists():return "KILLING RELAY"
-    if (root/".relay-off").exists():return "OFF"
-    if (root/".relay-paused").exists():return "STOPPED"
-    if (root/".relay-starting").exists():return "STARTING"
-    return "RUNNING"
-
-def marker_text(name,root=None):
-    root=Path(root) if root is not None else Path(__file__).resolve().parent
-    try:return (root/name).read_text(encoding="utf-8-sig").strip()
-    except Exception:return ""
-
-def backend_disconnect_reason(exc=None,root=None):
-    root=Path(root) if root is not None else Path(__file__).resolve().parent
-    saved=marker_text(".relay-disconnect-reason",root)
-    if saved:return saved
-    c=cfg(); port=int(c.get("port",8766))
-    try:
-        with socket.create_connection(("127.0.0.1",port),timeout=.20):pass
-    except OSError:
-        return f"port {port} not listening"
-    if exc:return f"status endpoint unavailable • {type(exc).__name__}"
-    return "backend unavailable"
-
 def operation_label(packet_id):
     m=re.search(r"(?i)\bA\d+\.\d+\b",str(packet_id or ""))
     return m.group(0).upper() if m else str(packet_id or "")[:32]
 
 def headline(online,life,browser):
-    if not online:return "DISCONNECTED"
+    if not online:return "OFFLINE"
     if life["phase"]=="STALLED":return "STALLED"
     if life["phase"]=="RECOVERING":return "RECOVERING"
     if life["phase"]=="RUNNING":return "RUNNING"
@@ -188,51 +160,24 @@ def headline(online,life,browser):
 def snapshot():
     state=read_json(L/"state.json",{"processed":{}})
     events=recent_events()
-    backend_exc=None
     try:
         status=request("/status"); online=bool(status.get("ok")); armed=bool(status.get("armed"))
         pending=int(status.get("pending_missions",0))
         backend=f"Relay {'ONLINE' if online else 'OFFLINE'} • {'ARMED' if armed else 'DISARMED'} • pending {pending}"
-    except Exception as exc:
-        backend_exc=exc
-        online=False; armed=False; pending=0
-        backend=f"Relay DISCONNECTED • {backend_disconnect_reason(exc)}"
+    except Exception:
+        online=False; armed=False; backend="Relay OFFLINE"
     browser=browser_state(events)
     life=lifecycle(events,state)
     detail,is_active=action_detail(state)
-    intent=control_state()
-    title_phase=headline(online,life,browser) if intent=="RUNNING" else intent
-    phase_age=life.get("age")
-    phase_line=f"{life['phase']} • {life['reason']}"
-    if phase_age is not None:phase_line+=f" • {phase_age}s"
-
-    if intent=="STOPPED":
-        backend="Relay STOPPED • operator stop"
-        phase_line="STOPPED • operator requested stop"
-    elif intent=="OFF":
-        backend="Relay OFF • backend and watchdog intentionally shut down"
-        phase_line="OFF • operator shutdown"
-    elif intent=="STARTING":
-        backend="Relay STARTING • waiting for port 8766"
-        phase_line="STARTING • launching watchdog and backend"
-    elif intent=="KILLING RELAY":
-        backend="Relay KILLING • force-stopping backend, supervisor and watchdog"
-        phase_line="KILLING RELAY • emergency shutdown in progress"
-    elif intent=="KILLING HUD":
-        backend="Relay KILLED • closing HUD"
-        phase_line="KILLING HUD • final shutdown stage"
-    elif intent=="KILL FAILED":
-        reason=marker_text(".relay-kill-failed") or "verification failed"
-        backend=f"Relay KILL FAILED • {reason}"
-        phase_line=f"KILL FAILED • {reason}"
-    elif not online:
-        reason=backend_disconnect_reason(backend_exc)
-        backend=f"Relay DISCONNECTED • {reason}"
-        phase_line=f"DISCONNECTED • {reason}"
-
+    paused=(Path(__file__).with_name(".relay-paused")).exists()
+    title_phase="STOPPED" if (paused and not online) else headline(online,life,browser)
+    if paused and not online:backend="Relay STOPPED • operator stop"
     bid=str(browser.get("browser_id") or "browser").title()
     age=browser.get("age")
     browser_line=f"{bid} {browser['state']} • {browser['event']} • {age if age is not None else '?'}s"
+    phase_age=life.get("age")
+    phase_line=f"{life['phase']} • {life['reason']}"
+    if phase_age is not None:phase_line+=f" • {phase_age}s"
     packet_id=life.get("packet_id")
     if detail and (is_active or not packet_id):packet_id=detail.get("id") or packet_id
     title=title_phase
@@ -255,7 +200,7 @@ def snapshot():
         exact=f"ID: {packet_id}\n\nExact command is not available until the packet reaches the Windows relay."
     return {
         "online":online,"title":title,"title_phase":title_phase,"backend":backend,"browser":browser_line,
-        "phase":phase_line,"action":action_line,"preview":preview,"exact":exact,"intent":intent,
+        "phase":phase_line,"action":action_line,"preview":preview,"exact":exact,
     }
 
 def acquire_mutex():
@@ -264,7 +209,6 @@ def acquire_mutex():
     return None if (not h or k.GetLastError()==183) else h
 
 def run_ui():
-    if (Path(__file__).with_name(".relay-kill")).exists() and not (Path(__file__).with_name(".relay-kill-failed")).exists():return 0
     mutex=acquire_mutex()
     if os.name=="nt" and mutex is None:return 0
     root=tk.Tk(); root.title("GPT Relay HUD"); root.overrideredirect(True); root.resizable(False,False)
@@ -288,31 +232,14 @@ def run_ui():
     toggle=tk.Button(top,text="▾",font=("Segoe UI",9,"bold"),bg=PANEL,fg=MUTED,activebackground="#303134",
                      activeforeground=FG,bd=0,highlightthickness=0,padx=5,pady=0,cursor="hand2")
     toggle.pack(side="right")
-    min_btn=tk.Button(top,text="—",font=("Segoe UI",9,"bold"),bg=PANEL,fg=MUTED,activebackground="#303134",
-                      activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=0,cursor="hand2")
-    min_btn.pack(side="right",padx=(0,3))
-
-    controls=tk.Frame(panel,bg=PANEL); controls.pack(fill="x",pady=(4,2))
-    start_btn=tk.Button(controls,text="START",font=("Segoe UI",8,"bold"),bg="#174ea6",fg=FG,activebackground="#1967d2",
-                        activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",
-                        command=lambda:relay_control("start"))
-    start_btn.pack(side="left",padx=(0,3))
-    stop_btn=tk.Button(controls,text="STOP",font=("Segoe UI",8,"bold"),bg="#5f2120",fg=FG,activebackground="#7a2e2b",
-                       activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",
+    stop_btn=tk.Button(top,text="STOP",font=("Segoe UI",8,"bold"),bg="#5f2120",fg=FG,activebackground="#7a2e2b",
+                       activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=1,cursor="hand2",
                        command=lambda:relay_control("stop"))
-    stop_btn.pack(side="left",padx=3)
-    restart_btn=tk.Button(controls,text="RESTART",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",
-                          activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",
-                          command=lambda:relay_control("restart"))
-    restart_btn.pack(side="left",padx=3)
-    off_btn=tk.Button(controls,text="OFF",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",
-                      activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",
-                      command=lambda:relay_control("off"))
-    off_btn.pack(side="left",padx=3)
-    kill_btn=tk.Button(controls,text="KILL",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",
-                       activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",
-                       command=lambda:relay_control("kill"))
-    kill_btn.pack(side="left",padx=3)
+    stop_btn.pack(side="right",padx=(3,2))
+    start_btn=tk.Button(top,text="START",font=("Segoe UI",8,"bold"),bg="#174ea6",fg=FG,activebackground="#1967d2",
+                        activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=1,cursor="hand2",
+                        command=lambda:relay_control("start"))
+    start_btn.pack(side="right",padx=(2,2))
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
@@ -340,19 +267,6 @@ def run_ui():
         except Exception:pass
     for widget in (root,panel,top,title,relay,browser,phase,action,preview):
         widget.bind("<ButtonPress-1>",down); widget.bind("<B1-Motion>",move); widget.bind("<ButtonRelease-1>",save)
-    def minimize_hud():
-        save()
-        try:
-            root.overrideredirect(False)
-            root.iconify()
-        except tk.TclError:pass
-    def restore_borderless(_e=None):
-        try:
-            if root.state()=="normal":root.after(20,lambda:root.overrideredirect(True))
-        except tk.TclError:pass
-    min_btn.configure(command=minimize_hud)
-    root.bind("<Map>",restore_borderless)
-
     # GPT_RELAY_HUD_NO_HIDDEN_RIGHT_CLICK_EXIT_V1
 
     def set_details(text):
@@ -371,7 +285,7 @@ def run_ui():
             root.geometry(f"{W}x{COMPACT_H}+{root.winfo_x()}+{root.winfo_y()}")
     toggle.configure(command=toggle_details)
 
-    colors={"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"RUNNING":GOOD,"READY":GOOD}
+    colors={"OFFLINE":BAD,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
     def refresh():
         snap=snapshot()
         title.configure(text=snap["title"],fg=colors.get(snap.get("title_phase",snap["title"]),GOOD))

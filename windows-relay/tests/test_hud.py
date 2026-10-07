@@ -145,60 +145,20 @@ class HudTests(unittest.TestCase):
   self.assertIn('GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1',text)
 
 
- def test_operator_control_state_machine(self):
-  from pathlib import Path
-  from tempfile import TemporaryDirectory
-  with TemporaryDirectory() as d:
-   root=Path(d)
-   self.assertEqual(hud.control_state(root),'RUNNING')
-   (root/'.relay-starting').touch(); self.assertEqual(hud.control_state(root),'STARTING'); (root/'.relay-starting').unlink()
-   (root/'.relay-paused').touch(); self.assertEqual(hud.control_state(root),'STOPPED'); (root/'.relay-paused').unlink()
-   (root/'.relay-off').touch(); self.assertEqual(hud.control_state(root),'OFF'); (root/'.relay-off').unlink()
-   (root/'.relay-kill').touch(); self.assertEqual(hud.control_state(root),'KILLING RELAY')
-   (root/'.relay-kill-hud').touch(); self.assertEqual(hud.control_state(root),'KILLING HUD')
-   (root/'.relay-kill-failed').write_text('verification failed',encoding='utf-8'); self.assertEqual(hud.control_state(root),'KILL FAILED')
-
- def test_no_backend_is_disconnected(self):
-  self.assertEqual(hud.headline(False,{'phase':'READY'},{'state':'ACTIVE'}),'DISCONNECTED')
-
- def test_hud_exposes_start_stop_restart_off_kill_and_minimize(self):
-  from pathlib import Path
-  source=(Path(hud.__file__).resolve().parent/'hud.py').read_text(encoding='utf-8')
-  for action in ('start','stop','restart','off','kill'):
-   self.assertIn(f'command=lambda:relay_control("{action}")',source)
-  self.assertIn('min_btn.configure(command=minimize_hud)',source)
-  self.assertIn('root.iconify()',source)
-  self.assertIn('KILLING RELAY',source)
-  self.assertIn('KILLING HUD',source)
-  self.assertIn('DISCONNECTED',source)
-
- def test_control_plane_supports_intent_and_hard_kill(self):
+ def test_operator_stop_is_presented_as_stopped(self):
   from pathlib import Path
   root=Path(hud.__file__).resolve().parent
+  source=(root/'hud.py').read_text(encoding='utf-8')
+  stop=(root/'STOP-RELAY.bat').read_text(encoding='utf-8')
   control=(root/'relay-control.ps1').read_text(encoding='utf-8')
-  self.assertIn("'off','kill'",control)
-  for marker in ('.relay-off','.relay-kill','.relay-kill-hud','.relay-starting','.relay-kill-failed'):
-   self.assertIn(marker,control)
-  self.assertIn('function GenuineWatchdogs',control)
-  self.assertIn('function GenuineRelayProcesses',control)
-  self.assertIn("Write-Output 'OFF'",control)
-  self.assertIn("Write-Output 'KILLED'",control)
-  self.assertIn("Write-Output 'DISCONNECTED'",control)
-
- def test_watchdog_respects_off_and_kill_before_hud_reconcile(self):
-  from pathlib import Path
-  text=(Path(hud.__file__).resolve().parent/'relay-watchdog-loop.ps1').read_text(encoding='utf-8')
-  call='EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1'
-  self.assertLess(text.index("if(Test-Path -LiteralPath $kill)"),text.index(call))
-  self.assertLess(text.index("if(Test-Path -LiteralPath $off)"),text.index(call))
-  self.assertIn('WATCHDOG_KILL_LATCH_EXIT',text)
-  self.assertIn('WATCHDOG_OFF_LATCH_EXIT',text)
-
- def test_sync_live_deploys_entire_control_plane(self):
-  from pathlib import Path
-  text=(Path(hud.__file__).resolve().parent/'sync-live.py').read_text(encoding='utf-8')
-  for rel in ('START-RELAY.bat','STOP-RELAY.bat','relay-control.ps1','relay-watchdog-loop.ps1','run.ps1'):
-   self.assertIn(f'"{rel}"',text)
+  self.assertIn('title_phase="STOPPED" if (paused and not online)',source)
+  self.assertIn('Relay STOPPED • operator stop',source)
+  self.assertIn("$q=if($verified){'VERIFIED'}else{'UNVERIFIED'}",control)
+  self.assertIn("BROWSER_QUIESCENCE=",control)
+  self.assertIn("GENERATION=",control)
+  self.assertIn("if($Action -eq 'stop'){Write-Output ('STOPPED BROWSER_QUIESCENCE='+$q+' GENERATION='+$stopGeneration)}",control)
+  self.assertIn("else{Write-Output ('PAUSED BROWSER_QUIESCENCE='+$q+' GENERATION='+$stopGeneration)}",control)
+  self.assertIn('Relay is STOPPED.',stop)
 
 
 if __name__=='__main__':unittest.main()

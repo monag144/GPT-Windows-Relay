@@ -1,21 +1,52 @@
 param(
- [Parameter(Mandatory=$true)][ValidateSet('list-tabs','select-tab','reload-addon','refresh-tab','ensure-addon','close-profile','send-chatgpt-prompt','read-chatgpt-text')][string]$Action,
+ [Parameter(Mandatory=$true)][ValidateSet('list-tabs','select-tab','reload-addon','refresh-tab','ensure-addon','close-profile','send-chatgpt-prompt','read-chatgpt-text','send-relay-result','resolve-conversation-tab')][string]$Action,
  [string]$TabName='',
  [string]$Contains='',
  [string]$AddonName='',
  [string]$ManifestPath='',
  [int]$FirefoxPid=0,
  [string]$ProfilePath='',
- [string]$PromptText=''
+ [string]$PromptText='',
+ [string]$ResultFile='',
+ [string]$PacketId='',
+ [string]$ExactTabName='',
+ [string]$ConversationUrl=''
 )
 $ErrorActionPreference='Stop'
+function Normalize-RelayConversationUrl([string]$Value,[bool]$Strict=$false){
+ try{
+  if([string]::IsNullOrWhiteSpace($Value)){throw 'invalid'}
+  $u=[Uri]$Value
+  $parts=@($u.AbsolutePath.Trim('/') -split '/')
+  if($u.Scheme -ne 'https' -or $u.Host -ne 'chatgpt.com' -or $parts.Count -ne 2 -or $parts[0] -ne 'c' -or [string]::IsNullOrWhiteSpace($parts[1])){throw 'invalid'}
+  return 'https://chatgpt.com/c/'+$parts[1]
+ }catch{
+  if($Strict){throw 'FIREFOX_CONVERSATION_URL_INVALID'}
+  return $null
+ }
+}
 if($Action -in @('select-tab','refresh-tab')){
  if(([string]::IsNullOrEmpty($TabName) -and [string]::IsNullOrEmpty($Contains)) -or (-not [string]::IsNullOrEmpty($TabName) -and -not [string]::IsNullOrEmpty($Contains))){throw 'TAB_SELECTOR_REQUIRED_EXACTLY_ONE'}
 }
 if($Action -in @('reload-addon','ensure-addon') -and [string]::IsNullOrWhiteSpace($AddonName)){throw 'ADDON_NAME_REQUIRED'}
 if($Action -eq 'close-profile' -and [string]::IsNullOrWhiteSpace($ProfilePath)){throw 'PROFILE_PATH_REQUIRED'}
 if($Action -eq 'send-chatgpt-prompt' -and [string]::IsNullOrWhiteSpace($PromptText)){throw 'PROMPT_TEXT_REQUIRED'}
+if($Action -eq 'resolve-conversation-tab'){$ConversationUrl=Normalize-RelayConversationUrl $ConversationUrl $true}
 if($PromptText.Length -gt 12000){throw 'PROMPT_TEXT_TOO_LONG'}
+if($Action -eq 'send-relay-result'){
+ if([string]::IsNullOrWhiteSpace($ResultFile)){throw 'RELAY_RESULT_FILE_REQUIRED'}
+ if([string]::IsNullOrWhiteSpace($PacketId)){throw 'RELAY_RESULT_PACKET_ID_REQUIRED'}
+ if([string]::IsNullOrWhiteSpace($ExactTabName)){throw 'RELAY_RESULT_EXACT_TAB_REQUIRED'}
+ if([string]::IsNullOrWhiteSpace($ConversationUrl)){throw 'RELAY_RESULT_CONVERSATION_URL_REQUIRED'}
+ $ConversationUrl=Normalize-RelayConversationUrl $ConversationUrl $true
+ $ResultFile=[IO.Path]::GetFullPath($ResultFile)
+ if(-not(Test-Path -LiteralPath $ResultFile -PathType Leaf)){throw 'RELAY_RESULT_FILE_NOT_FOUND'}
+ $utf8=New-Object System.Text.UTF8Encoding($false,$true)
+ $ResultText=[System.IO.File]::ReadAllText($ResultFile,$utf8)
+ if([string]::IsNullOrWhiteSpace($ResultText)){throw 'RELAY_RESULT_TEXT_REQUIRED'}
+ if($ResultText.Length -gt 250000){throw 'RELAY_RESULT_TEXT_TOO_LONG'}
+ if(-not $ResultText.Contains($PacketId)){throw 'RELAY_RESULT_PACKET_ID_NOT_IN_TEXT'}
+}
 if(-not [string]::IsNullOrWhiteSpace($ProfilePath)){$ProfilePath=[IO.Path]::GetFullPath($ProfilePath)}
 if($Action -eq 'ensure-addon'){
  if([string]::IsNullOrWhiteSpace($ManifestPath)){throw 'MANIFEST_PATH_REQUIRED'}
@@ -83,6 +114,63 @@ if($fw.Count -lt 1){
  throw ('FIREFOX_WINDOW_MATCH_COUNT_0 profile_roots='+$rootIds+' targets='+$targetIds+' visible_mozilla='+($visibleMozilla -join ';'))
 }
 $tc=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::TabItem)
+if($Action -eq 'resolve-conversation-tab'){
+ # GPT_WINDOWS_FIREFOX_MANAGED_CONVERSATION_RESOLVER_V1
+ $walker=[System.Windows.Automation.TreeWalker]::ControlViewWalker
+ $matches=@();$restore=@();$scanError=$null;$restoreFailed=$false
+ try{
+  foreach($candidate in $fw){
+   $candidateTabs=$candidate.FindAll([System.Windows.Automation.TreeScope]::Descendants,$tc)
+   $canonical=@()
+   foreach($tab in $candidateTabs){
+    try{
+     if($tab.Current.IsOffscreen -or -not $tab.Current.IsEnabled){continue}
+     $parent=$walker.GetParent($tab)
+     if($null -eq $parent -or $parent.Current.ControlType -ne [System.Windows.Automation.ControlType]::Tab -or $parent.Current.AutomationId -ne 'tabbrowser-tabs'){continue}
+     $canonical+=,$tab
+    }catch{}
+   }
+   if($canonical.Count -eq 0){continue}
+   $selected=@()
+   foreach($tab in $canonical){
+    try{$sp=$null;if($tab.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$sp) -and $sp.Current.IsSelected){$selected+=,$tab}}catch{}
+   }
+   if($selected.Count -ne 1){throw ('FIREFOX_CONVERSATION_ORIGINAL_SELECTION_COUNT_'+$selected.Count)}
+   $restore+=,[ordered]@{tab=$selected[0]}
+   foreach($tab in $canonical){
+    $sp=$null
+    if(-not $tab.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$sp)){throw 'FIREFOX_CONVERSATION_TAB_SELECTION_UNAVAILABLE'}
+    $sp.Select();Start-Sleep -Milliseconds 180
+    if(-not $sp.Current.IsSelected){throw 'FIREFOX_CONVERSATION_TAB_SELECTION_MISMATCH'}
+    $aid=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::AutomationIdProperty,'urlbar-input')
+    $bars=$candidate.FindAll([System.Windows.Automation.TreeScope]::Descendants,$aid)
+    if($bars.Count -ne 1){throw ('FIREFOX_CONVERSATION_URLBAR_COUNT_'+$bars.Count)}
+    $vp=$null
+    if(-not $bars[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp)){throw 'FIREFOX_CONVERSATION_URLBAR_VALUE_UNAVAILABLE'}
+    $actual=Normalize-RelayConversationUrl ([string]$vp.Current.Value) $false
+    if($null -ne $actual -and $actual -eq $ConversationUrl){
+     $matches+=,[ordered]@{firefox_pid=[int]$candidate.Current.ProcessId;tab_name=[string]$tab.Current.Name;conversation_url=$actual}
+    }
+   }
+  }
+ }catch{$scanError=$_.Exception.Message}
+ finally{
+  foreach($item in @($restore)){
+   try{
+    $rsp=$null
+    if(-not $item.tab.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$rsp)){throw 'pattern'}
+    $rsp.Select();Start-Sleep -Milliseconds 80
+    if(-not $rsp.Current.IsSelected){throw 'readback'}
+   }catch{$restoreFailed=$true}
+  }
+ }
+ if($restoreFailed){throw 'FIREFOX_CONVERSATION_ORIGINAL_SELECTION_RESTORE_FAILED'}
+ if(-not [string]::IsNullOrWhiteSpace($scanError)){throw $scanError}
+ if($matches.Count -ne 1){throw ('FIREFOX_CONVERSATION_MATCH_COUNT_'+$matches.Count)}
+ $m=$matches[0]
+ [ordered]@{ok=$true;action='resolve-conversation-tab';firefox_pid=[int]$m.firefox_pid;tab_name=[string]$m.tab_name;conversation_url=[string]$m.conversation_url;match_count=1}|ConvertTo-Json -Compress
+ exit 0
+}
 $chatTarget=$null
 if($Action -in @('reload-addon','ensure-addon')){
  # GPT_WINDOWS_FIREFOX_DEBUG_WINDOW_SEMANTIC_SELECTION_V1
@@ -96,14 +184,27 @@ if($Action -in @('reload-addon','ensure-addon')){
  }
  if($debugHosts.Count -ne 1){throw ('FIREFOX_DEBUGGING_WINDOW_COUNT_'+$debugHosts.Count)}
  $firefox=$debugHosts[0]
-}elseif($Action -in @('send-chatgpt-prompt','read-chatgpt-text')){
+}elseif($Action -in @('send-chatgpt-prompt','read-chatgpt-text','send-relay-result')){
  # GPT_WINDOWS_FIREFOX_OUT_OF_BAND_PROMPT_V1
  # GPT_WINDOWS_FIREFOX_OUT_OF_BAND_READBACK_V1
+ # GPT_WINDOWS_FIREFOX_RELAY_RESULT_EXACT_TARGET_V1
  $chatHosts=@()
+ $hostWalker=[System.Windows.Automation.TreeWalker]::ControlViewWalker
  foreach($candidate in $fw){
   $candidateTabs=$candidate.FindAll([System.Windows.Automation.TreeScope]::Descendants,$tc)
   foreach($tab in $candidateTabs){
-   try{if(([string]$tab.Current.Name) -match '(?i)ChatGPT|PC Engineering'){$chatHosts+=,$candidate;$chatTarget=$tab;break}}catch{}
+   try{
+    $tabName=[string]$tab.Current.Name
+    if($Action -eq 'send-relay-result'){
+     if($tabName -ne $ExactTabName){continue}
+     $parent=$hostWalker.GetParent($tab)
+     if($null -eq $parent){continue}
+     if($parent.Current.ControlType -ne [System.Windows.Automation.ControlType]::Tab){continue}
+     if($parent.Current.AutomationId -ne 'tabbrowser-tabs'){continue}
+     $chatHosts+=,$candidate;$chatTarget=$tab;break
+    }
+    if($tabName -match '(?i)ChatGPT|PC Engineering'){$chatHosts+=,$candidate;$chatTarget=$tab;break}
+   }catch{}
   }
  }
  if($chatHosts.Count -ne 1){throw ('FIREFOX_CHATGPT_WINDOW_COUNT_'+$chatHosts.Count)}
@@ -154,6 +255,128 @@ if($Action -eq 'read-chatgpt-text'){
  $body=[string]$textPattern.DocumentRange.GetText(-1)
  if($body.Length -gt 24000){$body=$body.Substring($body.Length-24000)}
  [ordered]@{ok=$true;action='read-chatgpt-text';firefox_pid=[int]$firefox.Current.ProcessId;tab_name=[string]$chatTarget.Current.Name;text=$body;text_chars=$body.Length}|ConvertTo-Json -Compress
+ exit 0
+}
+if($Action -eq 'send-relay-result'){
+ # GPT_WINDOWS_FIREFOX_RELAY_RESULT_TRANSACTION_V1
+ # Clipboard paste is primary. No ValuePattern text insertion and no Enter fallback.
+ $pause=Join-Path $PSScriptRoot '.relay-paused'
+ $sendInvoked=$false
+ $confirmed=$false
+ $state='PRE_SUBMIT_FAILED'
+ $errorText=''
+ $sendName=''
+ $insertionMethod='guarded_clipboard_paste'
+ $submissionMethod='semantic_send_button'
+ try{
+  if(Test-Path -LiteralPath $pause){throw 'RELAY_RESULT_OPERATOR_PAUSED'}
+  if($null -eq $chatTarget){throw 'FIREFOX_RELAY_RESULT_TAB_COUNT_0'}
+  if(([string]$chatTarget.Current.Name) -ne $ExactTabName){throw 'FIREFOX_RELAY_RESULT_TAB_IDENTITY_MISMATCH'}
+  $chatSelection=$null
+  if(-not $chatTarget.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$chatSelection)){throw 'FIREFOX_RELAY_RESULT_TAB_SELECTION_PATTERN_UNAVAILABLE'}
+  $chatSelection.Select();Start-Sleep -Milliseconds 180
+  if(-not $chatSelection.Current.IsSelected){throw 'FIREFOX_RELAY_RESULT_TAB_SELECTION_READBACK_MISMATCH'}
+
+  # GPT_WINDOWS_FIREFOX_RELAY_RESULT_URL_BINDING_V1
+  $relayUrlCondition=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::AutomationIdProperty,'urlbar-input')
+  $relayUrlBars=$firefox.FindAll([Windows.Automation.TreeScope]::Descendants,$relayUrlCondition)
+  if($relayUrlBars.Count -ne 1){throw ('FIREFOX_RELAY_RESULT_URLBAR_COUNT_'+$relayUrlBars.Count)}
+  $relayUrlPattern=$null
+  if(-not $relayUrlBars[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$relayUrlPattern)){throw 'FIREFOX_RELAY_RESULT_URLBAR_VALUE_UNAVAILABLE'}
+  $relayActualUrl=Normalize-RelayConversationUrl ([string]$relayUrlPattern.Current.Value) $false
+  if($null -eq $relayActualUrl -or $relayActualUrl -ne $ConversationUrl){throw 'FIREFOX_RELAY_RESULT_CONVERSATION_URL_MISMATCH'}
+
+  $editType=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)
+  $edits=$firefox.FindAll([Windows.Automation.TreeScope]::Descendants,$editType)
+  $composers=@()
+  foreach($e in $edits){
+   try{
+    if($e.Current.IsEnabled -and -not $e.Current.IsOffscreen -and ([string]$e.Current.Name) -eq 'Ask ChatGPT' -and ([string]$e.Current.ClassName) -eq 'ProseMirror'){$composers+=,$e}
+   }catch{}
+  }
+  if($composers.Count -ne 1){throw ('FIREFOX_RELAY_RESULT_COMPOSER_COUNT_'+$composers.Count)}
+  $valuePattern=$null
+  if(-not $composers[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$valuePattern)){throw 'FIREFOX_RELAY_RESULT_COMPOSER_VALUE_PATTERN_UNAVAILABLE'}
+  if($valuePattern.Current.IsReadOnly){throw 'FIREFOX_RELAY_RESULT_COMPOSER_READ_ONLY'}
+  if(-not [string]::IsNullOrWhiteSpace([string]$valuePattern.Current.Value)){throw 'FIREFOX_RELAY_RESULT_COMPOSER_NOT_EMPTY'}
+
+  Add-Type -AssemblyName System.Windows.Forms
+  $oldClipboard=$null
+  $clipboardCaptured=$false
+  try{
+   try{$oldClipboard=[System.Windows.Forms.Clipboard]::GetDataObject();$clipboardCaptured=$true}catch{}
+   if(Test-Path -LiteralPath $pause){throw 'RELAY_RESULT_OPERATOR_PAUSED_BEFORE_PASTE'}
+   $composers[0].SetFocus();Start-Sleep -Milliseconds 80
+   [System.Windows.Forms.Clipboard]::SetText($ResultText)
+   [System.Windows.Forms.SendKeys]::SendWait('^v')
+   Start-Sleep -Milliseconds 300
+   if(([string]$valuePattern.Current.Value) -ne $ResultText){throw 'FIREFOX_RELAY_RESULT_CLIPBOARD_PASTE_READBACK_MISMATCH'}
+
+   $buttonType=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Button)
+   $buttons=$firefox.FindAll([System.Windows.Automation.TreeScope]::Descendants,$buttonType)
+   $send=@()
+   foreach($b in $buttons){
+    try{
+     if($b.Current.IsEnabled -and -not $b.Current.IsOffscreen -and ([string]$b.Current.Name) -match '(?i)^Send(?: prompt| message)?$'){$send+=,$b}
+    }catch{}
+   }
+   if($send.Count -ne 1){throw ('FIREFOX_RELAY_RESULT_SEND_BUTTON_COUNT_'+$send.Count)}
+   $sendInvoke=$null
+   if(-not $send[0].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$sendInvoke)){throw 'FIREFOX_RELAY_RESULT_SEND_INVOKE_UNAVAILABLE'}
+
+   # Final no-send boundary. Anything after sendInvoked becomes fail-closed/uncertain.
+   if(Test-Path -LiteralPath $pause){throw 'RELAY_RESULT_OPERATOR_PAUSED_BEFORE_SEND'}
+   if(-not $chatSelection.Current.IsSelected){throw 'FIREFOX_RELAY_RESULT_TAB_LOST_BEFORE_SEND'}
+   $relayActualUrlBeforeSend=Normalize-RelayConversationUrl ([string]$relayUrlPattern.Current.Value) $false
+   if($null -eq $relayActualUrlBeforeSend -or $relayActualUrlBeforeSend -ne $ConversationUrl){throw 'FIREFOX_RELAY_RESULT_CONVERSATION_URL_CHANGED_BEFORE_SEND'}
+   if(([string]$valuePattern.Current.Value) -ne $ResultText){throw 'FIREFOX_RELAY_RESULT_COMPOSER_CHANGED_BEFORE_SEND'}
+   $sendName=[string]$send[0].Current.Name
+   $sendInvoked=$true
+   $state='SUBMIT_UNCERTAIN'
+   $sendInvoke.Invoke()
+
+   $deadline=[DateTime]::UtcNow.AddSeconds(10)
+   do{
+    Start-Sleep -Milliseconds 120
+    try{
+     if([string]::IsNullOrWhiteSpace([string]$valuePattern.Current.Value)){
+      $confirmed=$true
+      $state='SUBMITTED'
+      break
+     }
+    }catch{}
+   }while([DateTime]::UtcNow -lt $deadline)
+  }finally{
+   if($clipboardCaptured){
+    try{
+     if($null -ne $oldClipboard){[System.Windows.Forms.Clipboard]::SetDataObject($oldClipboard,$true)}
+     else{[System.Windows.Forms.Clipboard]::Clear()}
+    }catch{}
+   }
+  }
+ }catch{
+  $errorText=[string]$_.Exception.Message
+  if($sendInvoked){$state='SUBMIT_UNCERTAIN'}else{$state='PRE_SUBMIT_FAILED'}
+ }
+
+ # Always return the transaction phase. Callers may retry PRE_SUBMIT_FAILED only;
+ # SUBMITTED and SUBMIT_UNCERTAIN are terminal for automatic delivery.
+ [ordered]@{
+  ok=$true
+  action='send-relay-result'
+  state=$state
+  packet_id=$PacketId
+  firefox_pid=[int]$firefox.Current.ProcessId
+  tab_name=[string]$chatTarget.Current.Name
+  composer_name=if($composers.Count -eq 1){[string]$composers[0].Current.Name}else{''}
+  result_chars=$ResultText.Length
+  insertion=$insertionMethod
+  submission=$submissionMethod
+  send_button=$sendName
+  send_invoked=$sendInvoked
+  confirmed=$confirmed
+  error=$errorText
+ }|ConvertTo-Json -Compress
  exit 0
 }
 if($Action -eq 'send-chatgpt-prompt'){

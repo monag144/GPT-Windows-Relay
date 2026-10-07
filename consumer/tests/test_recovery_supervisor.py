@@ -70,16 +70,28 @@ class RecoverySupervisorTests(unittest.TestCase):
         self.assertEqual(packet, "PCENG-A6.396-test")
         self.assertIsNotNone(age)
 
-    def test_repair_browser_uses_firefox_one_click_setup(self):
-        with mock.patch.object(rs.browser_manager, "detect_browsers", return_value=[
-            {"id": "firefox", "family": "firefox", "supported": True}
-        ]), mock.patch.object(
-            rs.browser_manager, "open_extension_setup", return_value={"connected": True}
-        ) as setup:
-            ok, detail = rs._repair_browser("firefox")
+    def test_repair_browser_reacquires_exact_managed_firefox_conversation(self):
+        url="https://chatgpt.com/c/abc-123"
+        with mock.patch.object(rs.browser_manager,"detect_browsers",return_value=[{"id":"firefox","family":"firefox","supported":True}]), mock.patch.object(rs.browser_manager,"get_managed_conversation_url",return_value=url), mock.patch.object(rs.browser_manager,"open_extension_setup",return_value={"connected":True}) as setup, mock.patch.object(rs.browser_manager,"reacquire_managed_conversation",return_value={"matched":True,"url":url}) as reacquire:
+            ok,detail=rs._repair_browser("firefox")
         self.assertTrue(ok)
-        setup.assert_called_once_with("firefox")
-        self.assertIn("rebuilt", detail)
+        setup.assert_called_once_with("firefox",url=url)
+        reacquire.assert_called_once_with("firefox",url)
+        self.assertIn("conversation",detail.lower())
+
+    def test_repair_browser_fails_closed_without_managed_firefox_conversation(self):
+        with mock.patch.object(rs.browser_manager,"detect_browsers",return_value=[{"id":"firefox","family":"firefox","supported":True}]), mock.patch.object(rs.browser_manager,"get_managed_conversation_url",return_value=None), mock.patch.object(rs.browser_manager,"open_extension_setup") as setup:
+            ok,detail=rs._repair_browser("firefox")
+        self.assertFalse(ok)
+        setup.assert_not_called()
+        self.assertIn("no managed",detail.lower())
+
+    def test_repair_browser_fails_if_exact_reacquisition_fails(self):
+        url="https://chatgpt.com/c/abc-123"
+        with mock.patch.object(rs.browser_manager,"detect_browsers",return_value=[{"id":"firefox","family":"firefox","supported":True}]), mock.patch.object(rs.browser_manager,"get_managed_conversation_url",return_value=url), mock.patch.object(rs.browser_manager,"open_extension_setup",return_value={"connected":True}), mock.patch.object(rs.browser_manager,"reacquire_managed_conversation",side_effect=rs.browser_manager.BrowserError("wrong route")):
+            ok,detail=rs._repair_browser("firefox")
+        self.assertFalse(ok)
+        self.assertIn("wrong route",detail)
 
     def test_repair_browser_uses_existing_cdp_setup_for_chromium(self):
         with mock.patch.object(rs.browser_manager, "detect_browsers", return_value=[
