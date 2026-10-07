@@ -24,6 +24,9 @@ FILES = [
     "uia_control_action.ps1",
     "screenshot_capture.ps1",
     "hud.py",
+    "relay-control.ps1",
+    "relay-watchdog-loop.ps1",
+    "run-control.ps1",
     "START-HUD.bat",
     "windows_relay.py",
     "content.js",
@@ -40,6 +43,15 @@ FILES = [
     "extension-persistent/manifest.json",
     "extension-persistent/popup.html",
     "extension-persistent/popup.js",
+    "workday_provider_v2.py",
+    "sync-live.py",
+    "STOP-RELAY.bat",
+    "windows_outbound_worker.py",
+    "reasoning_broker_v2.py",
+    "job_application_session_v2.py",
+    "job_application_runner_v2.py",
+    "job_application_manifest_v2.py",
+    "job_application_engine_v2.py",
 ]
 
 
