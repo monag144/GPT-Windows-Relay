@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CONTROL_HARNESS_VERSION = 2
+CONTROL_HARNESS_VERSION = 3
 
 class ControlHarnessError(ValueError):
     pass
@@ -61,7 +61,7 @@ def incident_filename(hint: str, *, observed_at: datetime | None = None) -> str:
 def write_incident(repo_root: Path, hint: str, sections: dict[str,str], *, observed_at: datetime | None = None) -> dict:
     if not isinstance(sections, dict) or not sections:
         raise ControlHarnessError("incident sections are required")
-    docs = Path(repo_root) / "docs"; docs.mkdir(parents=True, exist_ok=True); path = docs / incident_filename(hint, observed_at=observed_at)
+    docs = Path(repo_root) / "docs" / "incidents"; docs.mkdir(parents=True, exist_ok=True); path = docs / incident_filename(hint, observed_at=observed_at)
     body = [f"# INCIDENT {_stamp(observed_at)} — {hint.strip()}", ""]
     for heading, text in sections.items():
         body.extend([f"## {str(heading).strip()}", str(text).strip(), ""])
@@ -106,7 +106,7 @@ def validate_windows_runtime_contract(run_ps1: str, consumer_run_ps1: str, relay
         "main_runner_mutex":"Local\\GPTWindowsRelaySupervisor" in run_ps1,
         "main_runner_default_server":"& $py $server server" in run_ps1 and "--config $config --state-dir $stateDir server" not in run_ps1,
         "consumer_runner_isolated":"GPTWindowsRelayConsumer" in consumer_run_ps1 and "Local\\GPTWindowsRelayConsumerSupervisor" in consumer_run_ps1 and "--config $config --state-dir $stateDir server" in consumer_run_ps1,
-        "relay_control_targets_main_runner":"$run=Join-Path $root 'run.ps1'" in relay_control_ps1,
+        "relay_control_targets_main_runner":"$run=Join-Path $root 'run-control.ps1'" in relay_control_ps1,
         "rollback_restarts_watchdog":"rollback_watchdog_started" in cutover_py and "start_watchdog(ns.live)" in cutover_py,
         "hud_gui_is_verified":"wait_hud_process" in cutover_py and "rollback_hud_ready" in cutover_py,
     }
@@ -128,18 +128,32 @@ def evaluate_runtime_transition(observed: dict) -> dict:
     blockers=[name for name,ok in checks.items() if not ok]
     return {"ok":not blockers,"checks":checks,"blockers":blockers}
 
-def assess_engineering_operation_budget(current_operation:int,max_operation:int=100,next_chat_title:str="💻PC Engineering 9🔧")->dict:
-    if current_operation<1 or current_operation>max_operation: raise ControlHarnessError("invalid operation")
+def assess_engineering_operation_budget(current_operation:int,max_operation:int=100,current_series:int=8,next_chat_title:str|None=None)->dict:
+    if current_operation<0 or current_operation>max_operation: raise ControlHarnessError("invalid operation")
+    if current_series<1: raise ControlHarnessError("invalid engineering series")
     r=max_operation-current_operation
-    return {"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":next_chat_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
+    successor_title=next_chat_title or f"💻PC Engineering {current_series+1}🔧"
+    return {"current_series":current_series,"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":successor_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
 
 def build_control_harness_contract(mission_id: str) -> dict:
     return {
         "version": CONTROL_HARNESS_VERSION,
         "mission_id": mission_id,
+        "turn_discipline": {
+            "read_every_turn": [
+                "consumer/control_harness.py",
+                "windows-relay/TASKS.md",
+                "docs/windows-relay-mission-and-roadmap.md"
+            ],
+            "canonical_windows_repository": "monag144/GPT-Windows-Relay",
+            "sandwich_required": True,
+            "audit_every_engineering_turns": 5,
+            "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
+            "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
+        },
         "incident_logging": {
             "method": "write_incident",
-            "path_rule": "docs/INCIDENT_<UTC timestamp>_<short hint>.md",
+            "path_rule": "docs/incidents/INCIDENT_<UTC timestamp>_<short hint>.md",
             "rule": "Log abnormal rendering, autonomy, user-rescue, tooling, transport, data-loss, duplicate-send, or execution incidents as small timestamped records. Do not create a giant current/active/authoritative incident document."
         },
         "reflection": {
