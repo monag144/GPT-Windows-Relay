@@ -87,3 +87,26 @@ Source validation is not live proof. Live cutover must verify:
 4. current PCE8.1 OP sequence executes normally;
 5. browser/result delivery remains healthy after extension reload.
 
+
+
+## Confirmed live evidence from delayed OP001
+
+A delayed result for `PCE8.1-OP001-reconcile-health-audit` later arrived with:
+
+- packet session: `default`
+- action start: `2026-10-07T04:11:48Z`
+- action finish: `2026-10-07T04:11:52Z`
+- immediately preceding PCE8 bootstrap OP003 had already finished at `2026-10-07T04:11:45Z`
+
+This is direct live proof that an older, default-session packet remained executable and was admitted **after a newer PCE8.1 operation had already completed**.
+
+The same OP001 telemetry showed:
+
+- old content runtime still active: `v11-scroll-v5-delivery-v16-submit-once-backend-retired-scoped-recovery-draft-owner-release-approval-v3-uierror-v1`
+- a fresh `action_received` event at `04:11:47Z`, immediately before OP001 began
+- no conversation-owner telemetry, because the owner-boundary extension had not yet been deployed
+- the live canonical Windows checkout path did not yet exist locally; the active local source checkout remained the old `GPT-Termux-Relay-consumer` clone
+- duplicate live HUD processes were present, reinforcing the need for a separate HUD/process-health cutover after ownership is fixed
+
+This converts the cross-conversation/stale-queue diagnosis from inference to reproduced live evidence.
+
