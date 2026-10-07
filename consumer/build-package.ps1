@@ -24,7 +24,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $consumerRoot $name) -Destination (Join-Path $stage $name) -Force
   }
   foreach($name in @(
-    'windows_relay.py','run.ps1','content.js','chromium_extension_setup.ps1','firefox_adapter.py','firefox_tab_adapter.ps1','screenshot_capture.ps1',
+    'windows_relay.py','run.ps1','run-consumer.ps1','content.js','chromium_extension_setup.ps1','firefox_adapter.py','firefox_tab_adapter.ps1','screenshot_capture.ps1',
     'uia_control_action.ps1','uia_text_entry.ps1','windows_tools.py','windows_workflow.py',
     'relay-control.ps1','hud.py'
   )){

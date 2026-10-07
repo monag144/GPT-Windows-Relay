@@ -376,3 +376,7 @@ PCE7.429 live evidence makes result submission a state-machine boundary, not a g
 - This requirement must be implemented without weakening normal keep-alive/self-healing behavior when operator pause is absent.
 - Every live candidate deployment now requires a new rollback snapshot of all files it changes. If the candidate breaks, restore the preceding snapshot first; do not stack speculative live edits on the broken candidate.
 - Timestamped rollback evidence is indexed in `docs/ROLLBACK_INDEX_2026-10-06T0701Z_RELAY_RECOVERY_BOUNDARIES.md`.
+
+## PCE8 rotation-budget amendment
+Marker: `PCE8_ROTATION_BUDGET_V1`
+At OP077 only 23 operations remain afterward. PCE9 rotation is P0 now. The next chat must be created/selected/named exactly **💻PC Engineering 9🔧**, handed off, identity-verified, and ownership-transferred before PCE8 retires.

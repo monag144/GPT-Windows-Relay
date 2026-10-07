@@ -133,11 +133,11 @@ class Tests(unittest.TestCase):
 
     def test_every_serialized_result_stdout_ends_with_sandwich_reminder(self):
         body=json.loads(wr.result({"status":"OK","stdout":"hello"}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(body["stdout"],"hello\n"+wr.SANDWICH_REMINDER)
+        self.assertEqual(body["stdout"],"hello\n"+wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
         empty=json.loads(wr.result({"status":"COMMAND_FAILED","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(empty["stdout"],wr.SANDWICH_REMINDER)
+        self.assertEqual(empty["stdout"],wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
         already=json.loads(wr.result({"status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(already["stdout"],wr.SANDWICH_REMINDER)
+        self.assertTrue(already["stdout"].endswith(wr.SANDWICH_REMINDER))
 
     def test_result_attachment_descriptor_is_extracted(self):
         out=json.dumps({"ok":True,"chatgpt_attachment":{"kind":"image","name":"screenshot-20261003T091921-123456789.png","mime":"image/png"}})

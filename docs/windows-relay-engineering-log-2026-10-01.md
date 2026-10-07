@@ -2683,3 +2683,15 @@ GitHub forensic readback proves this is local worktree divergence, not a bad rem
 Conclusion: the local Git checkout already had a modified older `windows-relay/extension/content.js`; the fast-forward did not touch that path because the incoming commit range did not modify it. The test gate correctly prevented that stale worktree file from being promoted live.
 
 Recovery must follow the new rollback-first rule: preserve the dirty local source file before restoring that path from HEAD, prove the source path is clean, rerun targeted/full tests, then create a new live rollback boundary before any staging.
+
+## 2026-10-07 — PCE8 OP077 discipline checkpoint
+Marker: `PCE8_OP077_DISCIPLINE_CHECKPOINT`
+Real progress: f04b925 startup fix promoted; v17 browser microactivation/resume proven earlier; OP070 proved main/consumer launcher collision; OP073 recorded 398 Windows tests green; OP074 recorded 101 consumer tests green and harness source gate green. Debt: repeated full-cutover scaffold delayed root-cause discovery; several test-root mistakes wasted operations; OP075 failed transport; OP076 was rejected for exceeding relay command-size limits. GitHub auto-approval source exists but live auto-click telemetry remains unproven. Rotation to 💻PC Engineering 9🔧 is now P0.
+
+## 2026-10-07 — PCE8 OP078 retry/latest-wins
+Marker: `PCE8_OP078_RETRY_LATEST_WINS`
+Adds modern HUD RETRY, selected-PC-Engineering refresh retry, latest-instruction-wins for stale/deferred browser ownership, every-result operation-discipline reminder, direct watchdog launch hardening, and PCE9 rotation budget P0. Safety invariant remains: do not preempt a genuinely inflight Windows side effect or overwrite an unresolved result draft. GitHub auto-approve live click remains unproven.
+
+## 2026-10-07 — PCE8 OP079 retry integration repair
+Marker: `PCE8_OP079_RETRY_INTEGRATION_REPAIR`
+OP078 contained real new functionality but failed its Windows integration gate due to a malformed test insertion and unsynchronized content-script copies. OP079 preserves the functionality, repairs those two integration defects, reruns complete Windows and consumer suites, and only then promotes. PCE9 rotation remains P0; GitHub auto-approval live click remains unproven.

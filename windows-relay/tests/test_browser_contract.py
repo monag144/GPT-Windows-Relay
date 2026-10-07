@@ -494,5 +494,11 @@ class BrowserContractTests(unittest.TestCase):
             self.assertIn("operator_quiesced_ack",src)
 
 
+    def test_newer_instruction_supersedes_stale_local_owner(self):
+        src=(Path(__file__).resolve().parents[1]/"extension"/"content.js").read_text(encoding="utf-8")
+        self.assertIn("GPT_WINDOWS_NEWER_INSTRUCTION_SUPERSEDES_STALE_V1",src)
+        self.assertIn("relay_stale_owner_superseded_by_newer",src)
+        self.assertIn("relay_deferred_superseded_by_newer",src)
+
 if __name__=="__main__":
     unittest.main()

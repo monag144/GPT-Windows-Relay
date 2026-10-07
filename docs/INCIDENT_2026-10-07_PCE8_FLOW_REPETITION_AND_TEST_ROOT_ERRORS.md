@@ -1,0 +1,2 @@
+# Incident: PCE8 repeated cutover flow and avoidable test-root errors
+Repeated use of the same full-cutover scaffold delayed discovery of the main/consumer launcher collision. Later operations also repeated test working-directory mistakes. Corrective action: mandatory per-operation roadmap/facts/incidents/log review, net-new progress proof, rollback boundary, development-log update, and priority-budget check.

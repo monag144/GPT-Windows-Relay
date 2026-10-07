@@ -1588,6 +1588,11 @@ function queueDeferredAction(p,reason,ownerId=null){
       });
     }
   }
+  for(const oldId of [...deferredActions.keys()]){
+    if(oldId===p.id)continue;
+    deferredActions.delete(oldId);
+    emitRelayEvent('relay_deferred_superseded_by_newer',{packet_id:oldId,newer_packet_id:p.id});
+  }
   deferredActions.set(p.id,p);
   emitRelayEvent('relay_action_queued',{
     packet_id:p.id,
@@ -1640,6 +1645,11 @@ async function run(p){
     return;
   }
 
+  // GPT_WINDOWS_NEWER_INSTRUCTION_SUPERSEDES_STALE_V1
+  if(activeRelayOperationId && activeRelayOperationId!==p.id && !inflight.has(activeRelayOperationId) && !draftRecoveryInFlight && !relayDraftFromComposer()){
+    const stale=activeRelayOperationId; activeRelayOperationId=null; activeRelayOperationClaimedAt=0; deferredActions.delete(stale);
+    emitRelayEvent('relay_stale_owner_superseded_by_newer',{packet_id:stale,newer_packet_id:p.id});
+  }
   const draft=relayDraftFromComposer();
   if(draft && draft.id!==p.id){
     queueDeferredAction(p,'existing_draft',draft.id);
@@ -1711,7 +1721,7 @@ ${JSON.stringify({
   state:'ACTION_FAILED',
   packet_id:p.id,
   detail:r?.error||'unknown_error',
-  recommended_action:'Diagnose the Windows relay failure and reissue with a new unique id.'
+  recommended_action:'Before retry: read roadmap/facts/incidents/log; prove net-new progress; log this failure; update development log; preserve rollback; check PCE8/PCE9 budget; then diagnose and reissue with a new unique id.'
 })}
 [/GPT_WINDOWS_FEEDBACK]`);
   }

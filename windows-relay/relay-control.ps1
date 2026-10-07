@@ -1,4 +1,4 @@
-param([ValidateSet('status','start','stop','restart','pause','resume')][string]$Action='status')
+param([ValidateSet('status','start','stop','restart','pause','resume','retry')][string]$Action='status')
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
 $pause=Join-Path $root '.relay-paused'
@@ -46,6 +46,19 @@ function StartSupervisor {
     Start-Process powershell.exe -WindowStyle Normal -WorkingDirectory $root -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$run+'"')) | Out-Null
     Start-Sleep -Seconds 2
   }
+}
+if($Action -eq 'retry'){
+  $py=Join-Path $root '.venv\Scripts\python.exe'
+  $adapter=Join-Path $root 'firefox_adapter.py'
+  $raw=& $py $adapter list-tabs
+  if($LASTEXITCODE -ne 0){throw 'Firefox tab discovery failed'}
+  $tabs=$raw|ConvertFrom-Json
+  $selected=@($tabs.tabs|Where-Object{$_.selected -eq $true -and $_.name -match 'PC Engineering'})
+  if($selected.Count -ne 1){throw ('Expected one selected PC Engineering tab, found '+$selected.Count)}
+  & $py $adapter refresh-tab --tab-name ([string]$selected[0].name) | Out-Null
+  if($LASTEXITCODE -ne 0){throw 'Firefox retry refresh failed'}
+  Write-Output ('RETRY_REQUESTED TAB='+[string]$selected[0].name)
+  exit
 }
 if($Action -eq 'status'){
   $l=Listener;$p=Test-Path $pause

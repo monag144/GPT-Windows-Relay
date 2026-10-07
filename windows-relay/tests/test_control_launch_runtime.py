@@ -7,6 +7,18 @@ from pathlib import Path
 
 
 @unittest.skipUnless(os.name == "nt", "Windows-only control launch acceptance")
+class SourceRunnerIsolationTests(unittest.TestCase):
+    def test_main_and_consumer_launchers_are_separate(self):
+        root=Path(__file__).resolve().parents[1]
+        main=(root/'run.ps1').read_text(encoding='utf-8-sig')
+        consumer=(root/'run-consumer.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn('Local\\GPTWindowsRelaySupervisor',main)
+        self.assertNotIn('GPTWindowsRelayConsumer',main)
+        self.assertIn('& $py $server server',main)
+        self.assertIn('Local\\GPTWindowsRelayConsumerSupervisor',consumer)
+        self.assertIn('GPTWindowsRelayConsumer',consumer)
+        self.assertIn('--config $config --state-dir $stateDir server',consumer)
+
 class ControlLaunchRuntimeTests(unittest.TestCase):
     def test_candidate_powershell_launch_pattern_handles_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="relay launch ") as d:

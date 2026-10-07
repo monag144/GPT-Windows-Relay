@@ -12,6 +12,7 @@ VERSION=1
 OPEN='[GPT_WINDOWS_ACTION]'; CLOSE='[/GPT_WINDOWS_ACTION]'
 RO='[GPT_WINDOWS_RESULT]'; RC='[/GPT_WINDOWS_RESULT]'
 SANDWICH_REMINDER='Reply to this with the sandwich technique'
+OPERATION_DISCIPLINE_REMINDER='Before the next operation: read roadmap, established facts, incident logs, and engineering log; prove net-new progress; log failures/manual rescues; update the development log; preserve rollback before mutation; check the PCE8 operation budget and PCE9 rotation; do not repeat a disproven approach.'
 ID_RE=re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 BROWSER_ID_RE=re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 PACKET_RE=re.compile(re.escape(OPEN)+r'\s*(\{.*?\})\s*'+re.escape(CLOSE),re.DOTALL)
@@ -545,7 +546,7 @@ def _with_sandwich_reminder(value:Any)->str:
     text=str(value or '').rstrip()
     if text.endswith(SANDWICH_REMINDER):
         return text
-    return (text+'\n' if text else '')+SANDWICH_REMINDER
+    return (text+'\n' if text else '')+OPERATION_DISCIPLINE_REMINDER+'\n'+SANDWICH_REMINDER
 
 def result(r):
     presented=dict(r)

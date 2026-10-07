@@ -161,4 +161,15 @@ class HudTests(unittest.TestCase):
   self.assertIn('Relay is STOPPED.',stop)
 
 
+
+ def test_retry_control_is_explicit(self):
+  from pathlib import Path
+  root=Path(hud.__file__).resolve().parent
+  source=(root/'hud.py').read_text(encoding='utf-8')
+  control=(root/'relay-control.ps1').read_text(encoding='utf-8')
+  self.assertIn('text="RETRY"',source)
+  self.assertIn('relay_control("retry")',source)
+  self.assertIn("$Action -eq 'retry'",control)
+
+
 if __name__=='__main__':unittest.main()

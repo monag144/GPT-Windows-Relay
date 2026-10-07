@@ -25,7 +25,31 @@ class ControlHarnessTests(unittest.TestCase):
         bad={**good,"user_rescues":1}
         self.assertTrue(ch.evaluate_improvement(b,good)["promote"]); self.assertFalse(ch.evaluate_improvement(b,bad)["promote"])
 
+    def test_runtime_source_gate_rejects_consumer_contaminated_main_runner(self):
+        bad_main="GPTWindowsRelayConsumer Local\\GPTWindowsRelayConsumerSupervisor --config $config --state-dir $stateDir server"
+        consumer_run="GPTWindowsRelayConsumer Local\\GPTWindowsRelayConsumerSupervisor --config $config --state-dir $stateDir server"
+        control="$run=Join-Path $root 'run.ps1'"
+        cutover="rollback_watchdog_started start_watchdog(ns.live) wait_hud_process rollback_hud_ready"
+        verdict=ch.validate_windows_runtime_contract(bad_main,consumer_run,control,cutover)
+        self.assertFalse(verdict["ok"]); self.assertIn("main_runner_not_consumer",verdict["blockers"])
+
+    def test_runtime_transition_gate_requires_distinct_relays_and_hud(self):
+        good=ch.evaluate_runtime_transition({"main_8766":True,"consumer_8767":True,"main_pid":1,"consumer_pid":2,"hud_processes":1,"firefox_runtime":"v17","helper_finalized":True})
+        bad=ch.evaluate_runtime_transition({"main_8766":True,"consumer_8767":True,"main_pid":1,"consumer_pid":1,"hud_processes":0,"firefox_runtime":"","helper_finalized":False})
+        self.assertTrue(good["ok"]); self.assertFalse(bad["ok"]); self.assertIn("one_hud",bad["blockers"])
+
+    def test_operation_budget_makes_rotation_p0(self):
+        x=ch.assess_engineering_operation_budget(77)
+        self.assertEqual(x["remaining_after_current"],23)
+        self.assertEqual(x["rotation_priority"],"P0")
+        self.assertTrue(x["rotation_build_due"])
+        self.assertEqual(x["next_chat_title"],"💻PC Engineering 9🔧")
+
+    def test_pce9_rotation_budget_is_p0(self):
+        x=ch.assess_engineering_operation_budget(78)
+        self.assertEqual(x["rotation_priority"],"P0"); self.assertEqual(x["remaining_after_current"],22); self.assertEqual(x["next_chat_title"],"💻PC Engineering 9🔧")
+
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
-        self.assertEqual(c["incident_logging"]["method"],"write_incident"); self.assertEqual(c["reflection"]["method"],"append_reflection"); self.assertEqual(c["data_policy"]["method"],"record_once"); self.assertEqual(c["continuous_improvement"]["method"],"evaluate_improvement"); self.assertIn("live-canary",c["continuous_improvement"]["cycle"])
+        self.assertEqual(c["incident_logging"]["method"],"write_incident"); self.assertEqual(c["runtime_gates"]["source_contract_method"],"validate_windows_runtime_contract"); self.assertEqual(c["reflection"]["method"],"append_reflection"); self.assertEqual(c["data_policy"]["method"],"record_once"); self.assertEqual(c["continuous_improvement"]["method"],"evaluate_improvement"); self.assertIn("live-canary",c["continuous_improvement"]["cycle"])
 if __name__=='__main__': unittest.main()

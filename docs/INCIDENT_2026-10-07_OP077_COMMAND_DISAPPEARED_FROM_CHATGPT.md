@@ -1,0 +1,2 @@
+# Incident: newer relay command disappeared from ChatGPT
+The replacement command was rendered but disappeared before execution. This is an autonomy/UI-flow incident. OP078 adds an explicit HUD RETRY control and latest-instruction-wins handling for stale/deferred local ownership. A truly executing Windows action and an undelivered relay-result draft remain protected from unsafe preemption.

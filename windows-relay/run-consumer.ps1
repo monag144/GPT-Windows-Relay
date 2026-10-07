@@ -6,9 +6,13 @@ $log=Join-Path $logDir 'supervisor.log'
 $pause=Join-Path $PSScriptRoot '.relay-paused'
 $py=Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 $server=Join-Path $PSScriptRoot 'windows_relay.py'
+$configDir=Join-Path $env:APPDATA 'GPTWindowsRelayConsumer'
+$stateDir=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayConsumer'
+$config=Join-Path $configDir 'bridge.json'
+New-Item -ItemType Directory -Force -Path $configDir,$stateDir | Out-Null
 function Log([string]$m){Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' '+$m)}
 $created=$false
-$mutex=[System.Threading.Mutex]::new($true,'Local\GPTWindowsRelaySupervisor',[ref]$created)
+$mutex=[System.Threading.Mutex]::new($true,'Local\GPTWindowsRelayConsumerSupervisor',[ref]$created)
 if(-not $created){
   Log ('SUPERVISOR_DUPLICATE_EXIT pid='+$PID)
   Write-Host '[SUPERVISOR] Another supervisor already owns the singleton lock.'
@@ -16,7 +20,7 @@ if(-not $created){
   exit 0
 }
 try {
-  try{$Host.UI.RawUI.WindowTitle='GPT Windows Relay'}catch{}
+  try{$Host.UI.RawUI.WindowTitle='GPT One-Click Go Relay'}catch{}
   Write-Host ''
   Write-Host '========================================'
   Write-Host ' GPT WINDOWS RELAY'
@@ -30,7 +34,7 @@ try {
     try {
       Log ('SERVER_START crashes='+$crashes)
       Write-Host ('[SUPERVISOR] Starting relay - crash count '+$crashes)
-      & $py $server server
+      & $py $server --config $config --state-dir $stateDir server
       $code=$LASTEXITCODE
     } catch {
       $code=1

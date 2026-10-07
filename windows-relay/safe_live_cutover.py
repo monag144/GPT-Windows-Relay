@@ -107,10 +107,11 @@ def kill_matching(kind: str):
     run(['powershell','-NoProfile','-Command',ps],timeout=25)
 
 def start_watchdog(live: Path):
-    root=str(live).replace("'","''"); wd=str(live/'relay-watchdog-loop.ps1').replace("'","''")
-    ps="$r='"+root+"';$w='"+wd+"';Start-Process powershell.exe -WindowStyle Hidden -WorkingDirectory $r -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('\\\"'+$w+'\\\"'))|Out-Null"
-    p=run(['powershell','-NoProfile','-Command',ps],timeout=25)
-    if p.returncode: raise RuntimeError('watchdog launch failed')
+    flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
+    p=subprocess.Popen(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(live/'relay-watchdog-loop.ps1')],cwd=str(live),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+    time.sleep(0.5)
+    if p.poll() is not None: raise RuntimeError('watchdog exited immediately code='+str(p.returncode))
+    return p.pid
 
 def wait_hud(py: Path, live: Path, timeout_seconds=20):
     deadline=time.time()+timeout_seconds
@@ -119,6 +120,22 @@ def wait_hud(py: Path, live: Path, timeout_seconds=20):
         if p.returncode==0: return
         time.sleep(0.5)
     raise RuntimeError('HUD health timeout')
+
+def hud_process_count(live: Path) -> int:
+    ps=r"@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^pythonw(.exe)?$' -and $_.CommandLine -and $_.CommandLine -match '(?i)Client\\Relay.*hud\.py' }).Count"
+    p=run(['powershell','-NoProfile','-Command',ps],timeout=8)
+    if p.returncode: raise RuntimeError('HUD process query failed: '+(p.stderr or p.stdout or '')[-800:])
+    try: return int((p.stdout or '0').strip().splitlines()[-1])
+    except Exception as exc: raise RuntimeError('HUD process query returned invalid count') from exc
+
+def wait_hud_process(live: Path, timeout_seconds=10):
+    deadline=time.time()+timeout_seconds
+    while time.time()<deadline:
+        count=hud_process_count(live)
+        if count==1: return
+        if count>1: raise RuntimeError('multiple HUD processes observed: '+str(count))
+        time.sleep(0.25)
+    raise RuntimeError('HUD GUI process not observed')
 
 def event_line_count(events: Path) -> int:
     if not events.is_file(): return 0
@@ -147,10 +164,11 @@ def write_report(path: Path, payload: dict):
 
 def start_legacy_hud(live: Path):
     pyw=live/'.venv'/'Scripts'/'pythonw.exe'; hud=live/'hud.py'
-    q=lambda s: "'"+str(s).replace("'","''")+"'"
-    ps='$p=Start-Process -FilePath '+q(pyw)+' -ArgumentList '+q(hud)+' -WorkingDirectory '+q(live)+' -WindowStyle Hidden -PassThru;[string]$p.Id'
-    p=run(['powershell','-NoProfile','-Command',ps],timeout=8)
-    if p.returncode: raise RuntimeError('legacy HUD launch failed: '+(p.stderr or p.stdout or '')[-800:])
+    p=subprocess.Popen([str(pyw),str(hud)],cwd=str(live),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    time.sleep(0.35)
+    if p.poll() is not None: raise RuntimeError('legacy HUD exited immediately with code '+str(p.returncode))
+    wait_hud_process(live,5)
+    return p.pid
 
 def wake(py: Path, live: Path, firefox_pid: int, message: str):
     p=run([py,live/'firefox_adapter.py','send-chatgpt-prompt','--prompt-text',message,'--firefox-pid',str(firefox_pid)],live,45)
@@ -195,7 +213,7 @@ def main():
         if not canonical_matches(ns.live,ns.canonical): raise RuntimeError('live tree is not staged canonical')
         set_run_deadline(ns.cutover_timeout);mutated=True
         restart_backend(ns.live);note('backend_restarted')
-        kill_matching('watchdog');kill_matching('hud');start_watchdog(ns.live);wait_hud(py,ns.live,min(12,max(1,int(budget_left(12)))));note('hud_rotated')
+        kill_matching('watchdog');kill_matching('hud');start_watchdog(ns.live);wait_hud(py,ns.live,min(12,max(1,int(budget_left(12)))));wait_hud_process(ns.live,min(8,max(1,int(budget_left(8)))));note('hud_rotated')
         firefox_pid=discover_firefox_pid(py,ns.live)
         baseline=event_line_count(events)
         reload_existing_addon(py,ns.live,firefox_pid,OLD_ADDON_NAME);note('addon_reloaded',pid=firefox_pid,event_baseline=baseline)
@@ -220,7 +238,8 @@ def main():
             except BaseException as e: rollback_errors.append('verify:'+repr(e));note('rollback_verify_failed',error=repr(e))
             best_effort('rollback_stop_watchdog',lambda:kill_matching('watchdog'))
             best_effort('rollback_stop_hud',lambda:kill_matching('hud'))
-            best_effort('rollback_hud_started',lambda:start_legacy_hud(ns.live))
+            best_effort('rollback_watchdog_started',lambda:start_watchdog(ns.live))
+            best_effort('rollback_hud_ready',lambda:wait_hud_process(ns.live,min(8,max(1,int(budget_left(8))))))
             try:
                 firefox_pid=discover_firefox_pid(py,ns.live);note('rollback_firefox_discovered',pid=firefox_pid)
                 loaded=False

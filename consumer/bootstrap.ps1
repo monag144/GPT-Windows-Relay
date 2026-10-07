@@ -200,7 +200,7 @@ function Relay-Online {
 }
 
 if(-not(Relay-Online)){
-  $run=Join-Path $runtime 'run.ps1'
+  $run=Join-Path $runtime 'run-consumer.ps1' # GPT_CONSUMER_DEDICATED_RUNNER_V1
   $argumentLine='-NoProfile -ExecutionPolicy Bypass -File "'+$run+'"'
   Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $argumentLine | Out-Null
   $online=$false

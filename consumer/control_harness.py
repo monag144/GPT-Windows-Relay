@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CONTROL_HARNESS_VERSION = 1
+CONTROL_HARNESS_VERSION = 2
 
 class ControlHarnessError(ValueError):
     pass
@@ -100,6 +100,39 @@ def evaluate_improvement(baseline: dict, candidate: dict) -> dict:
     if bool(candidate.get("target_incident_closed", False)): improvements.append("target_incident_closed")
     return {"promote":not blockers and bool(improvements),"blockers":blockers,"improvements":improvements}
 
+def validate_windows_runtime_contract(run_ps1: str, consumer_run_ps1: str, relay_control_ps1: str, cutover_py: str) -> dict:
+    checks={
+        "main_runner_not_consumer":"GPTWindowsRelayConsumer" not in run_ps1,
+        "main_runner_mutex":"Local\\GPTWindowsRelaySupervisor" in run_ps1,
+        "main_runner_default_server":"& $py $server server" in run_ps1 and "--config $config --state-dir $stateDir server" not in run_ps1,
+        "consumer_runner_isolated":"GPTWindowsRelayConsumer" in consumer_run_ps1 and "Local\\GPTWindowsRelayConsumerSupervisor" in consumer_run_ps1 and "--config $config --state-dir $stateDir server" in consumer_run_ps1,
+        "relay_control_targets_main_runner":"$run=Join-Path $root 'run.ps1'" in relay_control_ps1,
+        "rollback_restarts_watchdog":"rollback_watchdog_started" in cutover_py and "start_watchdog(ns.live)" in cutover_py,
+        "hud_gui_is_verified":"wait_hud_process" in cutover_py and "rollback_hud_ready" in cutover_py,
+    }
+    blockers=[name for name,ok in checks.items() if not ok]
+    return {"ok":not blockers,"checks":checks,"blockers":blockers}
+
+def evaluate_runtime_transition(observed: dict) -> dict:
+    if not isinstance(observed,dict): raise ControlHarnessError("runtime observation must be a dict")
+    checks={
+        "main_8766":bool(observed.get("main_8766")),
+        "consumer_8767":bool(observed.get("consumer_8767")),
+        "distinct_listener_pids":bool(observed.get("main_pid")) and bool(observed.get("consumer_pid")) and observed.get("main_pid")!=observed.get("consumer_pid"),
+        "one_hud":int(observed.get("hud_processes",0))==1,
+        "firefox_runtime":bool(observed.get("firefox_runtime")),
+        "helper_finalized":bool(observed.get("helper_finalized")),
+    }
+    if observed.get("rolled_back") is True:
+        checks["rollback_exact"]=observed.get("rollback_exact") is True
+    blockers=[name for name,ok in checks.items() if not ok]
+    return {"ok":not blockers,"checks":checks,"blockers":blockers}
+
+def assess_engineering_operation_budget(current_operation:int,max_operation:int=100,next_chat_title:str="💻PC Engineering 9🔧")->dict:
+    if current_operation<1 or current_operation>max_operation: raise ControlHarnessError("invalid operation")
+    r=max_operation-current_operation
+    return {"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":next_chat_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
+
 def build_control_harness_contract(mission_id: str) -> dict:
     return {
         "version": CONTROL_HARNESS_VERSION,
@@ -112,6 +145,11 @@ def build_control_harness_contract(mission_id: str) -> dict:
         "reflection": {
             "method": "append_reflection",
             "rule": "After an incident, record evidence-backed learning and the smallest next change. Exact duplicate reflections are denied by SHA-256 and counted rather than appended again."
+        },
+        "runtime_gates": {
+            "source_contract_method":"validate_windows_runtime_contract",
+            "transition_method":"evaluate_runtime_transition",
+            "rule":"A live transition is blocked unless 8766 main, isolated 8767 consumer, exactly one HUD, browser runtime evidence, and helper finalization are observed."
         },
         "continuous_improvement": {
             "method": "evaluate_improvement",

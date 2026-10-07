@@ -34,6 +34,7 @@ CONSUMER_FILES = (
 RUNTIME_FILES = (
     "windows_relay.py",
     "run.ps1",
+    "run-consumer.ps1",
     "content.js",
     "chromium_extension_setup.ps1",
     "firefox_adapter.py",

@@ -127,7 +127,7 @@ def command_preview(command,limit=92):
 
 # GPT_RELAY_HUD_OPERATOR_STOP_START_V1
 def relay_control(action):
-    if action not in {"start","stop"}:raise ValueError("unsupported relay control")
+    if action not in {"start","stop","retry"}:raise ValueError("unsupported relay control")
     script=Path(__file__).with_name("relay-control.ps1")
     if not script.is_file():raise FileNotFoundError(script)
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
@@ -240,6 +240,8 @@ def run_ui():
                         activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=1,cursor="hand2",
                         command=lambda:relay_control("start"))
     start_btn.pack(side="right",padx=(2,2))
+    retry_btn=tk.Button(top,text="RETRY",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=1,cursor="hand2",command=lambda:relay_control("retry"))
+    retry_btn.pack(side="right",padx=(2,2))
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
