@@ -158,18 +158,28 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertNotIn("resetRecoveryPacketWatch();",no_unit)
         self.assertIn("maybeScheduleRecoveryRefresh(recoveryPacketId,now)",no_unit)
 
-    def test_late_packet_cursor_suppresses_out_of_order_operations(self):
-        worker=(ROOT/"windows-relay"/"extension"/"service_worker.js").read_text(encoding="utf-8-sig")
-        self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V1",worker)
-        self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV1'",worker)
-        self.assertIn("operationSeriesPosition",worker)
-        self.assertIn("compareOperationPosition",worker)
-        self.assertIn("relayPacketId",worker)
-        self.assertIn("checkAndAdvanceOperationCursor",worker)
-        self.assertIn("relay_late_packet_suppressed",worker)
-        self.assertIn("error:'late_packet_suppressed'",worker)
+    def test_late_packet_cursor_is_scoped_to_conversation_owner_and_explicit_op_token(self):
+        workers=(
+            ROOT/"windows-relay"/"extension"/"service_worker.js",
+            ROOT/"windows-relay"/"extension-persistent"/"service_worker.js",
+        )
+        for path in workers:
+            worker=path.read_text(encoding="utf-8-sig")
+            self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V2",worker,path)
+            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",worker,path)
+            self.assertIn("GPT_RELAY_OP_TOKEN_CURSOR_V1",worker,path)
+            self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV2'",worker,path)
+            self.assertIn("RELAY_OWNER_KEY='gptRelayConversationOwnerV1'",worker,path)
+            self.assertIn("operationSeriesPosition",worker,path)
+            self.assertIn("match(/(?:^|[-.])OP(\\d+)([a-z]*)(?=[-.]|$)/i)",worker,path)
+            self.assertIn("cursor.owner_key===ownerKey",worker,path)
+            self.assertIn("checkAndClaimRelayOwner",worker,path)
+            self.assertIn("relay_cross_conversation_suppressed",worker,path)
+            self.assertIn("relay_late_packet_suppressed",worker,path)
+            self.assertIn("error:'late_packet_suppressed'",worker,path)
         for path in FILES:
             src=path.read_text(encoding="utf-8-sig")
+            self.assertIn("conversation_key:relayConversationKey()",src,path)
             self.assertIn("r?.error==='late_packet_suppressed'",src,path)
             self.assertIn("reason:'newer_operation_cursor'",src,path)
 
