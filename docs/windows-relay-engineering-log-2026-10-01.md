@@ -2731,3 +2731,7 @@ Non-trigger diagnostic operation. OP094 Reload/refresh calls were successful; it
 ## 2026-10-07 — PCE8 OP097 result-turn recognition
 Marker: `PCE8_OP097_RESULT_TURN_RECOGNITION`
 Repair the exact-delivery boundary isolated by OP096: accept current element-agnostic `[data-turn=user]` and `[data-testid^=conversation-turn-]` wrappers while preserving explicit assistant rejection and composer exclusion. Move the first eligible engineering trigger to OP099 so OP098 can activate/prove the repaired runtime without retroactively rotating on OP095.
+
+## 2026-10-07 — PCE8 OP098 result-recognition activation
+Marker: `PCE8_OP098_RESULT_RECOGNITION_ACTIVATION`
+Activate the OP097 element-agnostic exact-result recognition fix in the temporary Firefox extension. OP098 is intentionally non-triggering. Live activation acceptance uses fresh `content_script_started` plus content/integration telemetry after delayed add-on reload and PCE8 refresh; transient tab title is informational only. OP099 remains the first eligible automatic PCE8→PCE9 rotation trigger.
