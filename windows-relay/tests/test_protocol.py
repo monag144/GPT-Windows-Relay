@@ -15,6 +15,12 @@ class Tests(unittest.TestCase):
         with self.assertRaises(wr.PacketError): wr.extract(pkt(result_mode="huge"))
     def test_platform(self):
         with self.assertRaises(wr.PacketError): wr.extract(pkt(platform="linux"))
+    def test_bridge_owner_metadata_is_accepted_and_hashed(self):
+        a=wr.extract(pkt(id="owner-meta",session="pce8.1",owner_claim=True))
+        self.assertEqual(a.session,"pce8.1")
+        b=wr.extract(pkt(id="owner-meta",session="pce8.1",owner_claim=False))
+        self.assertNotEqual(a.hash,b.hash)
+
     def test_b64(self):
         x=base64.b64encode(b"Write-Output encoded").decode(); self.assertEqual(wr.extract(pkt(command=None,command_b64=x)).command,"Write-Output encoded")
     def test_command_lines(self):
