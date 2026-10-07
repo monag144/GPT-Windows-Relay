@@ -2719,3 +2719,7 @@ Build the content-side handler for the already-promoted PCE9 trigger. Rotation s
 ## 2026-10-07 — PCE8 OP093 rotation-handler promotion
 Marker: `PCE8_OP093_HANDLER_PROMOTION`
 Back up before cache cleanup, remove generated Python cache, restore the protected relay bootstrap ordering, and gate the durable fresh-chat/handoff/exact-rename handler through complete Windows and consumer suites. First eligible live rotation moves to OP095 so OP094 can stage/reload the promoted extension safely.
+
+## 2026-10-07 — PCE8 OP094 rotation runtime activation
+Marker: `PCE8_OP094_ROTATION_RUNTIME_ACTIVATION`
+Source trigger/handler are promoted and fully gated. OP094 stages only the temporary Firefox extension worker/content into the live tree, preserves rollback copies, and schedules a delayed temporary-addon reload plus PCE8 tab refresh so OP094 result delivery is not disrupted. OP095 must first verify the activation receipt before serving as live rotation acceptance.
