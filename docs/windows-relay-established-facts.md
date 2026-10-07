@@ -19,6 +19,12 @@ Long-form chronology and proof live in:
 
 GitHub is the canonical engineering/audit record. Confirmed findings, root causes, fixes, false leads worth remembering, and proof of validation should be logged there.
 
+## Proof-reuse / no-rediscovery rule
+
+Established facts are reusable evidence, not suggestions to rediscover the same state. Re-run a Firefox restart/temporary-extension/profile/continuity probe only when a browser-affecting mutation occurred, contradictory evidence appeared, or a specific acceptance gate requires it. Routine source-only, documentation-only, or Git-only work must not re-prove unchanged Firefox state.
+
+Before any Windows mutation or push, verify that the active repository is `monag144/GPT-Windows-Relay`; the old Termux repository is not a valid Windows destination.
+
 ## Relay packet / rendering contract
 
 Canonical procedure: `docs/relay-sandwich-procedure.md`.
