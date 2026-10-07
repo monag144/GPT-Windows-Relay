@@ -1,5 +1,7 @@
 # GPT Windows Relay — Established Facts / Read This First
 
+Snapshot: `2026-10-07T2034Z`
+
 This is the canonical short-form knowledge base for the Windows↔ChatGPT Firefox relay.
 
 **Before starting new relay debugging or forensics, read this file and the engineering log first.** Do not rediscover facts already proven here unless new evidence directly contradicts them.
