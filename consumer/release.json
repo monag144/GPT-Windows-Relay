@@ -1,0 +1,44 @@
+{
+  "version": "1.1.0",
+  "repository": "monag144/GPT-Windows-Relay",
+  "branch": "main",
+  "minimum_python": "3.10",
+  "external_python_packages": [],
+  "browser_policy": "user_supplied",
+  "revision": 29,
+  "browser_integration": "verified_local_extension",
+  "portable_paths": "environment_derived",
+  "update_display": "semantic_version_plus_revision",
+  "extension_setup": {
+    "auto_attempt": [
+      "edge",
+      "brave",
+      "vivaldi",
+      "chromium",
+      "opera",
+      "custom",
+      "chrome",
+      "firefox"
+    ],
+    "one_time_manual": [],
+    "unsupported_until_signed": [],
+    "automatic_cdp": [
+      "chrome",
+      "edge"
+    ],
+    "chrome_session_mode": "automatic_session_load",
+    "chrome_profile_recovery": "quoted_profile_path_plus_legacy_cleanup_retry",
+    "automatic_firefox": [
+      "firefox"
+    ],
+    "firefox_session_mode": "automatic_temporary_addon_ui_automation",
+    "firefox_recovery": "managed_profile_plus_semantic_reinstall_and_refresh"
+  },
+  "recovery_supervisor": {
+    "architecture": "2026-10-05T2246Z",
+    "independent": true,
+    "bounded_repair_attempts": 3,
+    "self_update_after_failed_repairs": 2,
+    "approval_prompt_is_stall": false
+  }
+}

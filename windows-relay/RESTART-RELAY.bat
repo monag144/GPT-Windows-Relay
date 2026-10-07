@@ -1,0 +1,1 @@
+@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0relay-control.ps1" restart`r`npause`r`n

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GPT Job Provider Lab</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:760px;margin:32px auto;padding:0 20px;line-height:1.4}
+fieldset{margin:18px 0;padding:16px}
+label{display:block;margin:10px 0}
+#schedule-options{border:1px solid #999;padding:6px;max-width:320px;list-style:none}
+#schedule-options [role="option"]{padding:8px;cursor:pointer}
+#schedule-options [role="option"]:focus{outline:2px solid currentColor}
+.status{margin-top:12px;font-weight:600}
+</style>
+</head>
+<body>
+<h1>GPT Job Provider Lab</h1>
+<p>Local disposable UI Automation validation surface. No network requests are made by this page.</p>
+
+<fieldset role="group" aria-label="Identity">
+  <legend>Identity</legend>
+  <label>First Name
+    <input id="first-name" aria-label="First Name" required>
+  </label>
+  <label>
+    <input id="updates" type="checkbox" aria-label="Email Updates">
+    Email Updates
+  </label>
+</fieldset>
+
+<fieldset role="group" aria-label="Travel Availability">
+  <legend>Travel Availability</legend>
+  <label><input type="radio" name="travel" aria-label="Yes" value="Yes"> Yes</label>
+  <label><input type="radio" name="travel" aria-label="No" value="No"> No</label>
+</fieldset>
+
+<fieldset role="group" aria-label="Availability">
+  <legend>Availability</legend>
+  <label for="schedule">Schedule</label>
+  <input id="schedule" role="combobox" aria-label="Schedule" aria-expanded="false"
+         aria-controls="schedule-options" aria-haspopup="listbox" autocomplete="off" readonly>
+  <ul id="schedule-options" role="listbox" aria-label="Options Expanded" hidden>
+    <li role="option" tabindex="-1" aria-selected="false" data-value="Day">Day</li>
+    <li role="option" tabindex="-1" aria-selected="false" data-value="Night">Night</li>
+    <li role="option" tabindex="-1" aria-selected="false" data-value="Weekend">Weekend</li>
+  </ul>
+</fieldset>
+
+<fieldset role="group" aria-label="Attachments">
+  <legend>Attachments</legend>
+  <button id="select-files" type="button" aria-label="Select Files">Select Files</button>
+  <input id="file-input" type="file" hidden>
+  <div id="upload-filename" class="status" aria-live="polite"></div>
+  <div id="upload-status" class="status" aria-live="polite"></div>
+</fieldset>
+
+<button id="continue-lab" type="button" aria-label="Continue Lab">Continue Lab</button>
+<div id="continue-status" class="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const combo = document.getElementById('schedule');
+  const list = document.getElementById('schedule-options');
+  const options = [...list.querySelectorAll('[role="option"]')];
+
+  function setOpen(open) {
+    combo.setAttribute('aria-expanded', open ? 'true' : 'false');
+    list.hidden = !open;
+    if (open) options[0].focus();
+  }
+
+  combo.addEventListener('click', () => setOpen(list.hidden));
+  combo.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      setOpen(true);
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+      combo.focus();
+    }
+  });
+
+  options.forEach(option => {
+    option.addEventListener('click', () => {
+      options.forEach(item => item.setAttribute('aria-selected', 'false'));
+      option.setAttribute('aria-selected', 'true');
+      combo.value = option.dataset.value;
+      combo.setAttribute('aria-activedescendant', option.id || '');
+      setOpen(false);
+      combo.focus();
+    });
+    option.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        option.click();
+      } else if (event.key === 'Escape') {
+        setOpen(false);
+        combo.focus();
+      }
+    });
+  });
+
+  const picker = document.getElementById('file-input');
+  document.getElementById('select-files').addEventListener('click', () => picker.click());
+  picker.addEventListener('change', () => {
+    const file = picker.files && picker.files[0];
+    document.getElementById('upload-filename').textContent = file ? file.name : '';
+    document.getElementById('upload-status').textContent = file ? 'Successfully Uploaded!' : '';
+  });
+
+  document.getElementById('continue-lab').addEventListener('click', event => {
+    event.currentTarget.remove();
+    document.getElementById('continue-status').textContent = 'Lab Continue Verified';
+  });
+})();
+</script>
+</body>
+</html>

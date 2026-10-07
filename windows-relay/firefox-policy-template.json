@@ -1,0 +1,10 @@
+{
+  "policies": {
+    "ExtensionSettings": {
+      "gpt-windows-relay@local": {
+        "installation_mode": "force_installed",
+        "install_url": "file:///C:/Users/<LOCAL_USER>/Downloads/Dev/GPT/Client/Relay/dist/gpt-windows-relay-signed.xpi"
+      }
+    }
+  }
+}

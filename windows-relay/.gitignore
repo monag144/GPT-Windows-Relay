@@ -1,0 +1,26 @@
+﻿.venv/
+__pycache__/
+*.pyc
+logs/
+evidence/
+quarantine/
+backups/
+dist/
+.relay-paused
+*.log
+*.bak
+*.pre-*
+*.xpi
+*.zip
+extension/config.js
+bridge.json
+*token*
+*.secret
+Thumbs.db
+Desktop.ini
+
+# Local forensic/debug material
+security-*.json
+*HEAVY ENGINEER*
+__pycache__/
+*.pyc
