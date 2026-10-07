@@ -65,4 +65,28 @@ class SafeLiveCutoverTests(unittest.TestCase):
             self.assertIn('--firefox-pid',args)
             self.assertIn('18160',args)
 
+    def test_run_deadline_caps_subprocess_timeout(self):
+        fake=mock.Mock(return_value=mock.Mock(returncode=0,stdout='',stderr=''))
+        with mock.patch.object(CUT.time,'monotonic',return_value=100.0), mock.patch.object(CUT.subprocess,'run',fake):
+            CUT._RUN_DEADLINE=110.0
+            CUT.run(['echo','x'],timeout=60)
+            self.assertEqual(fake.call_args.kwargs['timeout'],10.0)
+        CUT.set_run_deadline(None)
+
+    def test_wait_v17_requires_event_after_baseline(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/'browser-events.jsonl'
+            old={'event':'content_script_started','detail':{'runtime':'v11-scroll-v5-delivery-v17-whole-stop-v1-owner-v1'}}
+            p.write_text(json.dumps(old)+'\n',encoding='utf-8')
+            baseline=CUT.event_line_count(p)
+            with self.assertRaises(RuntimeError): CUT.wait_v17(p,0,baseline)
+            with p.open('a',encoding='utf-8') as f:f.write(json.dumps(old)+'\n')
+            self.assertIn('owner-v1',CUT.wait_v17(p,1,baseline))
+
+    def test_write_report_is_atomic_and_complete(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/'report.json';CUT.write_report(p,{'ok':False,'steps':[{'step':'x'}]})
+            self.assertEqual(json.loads(p.read_text(encoding='utf-8'))['steps'][0]['step'],'x')
+            self.assertFalse(p.with_suffix('.json.tmp').exists())
+
 if __name__=='__main__': unittest.main()

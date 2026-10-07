@@ -11,9 +11,26 @@ from pathlib import Path
 OLD_ADDON_NAME = "GPT Windows Relay"
 NEW_ADDON_NAME = "GPT One-Click Go Relay"
 DEFAULT_TASK_NAME = "GPTWindowsRelay-SafeLiveCutover"
+DEFAULT_CUTOVER_TIMEOUT = 45
+DEFAULT_ROLLBACK_TIMEOUT = 25
+DEFAULT_WAKE_TIMEOUT = 8
+_RUN_DEADLINE = None
+
+def set_run_deadline(seconds=None):
+    global _RUN_DEADLINE
+    _RUN_DEADLINE=None if seconds is None else time.monotonic()+max(0.0,float(seconds))
+
+def budget_left(cap=60):
+    if _RUN_DEADLINE is None: return float(cap)
+    return max(0.0,min(float(cap),_RUN_DEADLINE-time.monotonic()))
 
 def run(args, cwd=None, timeout=60):
-    return subprocess.run([str(x) for x in args], cwd=str(cwd) if cwd else None, text=True, capture_output=True, timeout=timeout, check=False)
+    effective=float(timeout)
+    if _RUN_DEADLINE is not None:
+        left=_RUN_DEADLINE-time.monotonic()
+        if left<=0: raise TimeoutError('operation budget exhausted')
+        effective=min(effective,max(0.2,left))
+    return subprocess.run([str(x) for x in args], cwd=str(cwd) if cwd else None, text=True, capture_output=True, timeout=effective, check=False)
 
 def sha256(path: Path) -> str:
     h=hashlib.sha256()
@@ -60,7 +77,7 @@ def snapshot_matches(live: Path, backup: Path) -> bool:
     return True
 
 def canonical_matches(live: Path, canonical: Path) -> bool:
-    critical=['content.js','extension/content.js','extension/service_worker.js','extension-persistent/content.js','extension-persistent/service_worker.js','windows_relay.py','windows_outbound_worker.py','firefox_adapter.py','firefox_tab_adapter.ps1','relay-control.ps1','relay-watchdog-loop.ps1','relay-watchdog.ps1','hud.py']
+    critical=['content.js','extension/manifest.json','extension/content.js','extension/service_worker.js','extension-persistent/manifest.json','extension-persistent/content.js','extension-persistent/service_worker.js','windows_relay.py','windows_outbound_worker.py','firefox_adapter.py','firefox_tab_adapter.ps1','relay-control.ps1','relay-watchdog-loop.ps1','relay-watchdog.ps1','hud.py']
     return all((canonical/r).is_file() and (live/r).is_file() and sha256(canonical/r)==sha256(live/r) for r in critical)
 
 def discover_firefox_pid(py: Path, live: Path) -> int:
@@ -103,19 +120,37 @@ def wait_hud(py: Path, live: Path, timeout_seconds=20):
         time.sleep(0.5)
     raise RuntimeError('HUD health timeout')
 
-def wait_v17(events: Path, timeout_seconds=45) -> str:
+def event_line_count(events: Path) -> int:
+    if not events.is_file(): return 0
+    return len(events.read_text(encoding='utf-8',errors='replace').splitlines())
+
+def wait_v17(events: Path, timeout_seconds=45, start_line=0) -> str:
     deadline=time.time()+timeout_seconds
     while time.time()<deadline:
         if events.is_file():
-            for line in reversed(events.read_text(encoding='utf-8',errors='replace').splitlines()[-1800:]):
+            lines=events.read_text(encoding='utf-8',errors='replace').splitlines()
+            for line in reversed(lines[max(0,int(start_line)):]):
                 try: row=json.loads(line)
                 except Exception: continue
                 if row.get('event')!='content_script_started': continue
                 d=row.get('detail') if isinstance(row.get('detail'),dict) else {}
                 runtime=str(d.get('runtime') or '')
                 if 'delivery-v17-whole-stop-v1' in runtime and 'owner-v1' in runtime: return runtime
-        time.sleep(0.5)
-    raise RuntimeError('v17 owner runtime not observed')
+        time.sleep(0.25)
+    raise RuntimeError('fresh v17 owner runtime not observed')
+
+def write_report(path: Path, payload: dict):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    tmp=path.with_suffix(path.suffix+'.tmp')
+    tmp.write_text(json.dumps(payload,indent=2),encoding='utf-8')
+    os.replace(tmp,path)
+
+def start_legacy_hud(live: Path):
+    pyw=live/'.venv'/'Scripts'/'pythonw.exe'; hud=live/'hud.py'
+    q=lambda s: "'"+str(s).replace("'","''")+"'"
+    ps='$p=Start-Process -FilePath '+q(pyw)+' -ArgumentList '+q(hud)+' -WorkingDirectory '+q(live)+' -WindowStyle Hidden -PassThru;[string]$p.Id'
+    p=run(['powershell','-NoProfile','-Command',ps],timeout=8)
+    if p.returncode: raise RuntimeError('legacy HUD launch failed: '+(p.stderr or p.stdout or '')[-800:])
 
 def wake(py: Path, live: Path, firefox_pid: int, message: str):
     run([py,live/'firefox_adapter.py','send-chatgpt-prompt','--prompt-text',message,'--firefox-pid',str(firefox_pid)],live,45)
@@ -128,47 +163,80 @@ def main():
     ap.add_argument('--live',required=True,type=Path)
     ap.add_argument('--chat-contains',default='PC Engineering 8')
     ap.add_argument('--task-name',default=DEFAULT_TASK_NAME)
-    ap.add_argument('--gate-timeout',type=int,default=120)
-    ap.add_argument('--grace-seconds',type=int,default=10)
+    ap.add_argument('--gate-timeout',type=int,default=45)
+    ap.add_argument('--grace-seconds',type=int,default=5)
+    ap.add_argument('--cutover-timeout',type=int,default=DEFAULT_CUTOVER_TIMEOUT)
+    ap.add_argument('--rollback-timeout',type=int,default=DEFAULT_ROLLBACK_TIMEOUT)
+    ap.add_argument('--wake-timeout',type=int,default=DEFAULT_WAKE_TIMEOUT)
     ns=ap.parse_args()
     local=Path(os.environ.get('LOCALAPPDATA',Path.home()/'AppData'/'Local'))
-    state=local/'GPTWindowsRelay'; events=state/'browser-events.jsonl'
-    log=state/(ns.packet_id+'-cutover.jsonl'); report=state/(ns.packet_id+'-cutover-report.json')
-    py=ns.live/'.venv'/'Scripts'/'python.exe'; mutated=False; firefox_pid=None; steps=[]
+    state=local/'GPTWindowsRelay';events=state/'browser-events.jsonl'
+    log=state/(ns.packet_id+'-cutover.jsonl');report=state/(ns.packet_id+'-cutover-report.json')
+    py=ns.live/'.venv'/'Scripts'/'python.exe';mutated=False;firefox_pid=None;steps=[]
+    outcome={'ok':False,'error':'helper did not finalize','steps':steps}
     def note(step,**kw):
-        row={'time':time.time(),'step':step,**kw}; steps.append(row); append_jsonl(log,row)
+        row={'time':time.time(),'step':step,**kw};steps.append(row);append_jsonl(log,row)
+    def best_effort(label,fn):
+        try: fn();note(label,ok=True);return True
+        except BaseException as e: note(label,ok=False,error=type(e).__name__+': '+str(e));return False
     try:
         note('helper_started')
         if not wait_for_send_accepted(events,ns.packet_id,ns.gate_timeout): raise RuntimeError('relay_result_send_accepted not observed')
-        note('send_accepted_observed'); time.sleep(ns.grace_seconds)
+        note('send_accepted_observed');time.sleep(max(0,min(ns.grace_seconds,10)))
         if not canonical_matches(ns.live,ns.canonical): raise RuntimeError('live tree is not staged canonical')
-        mutated=True; restart_backend(ns.live); note('backend_restarted')
-        kill_matching('watchdog'); kill_matching('hud'); start_watchdog(ns.live); wait_hud(py,ns.live); note('hud_rotated')
+        set_run_deadline(ns.cutover_timeout);mutated=True
+        restart_backend(ns.live);note('backend_restarted')
+        kill_matching('watchdog');kill_matching('hud');start_watchdog(ns.live);wait_hud(py,ns.live,min(12,max(1,int(budget_left(12)))));note('hud_rotated')
         firefox_pid=discover_firefox_pid(py,ns.live)
-        reload_existing_addon(py,ns.live,firefox_pid,OLD_ADDON_NAME); note('addon_reloaded',pid=firefox_pid)
-        refresh_chat(py,ns.live,firefox_pid,ns.chat_contains); note('chat_refreshed')
-        runtime=wait_v17(events); note('v17_seen',runtime=runtime)
+        baseline=event_line_count(events)
+        reload_existing_addon(py,ns.live,firefox_pid,OLD_ADDON_NAME);note('addon_reloaded',pid=firefox_pid,event_baseline=baseline)
+        refresh_chat(py,ns.live,firefox_pid,ns.chat_contains);note('chat_refreshed')
+        runtime=wait_v17(events,min(20,max(1,int(budget_left(20)))),baseline);note('v17_seen',runtime=runtime)
         if not canonical_matches(ns.live,ns.canonical): raise RuntimeError('post-cutover canonical hash mismatch')
-        report.write_text(json.dumps({'ok':True,'runtime':runtime,'steps':steps},indent=2),encoding='utf-8')
-        wake(py,ns.live,firefox_pid,'[PCE8_AUTOMATION] Safe live cutover completed. Canonical v17 + whole-stop + owner-v1 is live. Continue with the first owner-proof operation.')
-    except Exception as exc:
-        reason=type(exc).__name__+': '+str(exc); note('failed',error=reason)
+        outcome={'ok':True,'runtime':runtime,'steps':steps}
+        write_report(report,outcome);note('success_report_written')
+        set_run_deadline(ns.wake_timeout)
+        best_effort('success_wake',lambda:wake(py,ns.live,firefox_pid,'[PCE8_AUTOMATION] Safe live cutover completed. Canonical v17 + whole-stop + owner-v1 is live. Continue with the first owner-proof operation.'))
+    except BaseException as exc:
+        reason=type(exc).__name__+': '+str(exc);note('failed',error=reason)
+        rollback_errors=[]
         if mutated:
+            set_run_deadline(ns.rollback_timeout);note('rollback_started',budget_seconds=ns.rollback_timeout)
+            try: restore_snapshot(ns.live,ns.backup);note('rollback_files_restored')
+            except BaseException as e: rollback_errors.append('files:'+repr(e));note('rollback_files_failed',error=repr(e))
+            best_effort('rollback_backend_restart',lambda:restart_backend(ns.live))
             try:
-                restore_snapshot(ns.live,ns.backup); restart_backend(ns.live); note('snapshot_restored')
-                kill_matching('watchdog'); kill_matching('hud'); run(['cmd','/c',ns.live/'START-HUD.bat'],ns.live,20)
-                firefox_pid=discover_firefox_pid(py,ns.live)
+                exact=snapshot_matches(ns.live,ns.backup);note('rollback_snapshot_verified',exact=exact)
+                if not exact: rollback_errors.append('snapshot_hash_mismatch')
+            except BaseException as e: rollback_errors.append('verify:'+repr(e));note('rollback_verify_failed',error=repr(e))
+            best_effort('rollback_stop_watchdog',lambda:kill_matching('watchdog'))
+            best_effort('rollback_stop_hud',lambda:kill_matching('hud'))
+            best_effort('rollback_hud_started',lambda:start_legacy_hud(ns.live))
+            try:
+                firefox_pid=discover_firefox_pid(py,ns.live);note('rollback_firefox_discovered',pid=firefox_pid)
+                loaded=False
                 for name in (NEW_ADDON_NAME,OLD_ADDON_NAME):
-                    p=run([py,ns.live/'firefox_adapter.py','reload-addon','--addon-name',name,'--firefox-pid',str(firefox_pid)],ns.live,45)
-                    if p.returncode==0: break
-                refresh_chat(py,ns.live,firefox_pid,ns.chat_contains)
-                if not snapshot_matches(ns.live,ns.backup): note('rollback_hash_warning')
-            except Exception as rb: note('rollback_failed',error=repr(rb))
-        report.write_text(json.dumps({'ok':False,'error':reason,'steps':steps},indent=2),encoding='utf-8')
+                    try:
+                        reload_existing_addon(py,ns.live,firefox_pid,name);note('rollback_addon_reloaded',name=name);loaded=True;break
+                    except BaseException as e: note('rollback_addon_reload_attempt_failed',name=name,error=repr(e))
+                if not loaded: rollback_errors.append('addon_reload_failed')
+                best_effort('rollback_chat_refreshed',lambda:refresh_chat(py,ns.live,firefox_pid,ns.chat_contains))
+            except BaseException as e: rollback_errors.append('firefox:'+repr(e));note('rollback_firefox_failed',error=repr(e))
+        outcome={'ok':False,'error':reason,'rollback_errors':rollback_errors,'steps':steps}
+        set_run_deadline(None);write_report(report,outcome);note('failure_report_written')
         if firefox_pid:
-            wake(py,ns.live,firefox_pid,'[PCE8_AUTOMATION] Safe live cutover failed; rollback was attempted. Inspect the cutover report before another runtime mutation.')
+            set_run_deadline(ns.wake_timeout)
+            best_effort('failure_wake',lambda:wake(py,ns.live,firefox_pid,'[PCE8_AUTOMATION] Safe live cutover failed; rollback is finalized or bounded. Inspect the cutover report before another runtime mutation.'))
     finally:
-        run(['schtasks','/Delete','/TN',ns.task_name,'/F'],timeout=20)
+        set_run_deadline(None)
+        note('helper_finalizing')
+        try:
+            p=subprocess.run(['schtasks','/Delete','/TN',ns.task_name,'/F'],text=True,capture_output=True,timeout=5,check=False)
+            note('task_cleanup',returncode=p.returncode)
+        except BaseException as e: note('task_cleanup_failed',error=repr(e))
+        outcome['steps']=steps
+        try: write_report(report,outcome)
+        except BaseException as e: append_jsonl(log,{'time':time.time(),'step':'final_report_failed','error':repr(e)})
     return 0
 
 if __name__=='__main__': raise SystemExit(main())

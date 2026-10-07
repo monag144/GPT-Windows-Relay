@@ -15,7 +15,10 @@
   ],
   "background": {
     "service_worker": "service_worker.js",
-    "type": "module"
+    "type": "module",
+    "scripts": [
+      "service_worker.js"
+    ]
   },
   "content_scripts": [
     {
