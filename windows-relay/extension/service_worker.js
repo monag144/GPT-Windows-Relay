@@ -320,18 +320,29 @@ function browserHeartbeat(force=false){
 }
 
 const GPT_BROWSER_HEARTBEAT_ALARM_V1='gpt-oneclick-browser-heartbeat';
+let browserHeartbeatAlarmBound=false;
 function installBrowserHeartbeatLifecycle(){
   browserHeartbeat();
-  try{chrome.alarms.create(GPT_BROWSER_HEARTBEAT_ALARM_V1,{periodInMinutes:0.5});}catch{}
+  try{
+    const alarms=chrome?.alarms;
+    if(!alarms)return;
+    if(typeof alarms.create==='function'){
+      const created=alarms.create(GPT_BROWSER_HEARTBEAT_ALARM_V1,{periodInMinutes:0.5});
+      created?.catch?.(()=>{});
+    }
+    if(!browserHeartbeatAlarmBound && alarms.onAlarm && typeof alarms.onAlarm.addListener==='function'){
+      alarms.onAlarm.addListener(alarm=>{
+        if(alarm?.name===GPT_BROWSER_HEARTBEAT_ALARM_V1)browserHeartbeat();
+      });
+      browserHeartbeatAlarmBound=true;
+    }
+  }catch{}
 }
-chrome.alarms.onAlarm.addListener(alarm=>{
-  if(alarm?.name===GPT_BROWSER_HEARTBEAT_ALARM_V1)browserHeartbeat();
-});
 
 async function badge(){try{const s=await call('/status');await chrome.action.setBadgeText({text:s.armed?'ON':'OFF'});await chrome.action.setBadgeBackgroundColor({color:s.armed?'#16803a':'#666'});}catch{await chrome.action.setBadgeText({text:'ERR'});await chrome.action.setBadgeBackgroundColor({color:'#b42318'});}}
 chrome.runtime.onInstalled.addListener(()=>{badge();installBrowserHeartbeatLifecycle();}); chrome.runtime.onStartup.addListener(()=>{badge();installBrowserHeartbeatLifecycle();});
-installBrowserHeartbeatLifecycle();
 
+// GPT_WINDOWS_CORE_PORT_BEFORE_OPTIONAL_HEARTBEAT_V1
 chrome.runtime.onConnect.addListener(port=>{
   if(port?.name!=='gpt-windows-relay-content')return;
   relayContentPorts.add(port);
@@ -456,6 +467,10 @@ chrome.runtime.onConnect.addListener(port=>{
     })();
   });
 });
+
+// Optional heartbeat setup is deliberately after the core onConnect registration.
+// A missing or incompatible alarms API must never prevent relay-port startup.
+installBrowserHeartbeatLifecycle();
 
 chrome.runtime.onMessage.addListener((m,_s,reply)=>{(async()=>{try{
  if(m.type==='status') return reply({ok:true,data:await call('/status')});

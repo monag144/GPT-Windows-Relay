@@ -414,6 +414,16 @@ class BrowserContractTests(unittest.TestCase):
             self.assertIn("/managed-screenshot/",src); self.assertIn("relay_attachment_cleanup",src)
 
 
+    def test_core_port_registration_precedes_optional_heartbeat_startup(self):
+        src=self.live_worker
+        self.assertIn('GPT_WINDOWS_CORE_PORT_BEFORE_OPTIONAL_HEARTBEAT_V1',src)
+        connect=src.index('chrome.runtime.onConnect.addListener')
+        lifecycle=src.index('installBrowserHeartbeatLifecycle();',connect)
+        self.assertLess(connect,lifecycle)
+        self.assertIn('const alarms=chrome?.alarms;',src)
+        self.assertIn("typeof alarms.onAlarm.addListener==='function'",src)
+        self.assertNotIn('chrome.alarms.onAlarm.addListener',src)
+
     def test_consumer_missions_route_to_active_chatgpt_tab(self):
         self.assertIn("GPT_ONE_CLICK_ACTIVE_TAB_TARGET_V1",self.live_worker)
         self.assertIn("const consumerMissionPorts=new Map()",self.live_worker)

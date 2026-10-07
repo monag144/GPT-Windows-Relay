@@ -83,6 +83,24 @@ class SafeLiveCutoverTests(unittest.TestCase):
             with p.open('a',encoding='utf-8') as f:f.write(json.dumps(old)+'\n')
             self.assertIn('owner-v1',CUT.wait_v17(p,1,baseline))
 
+    def test_wake_requires_confirmed_adapter_result(self):
+        ok=mock.Mock(returncode=0,stdout=json.dumps({'ok':True,'action':'send-chatgpt-prompt','confirmed':True}),stderr='')
+        bad=mock.Mock(returncode=0,stdout=json.dumps({'ok':True,'action':'send-chatgpt-prompt','confirmed':False}),stderr='')
+        with tempfile.TemporaryDirectory() as td:
+            live=Path(td);py=live/'python.exe'
+            with mock.patch.object(CUT,'run',return_value=ok):
+                self.assertTrue(CUT.wake(py,live,18160,'done')['confirmed'])
+            with mock.patch.object(CUT,'run',return_value=bad):
+                with self.assertRaises(RuntimeError):
+                    CUT.wake(py,live,18160,'done')
+
+    def test_wake_rejects_nonzero_adapter_exit(self):
+        failed=mock.Mock(returncode=1,stdout='',stderr='boom')
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(CUT,'run',return_value=failed):
+            live=Path(td);py=live/'python.exe'
+            with self.assertRaises(RuntimeError):
+                CUT.wake(py,live,18160,'done')
+
     def test_write_report_is_atomic_and_complete(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'report.json';CUT.write_report(p,{'ok':False,'steps':[{'step':'x'}]})

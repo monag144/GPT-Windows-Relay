@@ -153,7 +153,16 @@ def start_legacy_hud(live: Path):
     if p.returncode: raise RuntimeError('legacy HUD launch failed: '+(p.stderr or p.stdout or '')[-800:])
 
 def wake(py: Path, live: Path, firefox_pid: int, message: str):
-    run([py,live/'firefox_adapter.py','send-chatgpt-prompt','--prompt-text',message,'--firefox-pid',str(firefox_pid)],live,45)
+    p=run([py,live/'firefox_adapter.py','send-chatgpt-prompt','--prompt-text',message,'--firefox-pid',str(firefox_pid)],live,45)
+    if p.returncode:
+        raise RuntimeError('wake prompt failed: '+(p.stderr or p.stdout or '')[-1200:])
+    try:
+        data=json.loads((p.stdout or '').strip())
+    except Exception as exc:
+        raise RuntimeError('wake prompt returned invalid JSON') from exc
+    if data.get('ok') is not True or data.get('action')!='send-chatgpt-prompt' or data.get('confirmed') is not True:
+        raise RuntimeError('wake prompt not confirmed: '+json.dumps(data,ensure_ascii=False)[:1200])
+    return data
 
 def main():
     ap=argparse.ArgumentParser()
