@@ -1515,8 +1515,11 @@ async function renameEngineeringChat(title,path){
  }
  throw new Error('engineering_chat_rename_timeout');
 }
+function engineeringRotationTargetValid(title,session){
+ const tm=String(title||'').match(/^💻PC Engineering (\\d+)🔧$/);const sm=String(session||'').match(/^pce(\\d+)\\.1$/i);return !!tm&&!!sm&&Number(tm[1])===Number(sm[1]);
+}
 async function resumeEngineeringRotation(){
- const st=rotationLoad();if(!st||st.target_title!=='💻PC Engineering 9🔧'||st.target_session!=='pce9.1'||!st.handoff)return;
+ const st=rotationLoad();if(!st||!engineeringRotationTargetValid(st.target_title,st.target_session)||!String(st.handoff||'').includes('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]'))return;
  if(Date.now()-Number(st.started_at||0)>180000)throw new Error('engineering_rotation_expired');
  if(st.phase==='navigate'){if(location.pathname!=='/'){location.assign('https://chatgpt.com/');return;}st.phase='handoff';rotationSave(st);}
  if(st.phase==='handoff'||st.phase==='handoff_submitting'){
@@ -1534,7 +1537,7 @@ async function resumeEngineeringRotation(){
  if(st.phase==='rename'){const path=st.conversation_path||rotationPath();if(!path)throw new Error('engineering_rotation_identity_missing');await renameEngineeringChat(st.target_title,path);if(!rotationExactAnchor(st.target_title,path))throw new Error('engineering_rotation_title_verify_failed');st.phase='verified';st.verified_at=Date.now();rotationSave(st);emitRelayEvent('chat_rotation_verified',{source_packet_id:st.source_packet_id,title:st.target_title,session:st.target_session,conversation_key:location.origin+path});}
 }
 function beginEngineeringRotation(m){
- if(m?.target_title!=='💻PC Engineering 9🔧'||m?.target_session!=='pce9.1'||!String(m?.handoff||'').includes('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]'))return;
+ if(!engineeringRotationTargetValid(m?.target_title,m?.target_session)||!String(m?.handoff||'').includes('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]'))return;
  const st={phase:'navigate',source_packet_id:m.source_packet_id||null,target_title:m.target_title,target_session:m.target_session,handoff:m.handoff,started_at:Date.now()};rotationSave(st);emitRelayEvent('chat_rotation_started',{source_packet_id:st.source_packet_id,title:st.target_title,session:st.target_session});location.assign('https://chatgpt.com/');
 }
 
