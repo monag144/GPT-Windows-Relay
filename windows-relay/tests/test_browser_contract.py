@@ -164,7 +164,7 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("beginRelayHandoffScroll();",self.src)
 
     def test_content_runtime_identity_is_emitted(self):
-        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1'",self.src)
+        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1-owner-v1'",self.src)
 
     def test_content_start_event_occurs_outside_connect_function(self):
         connect_start=self.src.index("function connectBackgroundPort()")
@@ -181,7 +181,7 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("root?.scrollTo?.({top:root.scrollHeight",self.src)
         self.assertIn("root.scrollTop=root.scrollHeight",self.src)
         self.assertIn("emitRelayEvent('handoff_scroll_tick'",self.src)
-        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1'",self.src)
+        self.assertIn("runtime:'v11-scroll-v5-delivery-v13-submit-once-result-wrapper-fallback-approval-v3-uierror-v1-owner-v1'",self.src)
 
     def test_result_delivery_submits_once_then_waits_for_exact_turn(self):
         self.assertIn("GPT_WINDOWS_RESULT_DELIVERY_RECOVERY_V1",self.src)
