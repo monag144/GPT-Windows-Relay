@@ -140,3 +140,27 @@ This is not a delivery-gate failure. The dominant defects are now:
 - supervisor restart logic can create a second visible relay stack instead of converging to one hidden canonical stack.
 
 The next recovery step must first identify which backend stack owns the live listener and then normalize to one supervisor/listener before any further cutover work.
+
+
+## Recovery update — OP044/OP045
+
+OP044 established that the two visible relay consoles are not duplicate owners of the same endpoint. They are two intentional relay stacks with separate state/config roots and ports:
+
+- **GPT Windows Relay** — main relay on 127.0.0.1:8766 using the GPTWindowsRelay state/config root.
+- **GPT One-Click Go Relay** — consumer/One-Click relay on 127.0.0.1:8767 using the GPTWindowsRelayConsumer state/config root.
+
+The main 8766 listener was owned by the GPT Windows Relay stack. The consumer stack was therefore preserved rather than killed as a duplicate.
+
+OP044 also confirmed that neither state root contained any v17/owner runtime-start telemetry. The main Firefox state root still showed v16 as the latest observed content-script runtime, while the consumer state root contained older v11 lineage telemetry.
+
+OP045 then completed targeted recovery:
+
+- OP042 scheduled task removed;
+- no OP042 helper processes remain;
+- OP041 rollback snapshot verified exact: missing=0, mismatch=0, unexpected=0;
+- main relay healthy on 8766 and armed;
+- consumer/One-Click relay preserved on 8767;
+- Firefox healthy with the PC Engineering 8 conversation selected;
+- no v17 reattempt occurred.
+
+**Recovery status:** complete. The machine is back in the known recovered pre-cutover state. The incident remains open solely for the failed v17 activation/proof path and the need for a bounded, invisible end-user cutover design.
