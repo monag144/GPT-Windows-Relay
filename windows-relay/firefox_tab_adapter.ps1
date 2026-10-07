@@ -499,6 +499,16 @@ if($Action -eq 'ensure-addon' -and $cards.Count -eq 0){
   if($dialogs.Count -eq 1){$dialog=$dialogs[0]}
  }while($null -eq $dialog -and [DateTime]::UtcNow -lt $deadline)
  if($null -eq $dialog){
+  # GPT_WINDOWS_FIREFOX_NESTED_FILE_PICKER_V1
+  $nestedWindowType=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Window)
+  $nestedWindows=$firefox.FindAll([Windows.Automation.TreeScope]::Descendants,$nestedWindowType)
+  foreach($w in $nestedWindows){
+   try{
+    if($w.Current.IsEnabled -and $w.Current.ClassName -eq '#32770' -and ([string]$w.Current.Name) -match '(?i)manifest|add-on|file|open'){$dialog=$w;break}
+   }catch{}
+  }
+ }
+ if($null -eq $dialog){
   # GPT_WINDOWS_FIREFOX_FILE_DIALOG_TELEMETRY_V1
   $seen=@()
   foreach($w in $nowWins){
