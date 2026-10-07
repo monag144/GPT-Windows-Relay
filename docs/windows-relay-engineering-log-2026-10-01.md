@@ -2695,3 +2695,19 @@ Adds modern HUD RETRY, selected-PC-Engineering refresh retry, latest-instruction
 ## 2026-10-07 — PCE8 OP079 retry integration repair
 Marker: `PCE8_OP079_RETRY_INTEGRATION_REPAIR`
 OP078 contained real new functionality but failed its Windows integration gate due to a malformed test insertion and unsynchronized content-script copies. OP079 preserves the functionality, repairs those two integration defects, reruns complete Windows and consumer suites, and only then promotes. PCE9 rotation remains P0; GitHub auto-approval live click remains unproven.
+
+## 2026-10-07 — PCE8 OP085 rotation trigger
+Marker: `PCE8_OP085_ROTATION_TRIGGER`
+Preserve and roll back failed OP082 HUD source, then replace generic-home rotation in canonical source with a durable PCE8→PCE9 trigger. Exactly delivered PCE8 operations at/after OP087 persist a rotation request containing exact title `💻PC Engineering 9🔧`, session `pce9.1`, and bounded handoff, then notify the content plane. Create/rename/verification handler follows in OP086. Rotation is P0.
+
+## 2026-10-07 — PCE8 OP086 rotation trigger gate repair
+Marker: `PCE8_OP086_ROTATION_TRIGGER_GATE_REPAIR`
+OP085 correctly restored the promoted source boundary and built the durable PCE9 rotation trigger, but its new test was pytest-style and `unittest` ran zero tests. OP086 repairs only that harness defect, then runs complete Windows and consumer suites before promotion. Rotation remains P0; no live reload occurs in this operation.
+
+## 2026-10-07 — PCE8 OP089 rotation trigger normalization
+Marker: `PCE8_OP089_ROTATION_TRIGGER_NORMALIZATION`
+Normalize the persistent worker back to exact promoted Git bytes, retain rotation only in the temporary/dev worker that owns delivered-operation counting, and fix forced-rotation precedence over normal modulo-100 calculation. OP092 is the first eligible automatic PCE8→PCE9 trigger, leaving OP090 for create/rename implementation and OP091 for activation proof.
+
+## 2026-10-07 — PCE8 OP090 consumer rotation contract
+Marker: `PCE8_OP090_CONSUMER_ROTATION_CONTRACT`
+OP089 reached 401/401 Windows green. Consumer acceptance still asserted the retired generic-home rotation mechanism. OP090 changes that test to require the durable exact PCE9 trigger instead: exact title/session, `relay_chat_rotation_start`, and no generic-home `chrome.tabs.update`. Full Windows + consumer suites gate promotion.

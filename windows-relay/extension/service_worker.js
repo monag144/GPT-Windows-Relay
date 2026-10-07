@@ -16,6 +16,13 @@ let lastBrowserHeartbeatAt=0;
 
 const CHAT_ROTATION_KEY='gptRelayChatRotationV1';
 const CHAT_ROTATION_EVERY=100;
+const ENGINEERING_ROTATION_KEY='gptEngineeringRotationV1';
+const ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=92;
+/* GPT_ENGINEERING_ROTATION_TRIGGER_V1 */
+function engineeringGeneration(id){const m=String(id||'').match(/PCE(\d+)/i);return m?Number(m[1]):null;}
+function engineeringOperation(id){const m=String(id||'').match(/PCE\d+BOOT-OP(\d+)/i);return m?Number(m[1]):null;}
+function pce9Target(){return {title:'💻PC Engineering 9🔧',session:'pce9.1'};}
+function pce9Handoff(id){return `[GPT_ENGINEERING_ROTATION_HANDOFF_V1]\nTarget title: 💻PC Engineering 9🔧\nTarget relay session: pce9.1\nSource packet: ${id}\nRead docs/HANDOFF_2026-10-07_PCE8_TO_PCE9.md, roadmap, established facts, recent incidents, and engineering log. Continue autonomously; do not restart the audit. First relay operation: PCE9BOOT-OP001 with owner_claim true.\n[/GPT_ENGINEERING_ROTATION_HANDOFF_V1]`;}
 
 function extensionStorageGet(key){
   return new Promise(resolve=>{
@@ -174,11 +181,13 @@ async function noteDeliveredOperation(port,id){
   const count=Math.max(0,Number(state.delivered_count)||0)+1;
   let fallbackSinceRotation=Math.max(0,Number(state.fallback_since_rotation)||0)+1;
   let lastRotationOrdinal=Number(state.last_rotation_ordinal)||0;
-  let rotationDue=false;
-  if(ordinal){
+  const eg=engineeringGeneration(id),eop=engineeringOperation(id);
+  const engineeringDue=eg===8 && Number.isFinite(eop) && eop>=ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP;
+  let rotationDue=engineeringDue;
+  if(ordinal && !rotationDue){
     rotationDue=ordinal%CHAT_ROTATION_EVERY===0 && ordinal!==lastRotationOrdinal;
     if(rotationDue)lastRotationOrdinal=ordinal;
-  }else if(fallbackSinceRotation>=CHAT_ROTATION_EVERY){
+  }else if(!ordinal && !rotationDue && fallbackSinceRotation>=CHAT_ROTATION_EVERY){
     rotationDue=true;
     fallbackSinceRotation=0;
   }
@@ -191,16 +200,14 @@ async function noteDeliveredOperation(port,id){
     updated_at:new Date().toISOString()
   }});
 
-  browserEvent('relay_operation_counted',{packet_id:id,ordinal,delivered_count:count,rotation_due:rotationDue}).catch(()=>{});
+  browserEvent('relay_operation_counted',{packet_id:id,ordinal,delivered_count:count,rotation_due:rotationDue,engineering_due:engineeringDue}).catch(()=>{});
   const tabId=port?.sender?.tab?.id;
   if(!rotationDue || RELAY_BROWSER_ID!=='firefox' || !Number.isInteger(tabId))return;
-  browserEvent('chat_rotation_due',{packet_id:id,ordinal,tab_id:tabId}).catch(()=>{});
-  setTimeout(()=>{
-    try{
-      const result=chrome.tabs.update(tabId,{url:'https://chatgpt.com/'});
-      result?.catch?.(()=>{});
-    }catch{}
-  },1200);
+  const target=pce9Target();
+  const rotation={source_packet_id:id,target_title:target.title,target_session:target.session,handoff:pce9Handoff(id),phase:'requested',requested_at:new Date().toISOString()};
+  await extensionStorageSet({[ENGINEERING_ROTATION_KEY]:rotation});
+  browserEvent('chat_rotation_due',{packet_id:id,ordinal,tab_id:tabId,target}).catch(()=>{});
+  try{port.postMessage({type:'relay_chat_rotation_start',...rotation});}catch{}
 }
 
 function rememberConsumerPort(port){
