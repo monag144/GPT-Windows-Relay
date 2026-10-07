@@ -403,5 +403,51 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("browser_integration_connected",self.live_worker)
         self.assertIn("browser_integration_disconnected",self.live_worker)
 
+
+    def test_relay_actions_carry_conversation_identity(self):
+        for path in (
+            ROOT/"content.js",
+            ROOT/"extension"/"content.js",
+            ROOT/"extension-persistent"/"content.js",
+        ):
+            src=path.read_text(encoding="utf-8-sig")
+            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",src,path)
+            self.assertIn("function relayConversationKey()",src,path)
+            self.assertIn("conversation_key:relayConversationKey()",src,path)
+            self.assertIn("conversation_href:location.href",src,path)
+
+    def test_workers_enforce_persisted_conversation_owner(self):
+        for src in (self.live_worker,self.persistent_worker):
+            self.assertIn("GPT_RELAY_CONVERSATION_OWNER_V1",src)
+            self.assertIn("RELAY_OWNER_KEY='gptRelayConversationOwnerV1'",src)
+            self.assertIn("checkAndClaimRelayOwner",src)
+            self.assertIn("chrome.tabs.query({active:true,lastFocusedWindow:true})",src)
+            self.assertIn("relay_owner_unclaimed_inactive_tab",src)
+            self.assertIn("legacy_default_session_blocked",src)
+            self.assertIn("relay_owner_same_session_different_conversation",src)
+            self.assertIn("relay_owner_transfer_requires_claim",src)
+            self.assertIn("relay_cross_conversation_suppressed",src)
+            self.assertIn("relay_conversation_owner_transferred",src)
+
+    def test_late_packet_cursor_uses_explicit_op_token_per_owner(self):
+        for src in (self.live_worker,self.persistent_worker):
+            self.assertIn("GPT_RELAY_LATE_PACKET_CURSOR_V2",src)
+            self.assertIn("GPT_RELAY_OP_TOKEN_CURSOR_V1",src)
+            self.assertIn("OPERATION_CURSOR_KEY='gptRelayOperationCursorV2'",src)
+            self.assertIn("match(/(?:^|[-.])OP(\\d+)([a-z]*)(?=[-.]|$)/i)",src)
+            self.assertIn("cursor.owner_key===ownerKey",src)
+            self.assertIn("checkAndAdvanceOperationCursor(packetId,ownerDecision.owner)",src)
+            self.assertNotIn("for(const key of ['generation','ordinal','suffix_rank'])",src)
+
+    def test_default_session_cannot_take_over_existing_owner(self):
+        for src in (self.live_worker,self.persistent_worker):
+            owner=src[src.index("function checkAndClaimRelayOwner"):src.index("function checkAndAdvanceOperationCursor")]
+            self.assertIn("if(session==='default')return {ok:false,error:'legacy_default_session_blocked',owner};",owner)
+            self.assertLess(
+                owner.index("if(session==='default')"),
+                owner.index("const incomingVersion=relaySessionVersion(session)")
+            )
+
+
 if __name__=="__main__":
     unittest.main()
