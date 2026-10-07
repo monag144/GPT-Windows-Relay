@@ -9,6 +9,10 @@
 - Despite that, recent PCE9 Windows work was committed to the old Termux repository, including `4fd6269bb7419d0b2f55d67a018d47bae0992976` and `249e3bb46c6ea57968d9ecf5157d73867a7f918d`.
 - Six consecutive operations redundantly re-probed the same Firefox continuity/restart-safety invariant while declaring no Firefox restart: OP177, OP177A, OP177B, OP177C1, OP177C2, and OP177C3. OP178 repeated the continuity check again, making seven. Existing established facts already record that the current add-on is temporary, a full Firefox exit removes it, and full restart acceptance is gated on the signed persistent-XPI path.
 
+## HUD/RETRY divergence
+
+Canonical Windows `main` already contains RETRY end to end: `windows-relay/hud.py` renders a RETRY button, `relay-control.ps1` accepts `retry`, and `tests/test_hud.py` protects it. The current live richer HUD came from the wrong-repository PCE9 line, where START/STOP/RESTART/OFF/KILL were restored but RETRY was omitted. Recovery must reconcile the richer HUD into the Windows repository while preserving RETRY; it must not rebuild RETRY from scratch.
+
 ## Root cause
 
 The per-operation discipline was not enforced from canonical Windows documentation on every turn. A stale established-facts path still pointed at the old Termux clone, allowing wrong-repository work to continue. Proven Firefox facts were treated as fresh discovery instead of reusable evidence.
