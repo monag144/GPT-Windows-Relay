@@ -4,7 +4,10 @@ This is the canonical short-form knowledge base for the Windows↔ChatGPT Firefo
 
 **Before starting new relay debugging or forensics, read this file and the engineering log first.** Do not rediscover facts already proven here unless new evidence directly contradicts them.
 
-Long-form chronology and proof live in:
+Current chronology and proof live in:
+- `docs/windows-relay-engineering-log-2026-10-07.md`
+
+Historical chronology is frozen in:
 - `docs/windows-relay-engineering-log-2026-10-01.md`
 
 ## Canonical project locations
@@ -15,7 +18,8 @@ Long-form chronology and proof live in:
 - Active live relay tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
 - Temporary Firefox manifest: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay\extension\manifest.json`
 - Persistent-extension source: `...\Client\Relay\extension-persistent`
-- Engineering log: `docs/windows-relay-engineering-log-2026-10-01.md`
+- Current engineering log: `docs/windows-relay-engineering-log-2026-10-07.md`
+- Frozen historical log: `docs/windows-relay-engineering-log-2026-10-01.md`
 
 GitHub is the canonical engineering/audit record. Confirmed findings, root causes, fixes, false leads worth remembering, and proof of validation should be logged there.
 
