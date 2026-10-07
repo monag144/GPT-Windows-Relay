@@ -143,3 +143,16 @@
 - [ ] Safe managed-conversation rotation.
 - [ ] Separately guarded modern-HUD recovery.
 - [ ] Audit local/remote divergence before any push.
+
+## PCE9 reconciliation checkpoint — 2026-10-07
+- [x] Result-confirmation selector/role-gate defect live-proven fixed with exact-once delivery canaries.
+- [x] Browser stop-generation/quiescence protocol live-proven; STOP -> START acceptance returned with verified browser quiescence.
+- [x] Rich HUD control surface restored live with START/STOP/RESTART/OFF/KILL/MINIMIZE.
+- [x] Dual-runtime ownership diagnosed: 8766 control plane and isolated 8767 consumer runtime are intentional.
+- [x] Dedicated 8766 control-launcher split implemented and deployed to the current live tree.
+- [ ] Reconcile the richer HUD with canonical RETRY support; RETRY exists in Windows-repo source but is absent from the current richer live HUD.
+- [ ] Port/reconcile all valid PCE9 Windows changes from the old Termux repository into `monag144/GPT-Windows-Relay`; do not continue Windows development in the old repository.
+- [ ] Complete canonical STOP -> START ancestry acceptance proving restarted 8766 is owned by `run-control.ps1`; the pending attempt was interrupted during harness repair.
+- [ ] Enforce operation-series rollover so no future managed series can emit OP101.
+- [ ] Signed persistent Firefox XPI/policy and full Firefox + Windows/login restart acceptance remain open.
+- [ ] Chrome and Edge clean-consumer browser-matrix acceptance remain open.
