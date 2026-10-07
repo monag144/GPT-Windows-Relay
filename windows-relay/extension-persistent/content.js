@@ -1410,6 +1410,16 @@ function connectBackgroundPort(){
   }
 }
 
+function relayConversationKey(){
+  try{
+    const u=new URL(location.href);
+    return u.origin+u.pathname.replace(/\/+$/,'');
+  }catch{
+    return String(location.origin||'')+String(location.pathname||'');
+  }
+}
+
+/* GPT_RELAY_CONVERSATION_OWNER_V1 */
 function backgroundAction(packet){
   return new Promise((resolve,reject)=>{
     const port=connectBackgroundPort();
@@ -1429,7 +1439,9 @@ function backgroundAction(packet){
       port.postMessage({
         type:'relay_action',
         request_id:requestId,
-        packet
+        packet,
+        conversation_key:relayConversationKey(),
+        conversation_href:location.href
       });
     }catch(e){
       backgroundPending.delete(requestId);
@@ -1672,7 +1684,8 @@ function inspectUnit(unit){
   if(prior?.timer)clearTimeout(prior.timer);
   emitRelayEvent('relay_packet_discovered',{
     packet_id:p.id,
-    source:unit===watchedUnit?'watched_turn':'recovery_scan'
+    source:unit===watchedUnit?'watched_turn':'recovery_scan',
+    conversation_key:relayConversationKey()
   });
 
   const timer=setTimeout(()=>{
