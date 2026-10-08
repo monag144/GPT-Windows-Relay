@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CONTROL_HARNESS_VERSION = 4
+CONTROL_HARNESS_VERSION = 5
 
 class ControlHarnessError(ValueError):
     pass
@@ -140,8 +140,8 @@ def assess_engineering_operation_budget(current_operation:int,max_operation:int=
 MANDATORY_ENGINEERING_READS = (
     "consumer/control_harness.py",
     "windows-relay/TASKS.md",
-    "docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",
-    "docs/windows-relay-mission-and-roadmap.md",
+    "docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md",
+    "docs/windows-relay-established-facts.md",
     "docs/relay-sandwich-procedure.md",
 )
 ENGINEERING_AUDIT_INTERVAL = 5
@@ -194,7 +194,7 @@ def github_first_workflow_gate(evidence: dict, stage: str) -> dict:
             "blockers": blockers, "mutation_authorized": False}
 
 
-def due_engineering_checkpoints(ordinal: int, series: int = 10) -> dict:
+def due_engineering_checkpoints(ordinal: int, series: int = 11) -> dict:
     if type(ordinal) is not int or not 0 <= ordinal <= 100:
         raise ControlHarnessError("engineering ordinal outside 000..100")
     if type(series) is not int or series < 1:
@@ -205,13 +205,16 @@ def due_engineering_checkpoints(ordinal: int, series: int = 10) -> dict:
         "next_id": f"PCE{series}.{ordinal:03d}",
         "audit_due": audit,
         "review_due": review,
+        "soft_stop_due": ordinal == 50,
+        "email_review_due": ordinal == 50,
+        "rotation_due": ordinal == 100,
         "audit_window": [ordinal - ENGINEERING_AUDIT_INTERVAL, ordinal - 1] if audit else None,
         "review_window": [ordinal - ENGINEERING_REVIEW_INTERVAL, ordinal - 1] if review else None,
         "next_audit": ordinal + (ENGINEERING_AUDIT_INTERVAL - ordinal % ENGINEERING_AUDIT_INTERVAL),
         "next_review": ordinal + (ENGINEERING_REVIEW_INTERVAL - ordinal % ENGINEERING_REVIEW_INTERVAL),
     }
 
-def engineering_preflight(repo_root: Path, ordinal: int, series: int = 10) -> dict:
+def engineering_preflight(repo_root: Path, ordinal: int, series: int = 11) -> dict:
     """Read every mandatory control, then verify due audit/review evidence before work.
 
     A present report is necessary, not sufficient: approval for a risky
@@ -280,11 +283,11 @@ def build_control_harness_contract(mission_id: str) -> dict:
         "turn_discipline": {
             "read_every_turn": list(MANDATORY_ENGINEERING_READS),
             "preflight_method": "engineering_preflight",
-            "preflight_rule": "Before every operation, read all five current source-of-truth files, record hashes, then verify checkpoint evidence by operation ordinal. This preflight does NOT authorize mutation.",
+            "preflight_rule": "Before every PCE011 operation read FULL harness, FULL current TODO, established facts, current PCE011 dated queue and sandwich procedure; record all five SHA-256 hashes, verify operation ordinal and checkpoints. This preflight does NOT authorize live mutation.",
             "review_every_engineering_turns": 20,
-            "review_rule": "Before PCE10.020, PCE10.040, PCE10.060, PCE10.080 and PCE10.100, review the preceding twenty attempted operation slots, including non-executed failures, and reconcile the four five-operation audits. After .020 the next review is before .040.",
-            "audit_boundary_rule": "Before PCE10.025 require an audit of .020-.024; before .030 require .025-.029. A written reminder is insufficient without a verified artifact.",
-            "autonomy_rule": "After an operation result, continue autonomously to the next SAFE operation, unless STOP or uncertain side effects require hold. Never request a routine manual continue; do not interpret a missing command as permission to replay it.",
+            "review_rule": "PCE011.020/.040/.060/.080/.100 require review of preceding twenty attempted slots including unexecuted errors, four five-operation audits, rollback evidence, benchmark progress and TODO reprioritization.",
+            "audit_boundary_rule": "PCE10.015–.019 historical audit exists. PCE011 begins fresh: before .005 audit .000–.004; before .010 audit .005–.009; same five-slot cadence. A reminder or unsupported PASS is not evidence.",
+            "autonomy_rule": "After VERIFIED durable completion continue to next SAFE operation only while an actual active controller/process exists, unless operator STOP, uncertain side effects, dirty state, or identity gate requires hold. Never assume ChatGPT can work after its turn ends or infer missing command as retry authority.",
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
             "github_first_source_rule": "MANDATORY: Author and commit Windows Relay source fixes in canonical GitHub first; verify the remote commit SHA. The Windows relay must only git pull/ff-sync that committed source before tests. Never patch source directly in Client/Relay or a local checkout as the normal engineering path. No local-to-remote push as substitute except separately authorized rescue with reconciliation and backup.",
             "github_first_order": list(ENGINEERING_WORKFLOW),
@@ -294,8 +297,11 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "collapsed_engineering_rule": "A Worked for X rendering artifact during a PCE engineering handoff must be observable even without consumerRecoveryContext. Fail closed; do not infer, auto-replay, or re-execute an invisible command.",
             "prior_rendering_incident": "docs/relay-rendering-incident-2026-10-03.md Incident 6",
             "audit_every_engineering_turns": 5,
-            "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
-            "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
+            "audit_rule": "Every fifth PCE011 attempted ordinal, audit the preceding five including failed/skipped slots; start .005 (.000-.004); test SHA, rollback, user rescues and live-vs-source claims.",
+            "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract in GitHub and test before risky mutation; never hide a failing acceptance gate.",
+            "halfway_rule": "PCE011.050 is a soft findings review and attempted email only via an actually connected authorized mail sender. No claim of mail delivery without a send receipt; STOP and uncertain-effect safety gates outrank requested unattended continuation.",
+            "rotation_rule": "At PCE011.100 gate semantic ChatGPT New chat with positively verified identity, named successor 💻PC Engineering 12🔧, durable owner transfer, and no OP101. If unable to use browser UI, classify BLOCKED; never invent successful rotation.",
+            "codex_policy": "After more than five distinct attempts at a complex failure, Codex CLI may be used as bounded diagnosis or patch candidate on the user's machine. Prefer 5.6/6 Luna when truly installed; source edits still GitHub-first; preserve rollback and tests."
         },
         "github_first_workflow": {
             "sequence": list(ENGINEERING_WORKFLOW),
