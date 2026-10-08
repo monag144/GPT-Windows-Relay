@@ -58,7 +58,7 @@ class BenchmarkContract(unittest.TestCase):
                                                 "visible_result":True,"duplicate_effects":0})
             p.write_text(json.dumps(payload))
             rec["evidence"]["sha256"]=bm.digest(p)
-            self.assertEqual(bm.proof("U",rec)[0],"PASS")
+            self.assertEqual(bm.proof("U",rec)[0],"BLOCKED")  # hourly claims alone cannot replace raw independent observation
 
 if __name__=="__main__":
     unittest.main()
