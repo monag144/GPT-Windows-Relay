@@ -18,7 +18,7 @@ class ResultTurnInlineReceiptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         content = MIRRORS[0].read_text(encoding="utf-8")
-        start = content.index("function resultPacketIdFromUserUnit(unit){")
+        start = content.index("function resultPacketIdFromExactEnvelope(text){")
         stop = content.index("\nfunction hydrateAttemptedFromConversation(){", start)
         matcher = content[start:stop]
         payload = {"version": 1, "platform": "windows", "action": "EXEC",
