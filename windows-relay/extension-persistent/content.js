@@ -1448,7 +1448,7 @@ function latestEngineeringResultContext(){
   const text=last?.textContent||'';
   if(!text.includes('[GPT_WINDOWS_RESULT]'))return null;
   const m=text.match(/"id"\s*:\s*"(PCE\d+\.\d{3})"/i);
-  return m?{previous_result_id:m[1]}:null;
+  return m?{previous_result_id:m[1],user_turn:last}:null;
 }
 function scheduleEngineeringCollapseCheck(){
   if(operatorPaused||engineeringCollapseTimer!==null)return;
@@ -1463,7 +1463,7 @@ function scheduleEngineeringCollapseCheck(){
     const artifact=visibleExternalCollapseArtifact() ||
       (/^Worked for\s+\d+(?:\.\d+)?(?:ms|s|m|h)$/i.test(rendered)?{text:rendered}:null);
     if(!artifact)return;
-    if(newest&&extractUnit(newest))return;
+    if(newest && (ctx.user_turn?.compareDocumentPosition(newest)&Node.DOCUMENT_POSITION_FOLLOWING) && extractUnit(newest))return;
     const signature=ctx.previous_result_id+'|'+artifact.text;
     if(signature===lastEngineeringCollapseSignature)return;
     lastEngineeringCollapseSignature=signature;
