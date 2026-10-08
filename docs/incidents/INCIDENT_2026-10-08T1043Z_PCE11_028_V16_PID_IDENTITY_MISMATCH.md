@@ -1,0 +1,16 @@
+# PCE11.028 isolated historical v16 PID identity mismatch — 2026-10-08T10:43:52Z
+
+**OPEN — source acceptance passed, actual v16 health check FAILED. Independent private Job cleanup and production preservation confirmed in saved second-canary evidence. Do NOT promote or blindly relaunch.**
+
+## Exact second attempt evidence
+`PCE11.028-new-isolated-v16-pid-and-mission-telemetry-canary` returned `COMMAND_FAILED` exit 2. The `PCE11_028_V16_REJECTED` marker reported `RuntimeError: isolated sidecar status PID mismatch` with private sandbox report `%LOCALAPPDATA%/GPTWindowsRelay/pce11-isolated/PCE11_ISOLATED_V16_CANARY_20261008T104351Z_79f9e6b1e22d/health-report.json`. Child process PID **1640** was started suspended in a private Win32 Job, assigned before resume. Authenticated GET /status responded with PID **11180**, and **pending_missions=0**. `status_pid_matches_child=false`, `status_missions_zero=true`, `status_ok=false`. Private Job and child cleanup verified true, isolated port 8768 released true, production main identity preserved true.
+
+The earlier failed sidecar (.024) had no separate rejected response telemetry. .025 read-only forensics verified its private child 4480 was gone, 8768 free, main 8766 PID 18632 still ARMED/browser-owned with 2 missions. .026 preserved old private state had 0 missions. .027 fixed independent observed PID and mission telemetry, with full acceptance: 9 targeted status tests, 12 containment, 481 full Windows and 119 consumer tests, 4 JS syntax checks, original ZIP and historical v16 source verified. All of these are source tests except .023 native private-job smoke and .024/.028 actual one-shot runtime probes.
+
+## Root-cause boundary
+The failed status predicate is **PID identity**, not inherited missions. Because a private auth token was required, a distinct process may have hosted the same isolated server. A launcher stub spawning a real Python child process (PID 11180) is a plausible explanation, **not established**. The rejected response plus launcher PID alone does not prove parent-child ancestry or Win32 Job membership of the HTTP server. Never normalize or waive PID check merely to force a pass. Determine the executable's launcher topology, and in any later bounded probe correlate listening PID, parent ancestry, private Job membership and private authenticated status.
+
+## Current action
+PCE11.029 read-only forensics: inspect the exact .028 saved report, current 8766/8768 port ownership and production read-only status, interpreter executable/base executable identity and on-disk launcher metadata, historical source/state boundary. No v16 relaunch, STOP, browser mutation, queue consumption, process termination, token exposure, or production restart. Mark process-ancestry unproven if historical Windows process records are unavailable. Before numbered .030: five-operation audit .025–.029 with independent governance sync. Only later unique operations may run a harmless native test to prove the launcher topology and enforce real server process membership in the private Job.
+
+**Promotion verdict:** BLOCKED. No 12h/24h endurance, STOP/RETRY, loaded browser extension identity, rollback, or One-Click GO release evidence yet.
