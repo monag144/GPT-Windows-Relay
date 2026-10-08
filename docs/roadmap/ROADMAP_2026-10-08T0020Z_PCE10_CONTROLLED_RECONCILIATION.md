@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Source acceptance is green through the PCE10.011 pre-browser gates. PCE10.011 then failed at unscoped `list-tabs`; the adapter intentionally requires one visible Firefox window for that action. Harness now requires exact `resolve-conversation-tab` first when the conversation URL is known, using the returned PID/tab for all subsequent Firefox actions. PCE10.012 performs that bounded browser-state re-proof and only then may stage the rollback-backed stale-settle canary.
+- [~] Source/migration/scoped-diff acceptance is green. PCE10.012 failed read-only at exact `resolve-conversation-tab` before canary staging; the visible compact result omitted the nested semantic-adapter error. PCE10.013 is diagnostic-only: extract the saved resolver failure, rerun the existing semantic resolver, and capture only bounded Firefox process/window telemetry required to classify the browser-state failure. No source/live mutation until exact diagnosis.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
