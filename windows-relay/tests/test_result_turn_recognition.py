@@ -14,17 +14,12 @@ class ResultTurnRecognitionTests(unittest.TestCase):
         self.assertIn('[data-turn="user"]', c)
         self.assertIn('[data-turn="assistant"]', c)
 
-        # Result confirmation also needs the live-proven conversation-turn
-        # wrapper fallbacks retained by the PCE9 regressions.
-        selector = next(
-            line for line in c.splitlines()
-            if line.startswith("const RESULT_TURN_SELECTOR=")
-        )
-        self.assertIn("USER_SELECTOR+", selector)
-        self.assertIn('article[data-testid^="conversation-turn-"]', selector)
-        self.assertIn('section[data-testid^="conversation-turn-"]', selector)
-        self.assertIn('div[data-testid^="conversation-turn-"]', selector)
-        self.assertIn('div[class~=bg-user-message]', selector)
+        # Generic wrappers remain valid for discovery, but not result receipts.
+        selector = next(line for line in c.splitlines()
+                        if line.startswith("const RESULT_TURN_SELECTOR="))
+        self.assertEqual(selector,"const RESULT_TURN_SELECTOR=USER_SELECTOR;")
+        self.assertIn("if(!unit?.matches?.(USER_SELECTOR))return null;",c)
+        self.assertNotIn("USER_SELECTOR+",selector)
 
         self.assertEqual(
             (ROOT / "content.js").read_bytes(),
