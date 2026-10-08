@@ -14,7 +14,7 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source acceptance remains pending. PCE10.008 isolated the full-Windows-suite block to one stale legacy test: `test_result_turn_recognition.py` forbade article/section wrappers that the newer live-proven PCE9 regression requires. Production source already preserves generic `[data-turn]` compatibility plus the broader result wrapper fallback. The stale test is repaired only; PCE10.009 must rerun that test, the full Windows suite, and full consumer suite before any live Firefox promotion.
+- [~] Source behavior is green through PCE10.009: exact prior failure, full Windows suite, full consumer suite, and JS parse gates all passed. The remaining block was repository-wide `git diff --check` flagging byte-preserved migrated historical evidence. A 42-entry exact Git-blob migration manifest and harness/test contract now distinguish preserved evidence from active source/current-doc whitespace. PCE10.010 must verify the manifest, classify diff-check output, and only then perform the rollback-backed Firefox stale-settle canary.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
