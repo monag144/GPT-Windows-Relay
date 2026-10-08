@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CONTROL_HARNESS_VERSION = 3
+CONTROL_HARNESS_VERSION = 4
 
 class ControlHarnessError(ValueError):
     pass
@@ -146,6 +146,53 @@ MANDATORY_ENGINEERING_READS = (
 )
 ENGINEERING_AUDIT_INTERVAL = 5
 ENGINEERING_REVIEW_INTERVAL = 20
+ENGINEERING_WORKFLOW = ("github_edit", "github_commit", "github_remote_verify",
+                        "relay_pull", "source_acceptance", "rollback_and_live_activation",
+                        "live_canary", "promotion")
+
+def github_first_workflow_gate(evidence: dict, stage: str) -> dict:
+    """Enforce GitHub-first source changes, relay pull, and evidence-gated tests/promotion.
+
+    Source repairs are authored on canonical GitHub; Windows is a pull/test/deploy
+    consumer, never an independently edited source-of-truth. Fail closed on
+    absent or contradictory proof, including 'broken' build labels.
+    """
+    if not isinstance(evidence, dict):
+        raise ControlHarnessError("GitHub-first evidence must be a dict")
+    if stage not in ENGINEERING_WORKFLOW:
+        raise ControlHarnessError("unknown GitHub-first stage: " + str(stage))
+    requirements = {
+        "github_edit": (),
+        "github_commit": ("canonical_repo_confirmed",),
+        "github_remote_verify": ("canonical_repo_confirmed", "github_commit_sha"),
+        "relay_pull": ("canonical_repo_confirmed", "github_commit_sha", "remote_sha_verified"),
+        "source_acceptance": ("canonical_repo_confirmed", "github_commit_sha",
+                              "remote_sha_verified", "relay_pull_sha_matches_remote"),
+        "rollback_and_live_activation": ("canonical_repo_confirmed", "github_commit_sha",
+                              "remote_sha_verified", "relay_pull_sha_matches_remote",
+                              "source_tests_green", "js_syntax_green", "rollback_verified",
+                              "operator_armed", "exact_target_verified"),
+        "live_canary": ("canonical_repo_confirmed", "github_commit_sha",
+                       "remote_sha_verified", "relay_pull_sha_matches_remote",
+                       "source_tests_green", "js_syntax_green", "rollback_verified",
+                       "operator_armed", "exact_target_verified", "loaded_runtime_sha_verified"),
+        "promotion": ("canonical_repo_confirmed", "github_commit_sha", "remote_sha_verified",
+                      "relay_pull_sha_matches_remote", "source_tests_green", "js_syntax_green",
+                      "rollback_verified", "operator_armed", "exact_target_verified",
+                      "loaded_runtime_sha_verified", "live_canary_green",
+                      "stop_exact_once_green"),
+    }
+    checks = {name: (bool(evidence.get(name)) if name not in {
+        "github_commit_sha", "relay_pull_sha_matches_remote"
+    } else bool(str(evidence.get(name) or "").strip())) for name in requirements[stage]}
+    if evidence.get("broken_build") is True and stage in {
+        "rollback_and_live_activation", "live_canary", "promotion"
+    }:
+        checks["not_a_broken_build"] = False
+    blockers = [name for name, ok in checks.items() if not ok]
+    return {"ok": not blockers, "stage": stage, "checks": checks,
+            "blockers": blockers, "mutation_authorized": False}
+
 
 def due_engineering_checkpoints(ordinal: int, series: int = 10) -> dict:
     if type(ordinal) is not int or not 0 <= ordinal <= 100:
@@ -239,6 +286,9 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "audit_boundary_rule": "Before PCE10.025 require an audit of .020-.024; before .030 require .025-.029. A written reminder is insufficient without a verified artifact.",
             "autonomy_rule": "After an operation result, continue autonomously to the next SAFE operation, unless STOP or uncertain side effects require hold. Never request a routine manual continue; do not interpret a missing command as permission to replay it.",
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
+            "github_first_source_rule": "MANDATORY: Author and commit Windows Relay source fixes in canonical GitHub first; verify the remote commit SHA. The Windows relay must only git pull/ff-sync that committed source before tests. Never patch source directly in Client/Relay or a local checkout as the normal engineering path. No local-to-remote push as substitute except separately authorized rescue with reconciliation and backup.",
+            "github_first_order": list(ENGINEERING_WORKFLOW),
+            "github_first_gate": "github_first_workflow_gate",
             "sandwich_required": True,
             "durable_final_packet_rule": "The complete visible header, bare fenced GPT_WINDOWS_ACTION packet, and visible footer MUST be emitted within one durable FINAL assistant response. Never emit an action packet in commentary/progress, then finish with an empty final response.",
             "collapsed_engineering_rule": "A Worked for X rendering artifact during a PCE engineering handoff must be observable even without consumerRecoveryContext. Fail closed; do not infer, auto-replay, or re-execute an invisible command.",
@@ -246,6 +296,12 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "audit_every_engineering_turns": 5,
             "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
             "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
+        },
+        "github_first_workflow": {
+            "sequence": list(ENGINEERING_WORKFLOW),
+            "policy": "GitHub edit+commit+remote verify -> relay pull exact SHA -> targeted+full source tests and JS syntax -> verified rollback -> controlled live activation -> runtime-identified canary -> promotion. Source edits occur on GitHub; tests run after pull on Windows.",
+            "gate_method": "github_first_workflow_gate",
+            "failure": "If pull, test, STOP, SHA, or backup proof fails, mark BLOCKED and repair in GitHub; never hide a source failure by editing Windows local/live code. Local emergency repairs require explicit Director authorization and source reconciliation.",
         },
         "test_runtime": {
             "default_runner": "unittest",
