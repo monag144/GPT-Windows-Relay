@@ -190,7 +190,10 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "browser_discovery_settle": {
                 "settle_ms": 500,
                 "stale_pending_lease_ms": 5000,
-                "rule": "A discovered packet may not remain indefinitely in an unchanged pending-settle record. If the settle lease expires, the pending record must be cleared, observed, and re-armed."
+                "hud_stall_seconds": 45,
+                "rule": "A discovered packet may not remain indefinitely in an unchanged pending-settle record. If the settle lease expires, the pending record must be cleared, observed, and re-armed. The HUD must label DISCOVERED older than 45 seconds STALLED without inferring execution or replaying the packet.",
+                "deployment_rule": "Source presence is not live acceptance. Verify the exact live content-script revision, staged backups, extension reload, browser event progression, and fresh end-to-end canary before declaring recovery fixed.",
+                "user_rescue_rule": "If the relay is blocked before action execution and managed browser control cannot be positively scoped, ask for one ordinary page refresh to bootstrap recovery; then inspect durable action state before any repeat."
             },
             "firefox_identity_bootstrap": {
                 "known_conversation_rule": "When an exact ChatGPT conversation URL is known, call resolve-conversation-tab first, require exactly one canonical URL match, and use its returned Firefox PID/tab identity for subsequent list/reload/refresh actions.",
