@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. The PCE10.005 stale-settle repair is committed. PCE10.006 proved the structural repair but failed before live staging because it chose an existing venv without proving pytest capability, repeating `INCIDENT_2026-10-07_PCE9_WRONG_PYTEST_INTERPRETER.md`. The current suite has no pytest-specific usage, so Harness v3 now defaults acceptance to stdlib `unittest` and requires a capability probe before any external runner. PCE10.007 runs bytecode-free targeted/full unittest acceptance, then performs rollback-backed managed Firefox recovery.
+- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.007 passed all targeted tests and the full consumer suite, then the full Windows unittest suite failed before live staging. Because compact output hid the exact failing test names, PCE10.008 is diagnostic-only: extract the saved-result/full-suite failure evidence and rerun Windows tests to a dedicated log. No source mutation until the exact failure set is known.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
