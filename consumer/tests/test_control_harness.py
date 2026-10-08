@@ -55,9 +55,34 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertEqual(x["next_chat_title"],"💻PC Engineering 11🔧")
         self.assertEqual(x["remaining_after_current"],97)
 
+    def test_github_first_enforces_remote_pull_and_rollout_proof(self):
+        c=ch.build_control_harness_contract("gh-first")
+        self.assertEqual(c["github_first_workflow"]["gate_method"],"github_first_workflow_gate")
+        self.assertIn("GitHub first",c["turn_discipline"]["github_first_source_rule"])
+        self.assertEqual(c["github_first_workflow"]["sequence"][0],"github_edit")
+        empty=ch.github_first_workflow_gate({},"source_acceptance")
+        self.assertFalse(empty["ok"])
+        self.assertIn("relay_pull_sha_matches_remote",empty["blockers"])
+        evidence={
+            "canonical_repo_confirmed":True,"github_commit_sha":"f"*40,
+            "remote_sha_verified":True,"relay_pull_sha_matches_remote":True,
+            "source_tests_green":True,"js_syntax_green":True,
+            "rollback_verified":True,"operator_armed":True,
+            "exact_target_verified":True,"loaded_runtime_sha_verified":True,
+            "live_canary_green":True,"stop_exact_once_green":True,
+        }
+        self.assertTrue(ch.github_first_workflow_gate(evidence,"source_acceptance")["ok"])
+        self.assertTrue(ch.github_first_workflow_gate(evidence,"promotion")["ok"])
+        broken={**evidence,"broken_build":True}
+        self.assertFalse(ch.github_first_workflow_gate(broken,"promotion")["ok"])
+        evidence["js_syntax_green"]=False
+        self.assertFalse(ch.github_first_workflow_gate(evidence,"promotion")["ok"])
+        with self.assertRaises(ch.ControlHarnessError):
+            ch.github_first_workflow_gate(evidence,"guess_stage")
+
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
-        self.assertEqual(c["version"],3)
+        self.assertEqual(c["version"],4)
         self.assertEqual(c["turn_discipline"]["read_every_turn"],list(ch.MANDATORY_ENGINEERING_READS))
         self.assertIn("docs/relay-sandwich-procedure.md",c["turn_discipline"]["read_every_turn"])
         self.assertEqual(c["turn_discipline"]["preflight_method"],"engineering_preflight")
