@@ -1,0 +1,12 @@
+# Repository-wide generated Python/test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
