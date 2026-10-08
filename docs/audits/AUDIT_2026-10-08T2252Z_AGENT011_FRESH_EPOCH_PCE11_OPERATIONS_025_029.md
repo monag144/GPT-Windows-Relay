@@ -1,0 +1,29 @@
+# Agent011 fresh-epoch audit PCE11.025–.029
+
+UTC 2026-10-08T22:52Z. COMPLETE documentary audit; PCE12 semantic New Chat handoff NOT YET VERIFIED. This covers the fresh Agent011 epoch started Oct 8 21:40:59 UTC, not historical PCE11 slots. Canonical monag144/GPT-Windows-Relay branch pce11/one-click-go-recovery-and-doc-hygiene.
+
+## Mandatory governance
+
+All five PCE11.025–.029 numbered operations read six governance controls and reported SHA256, and all five engineering_preflight(ROOT,ordinal,series=11) PASS. .025 selected the correct preceding fresh audit [20,24]. Control SHA256 unchanged: consumer/control_harness.py 76d13b46ddc0289291a7bc155785c0b160d55751c4d1b515ea44db3f4bc6d883; windows-relay/TASKS.md fda801655fa66da9885500cea8f885c2442f511359eacda8fabeee07fc66e33d; PCE011 0852Z roadmap a2c2a4c0708432ee9325a21a65a9c6f9ea814399fa02a84849592fcedd9092ce; PCE11 0735Z GO roadmap 5857ddc2361baaac4b14c186a177ca741cbe870985badc980bb0e89382185793; established facts b1590bab9ca5b79a1182a4418f9fdc2c1b488a0154b286701d08ba8661545b2a; sandwich procedure b17263e8da2269344d6698a5111d582095fee85998036002ada7603ed7e58d01.
+
+## Full attempt ledger
+
+- PCE11.025 PASS: PCE11.025-agent011-safe-rotation-worker-startup-negative-test 22:43:37–22:43:42Z exit 0. Missing-handoff foreground worker intentionally exits 2 with durable HALT_BEFORE_CLICK receipt, click_invoked false, send_invoked false. Correct [20,24] audit gate. No UI change. Durable ops/PCE11_025_AGENT011_STARTUP_NEGATIVE_TEST.json.
+
+- PCE11.026 FAILED (pre-launch static test): PCE11.026-agent011-verified-one-shot-semantic-pce12-takeover 22:46:30–22:46:34Z exit 2. One of seven rotation tests raised ValueError substring not found for an overly brittle source marker. No worker started. GitHub-first fixed test to direct source marker without newline literal; worker unchanged. Test never proved live rotation.
+
+- PCE11.027 FAILED (worker launch): PCE11.027-agent011-semantic-agent12-takeover-after-test-repair 22:48:01–22:48:29Z exit 2. Source accepted 7/7 rotation tests, full Windows 532/532, consumer 123/123, JS syntax 5/5. Detached PowerShell worker exited code 0 without receipt (phase None). No positive click/handoff; existing Firefox chat retained in prior diagnostics. No source/runtime activation.
+
+- PCE11.028 PASS (read-only-to-live negative startup matrix): PCE11.028-agent011-no-click-powershell-launch-mode-matrix 22:49:13–22:49:17Z exit 0. Against intentionally missing handoff, foreground exit2 receipt HALT_BEFORE_CLICK; new-process-group exit2 receipt; DETACHED_PROCESS exit0 no receipt; DETACHED_PROCESS+group exit0 no receipt; CREATE_NO_WINDOW exit2 receipt. DETACHED_PROCESS decisively unsuitable for this Windows PowerShell 5.1 worker. No UI click or send. Durable ops/PCE11_028_AGENT011_NEGATIVE_LAUNCH_MATRIX.json. Documented incident docs/incidents/INCIDENT_2026-10-08T2250Z_AGENT011_POWERSHELL_DETACHED_PROCESS_FALSE_ZERO_EXIT.md; added Windows regression test using CREATE_NO_WINDOW. No renewed detached use allowed.
+
+- PCE11.029 FAILED (positive browser identity gate before click): PCE11.029-agent011-create-no-window-semantic-pce12-rotation 22:51:01–22:51:32Z exit 2. Source acceptance PASSED: launch_mode 1/1, rotation_contract 7/7, Windows 533/533, consumer 123/123, JS syntax 5/5, source mirrors equal, source head 025e17eb54afd98317f695095b31946d3ea16ea5. New worker launched using proven CREATE_NO_WINDOW and returned durable halt SOURCE_CONVERSATION_IDENTITY_INVALID. It reached positively selected original PC Engineer 11 UIA tab and read urlbar; the URL's actual raw format was NOT printed in relay output. Script refused to click; no new chat or handoff occurred in this attempt. Receipt at ops/PCE11_029_AGENT011_SEMANTIC_AGENT12_ROTATION.json. Exact actual source URL format remains UNKNOWN pending safe read-only diagnostic.
+
+## Review, incidents, user rescues and release boundary
+
+Window grade: 2 pass (.025,.028), 3 attempted failures (.026,.027,.029). Existing Director instruction: assistant must perform semantic New Chat and transmit successor handoff automatically; do not ask user to manually open ChatGPT or copy mission. No human rescue was required beyond forwarding relay results and that explicit instruction. Distinguish source test success from runtime delivery. Firefox temporary extension Client/Relay/extension content.js original SHA256 34500934b214423afc2d3c267877a961cd0ec46521e5860ed149502d7f4e2ae5 remains installed unchanged; preserved nine-file .004 original, candidate stages .009/.016 and 2532-entry BROKEN archive. Two consumer missions last checked pending, Relay armed with browser outbound owner. No 12h/24h canary or confirmed PCE12 first turn; STOP and exact-once override all autonomy.
+
+## Before PCE11.030
+
+Commit THIS correct new-epoch audit and use engineering_preflight(root,30,series=11) to select exact window [25,29]. Windows working HEAD before audit = 025e17eb54afd98317f695095b31946d3ea16ea5. Next unique .030 should be a strictly READ-ONLY semantic UIA URLbar-format forensic on exactly selected canonical PC Engineer 11 tab (no selection, no click, no navigation). Print only scheme/host/opaque-redacted path structure and SHA256, not actual conversation ID or secrets. Reconcile saved PCE11.029 receipt click_invoked=false/send_invoked=false; fail closed otherwise. Then GitHub-first repair source-conversation URL normalization to accommodate proven actual ChatGPT URL shape (including potential Firefox display simplification or project URL), with new positive and negative tests. Only after acceptance attempt distinct unique rotation; do not replay .029. The successor target stays 💻PC Engineering 12🔧, pce12.1, first PCE12.000, required full controls/preflight and source-only test continuation.
+
+**Audit complete; PCE12 takeover unverified, source URL identity gate requires forensic evidence.**
