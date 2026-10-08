@@ -38,9 +38,9 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] PCE11.026: private state 0 missions/actions, no auth config; historical `/status` source 5/5. `Client/Relay/bin/PCE11_026_PRIVATE_STATE_DIAG_2026-10-08T103556Z.json`.
 - [x] PCE11.027 PASS at `fe4035c22af1c04fa63869eb4ba900ca6595c6b8`: nine v16 telemetry, 12 containment, 481 Windows, 119 consumer tests; four JS, archive and staged v16 source verified. No process launched. Evidence `Client/Relay/bin/SOURCE_TELEMETRY_ACCEPTANCE_2026-10-08T103943Z/acceptance.json`.
 - [x] PCE11.028 FAILED: child PID 1640, authenticated `/status` PID 11180, missions 0; precise PID mismatch. Private Job cleanup, 8768 release, production identity verified. Incident `docs/incidents/INCIDENT_2026-10-08T1043Z_PCE11_028_V16_PID_IDENTITY_MISMATCH.md`.
-- [ ] PCE11.029: read-only exact .028 report, current 8766/8768 state, Python executable/launcher metadata; no relaunch or process kill.
-- [ ] Before .030: audit .025–.029 and GOVSYNC. Then consider a harmless native launcher ancestry/Job membership test; no arbitrary PID acceptance.
-- [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
+- [x] PCE11.029 PASS read-only: venv launcher python.exe 255,200 bytes vs base Python313 python.exe 105,696; historic 1640->11180 ancestry UNPROVEN. Main 18632 ARMED, 2 missions; 8768 free. `Client/Relay/bin/PCE11_029_PID_IDENTITY_DIAG_2026-10-08T104655Z.json`.
+- [x] Audit .025–.029 published `docs/audits/AUDIT_2026-10-08T1049Z_PCE11_OPERATIONS_025_029.md`. Independent GOVSYNC required before .030.
+- [ ] PCE11.030: harmless contained Python-venv launch experiment: compare starter vs actual interpreter PID/PPID and verify actual host belongs to private Job via Win32 IsProcessInJob; never start Relay service. Verify main 8766 and vacant 8768 before/after, kill only OWN private Job.
 
 ## Full original queue preserved
 [Complete 2026-10-08T1011Z snapshot](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md).
