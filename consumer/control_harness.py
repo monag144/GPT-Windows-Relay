@@ -171,6 +171,7 @@ def build_control_harness_contract(mission_id: str) -> dict:
         "source_tree_hygiene": {
             "dirty_preflight_rule": "Classify every dirty path before cleanup. Only deterministic generated caches may be removed automatically; any unknown or source-like path fails closed.",
             "test_rule": "Run source acceptance with Python bytecode generation disabled when practical so tests do not create the next preflight failure.",
+            "partial_write_rule": "A failed multi-file connector action may already have committed earlier writes. Re-read HEAD and every intended path before retry; reconcile individually and prove content mirror identity. Never assume an error rolled back preceding writes.",
             "ignore_contract": [".gitignore::__pycache__/", ".gitignore::*.py[cod]", ".gitignore::.pytest_cache/"]
         },
         "incident_logging": {
