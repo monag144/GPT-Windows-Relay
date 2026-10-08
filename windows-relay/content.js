@@ -31,6 +31,8 @@ const CHAT_IDLE_TIMEOUT_MS=120000;
 const CHAT_IDLE_POLL_MS=250;
 const RELAY_RECOVERY_INTERVAL_MS=15000;
 const RELAY_STALL_PATIENCE_MS=300000;
+const DISCOVERY_SETTLE_MS=500;
+const DISCOVERY_SETTLE_LEASE_MS=5000;
 const RELAY_REFRESH_GRACE_MS=2500;
 const RECOVERY_WATCH_MAX_AGE_MS=RELAY_STALL_PATIENCE_MS*3;
 const RECOVERY_WATCH_SESSION_KEY='gptWindowsRelayRecoveryWatchV1';
@@ -1939,7 +1941,7 @@ ${JSON.stringify({
   }
 }
 
-/* GPT_WINDOWS_DISCOVERY_SETTLE_REACQUIRE_V1 */
+/* GPT_WINDOWS_DISCOVERY_SETTLE_REACQUIRE_V2 */
 function recoverDiscoveredPacket(p,reason){
   if(!p?.id || attempted.has(p.id) || inflight.has(p.id))return;
   emitRelayEvent('relay_packet_settle_reacquire',{packet_id:p.id,reason});
@@ -1973,8 +1975,21 @@ function inspectUnit(unit){
 
   const sig=hash(p.packet);
   const prior=pending.get(p.id);
-  if(prior?.sig===sig && prior?.unit===unit)return;
-  if(prior?.timer)clearTimeout(prior.timer);
+  const now=Date.now();
+  if(prior?.sig===sig && prior?.unit===unit){
+    const age=Math.max(0,now-Number(prior.started_at||0));
+    if(age<DISCOVERY_SETTLE_LEASE_MS)return;
+    if(prior?.timer)clearTimeout(prior.timer);
+    pending.delete(p.id);
+    emitRelayEvent('relay_packet_settle_stale_rearmed',{
+      packet_id:p.id,
+      age_ms:age,
+      lease_ms:DISCOVERY_SETTLE_LEASE_MS
+    });
+  }else if(prior?.timer){
+    clearTimeout(prior.timer);
+  }
+
   emitRelayEvent('relay_packet_discovered',{
     packet_id:p.id,
     source:unit===watchedUnit?'watched_turn':'recovery_scan'
@@ -1995,9 +2010,9 @@ function inspectUnit(unit){
       return;
     }
     run(settled).catch(()=>{});
-  },500);
+  },DISCOVERY_SETTLE_MS);
 
-  pending.set(p.id,{sig,unit,timer});
+  pending.set(p.id,{sig,unit,timer,started_at:now});
 }
 
 function latestAssistantPair(){
