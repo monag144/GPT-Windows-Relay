@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse,hashlib,json,os,secrets,shutil,subprocess,sys,time,urllib.error,urllib.request
 from datetime import datetime,timezone
 from pathlib import Path
+from pce11_private_host_identity import attest_private_host
 
 BRANCH="pce11/one-click-go-recovery-and-doc-hygiene"
 BASE_SHA="7f894e2e90e5f35156558957ed3b148d49be50e6"
@@ -163,6 +164,7 @@ def run_health_canary(live,stage,legacy,containment):
           "--config",str(cfg),"--state-dir",str(state),"server"]
     legacy.validate_launch(args,state,cfg)
     p=None
+    host=None
     result={"schema":"pce011-contained-v16-health-v1",
       "time_utc":datetime.now(timezone.utc).isoformat(),
       "sandbox":str(sandbox),"port":SIDECAR_PORT,"baseline_main":baseline,
@@ -171,6 +173,9 @@ def run_health_canary(live,stage,legacy,containment):
       "private_missions_count":None,"observed_status_pid":None,
       "expected_child_pid":None,"observed_pending_missions":None,
       "status_pid_matches_child":None,"status_missions_zero":None,
+      "listener_pid_matches_status":None,"host_job_member":None,
+      "host_parent_pid":None,"host_identity_verified":False,
+      "host_exited_after_job_close":None,"host_handle_closed":None,
       "cleanup_verified":False,
       "production_main_identity_preserved":False,
       "prod_process_modified":False,"operator_stop_triggered":False,
@@ -201,8 +206,20 @@ def run_health_canary(live,stage,legacy,containment):
             result["observed_status_armed"]=status.get("armed")
             result["status_pid_matches_child"]=(type(status.get("pid")) is int and status["pid"]==p.pid)
             result["status_missions_zero"]=(type(status.get("pending_missions")) is int and status["pending_missions"]==0)
-            if not result["status_pid_matches_child"]:
-                raise RuntimeError("isolated sidecar status PID mismatch")
+            if type(status.get("pid")) is not int or status["pid"]<=0:
+                raise RuntimeError("isolated sidecar status PID malformed")
+            owners=port_pids(SIDECAR_PORT)
+            result["listener_pid_matches_status"]=(owners==[status["pid"]])
+            if not result["listener_pid_matches_status"]:
+                raise RuntimeError("isolated sidecar /status PID does not own the listener")
+            # The real host may be a child of the venv redirector; prove
+            # direct parent and exact owned Job rather than waiving identity.
+            host=attest_private_host(status["pid"],p.pid,p.job)
+            result["host_job_member"]=host.job_member
+            result["host_parent_pid"]=host.parent_pid
+            result["host_identity_verified"]=host.verified
+            if not result["host_identity_verified"] or not result["host_job_member"]:
+                raise RuntimeError("actual HTTP host not proved inside exact private Job")
             if not result["status_missions_zero"]:
                 raise RuntimeError("isolated sidecar reported nonzero or malformed mission count")
             if status.get("armed") is not True:
@@ -219,12 +236,27 @@ def run_health_canary(live,stage,legacy,containment):
             try:p.close()
             except BaseException as e:
                 failure=failure or "cleanup failed "+type(e).__name__
+        if host is not None:
+            try:
+                result["host_exited_after_job_close"]=host.wait_for_exit()
+            except BaseException as e:
+                result["host_exited_after_job_close"]=False
+                failure=failure or "actual HTTP host exit unverified: "+type(e).__name__
+            finally:
+                try:
+                    host.close()
+                    result["host_handle_closed"]=True
+                except BaseException as e:
+                    result["host_handle_closed"]=False
+                    failure=failure or "actual host handle cleanup failed: "+type(e).__name__
         for _ in range(20):
             if not port_pids(SIDECAR_PORT):break
             time.sleep(0.12)
         result["sidecar_released"]=not port_pids(SIDECAR_PORT)
         result["cleanup_verified"]=bool(p is not None and p.disposed and result["sidecar_released"]
-           and "private_job_terminated" in p.events and "child_handles_closed" in p.events)
+           and "private_job_terminated" in p.events and "child_handles_closed" in p.events
+           and (host is None or (result["host_exited_after_job_close"] is True
+                                 and result["host_handle_closed"] is True)))
         try:
             post=main_baseline()
             result["production_main_identity_preserved"]=post["pid"]==baseline["pid"] and post["armed"] is True
@@ -239,7 +271,11 @@ def run_health_canary(live,stage,legacy,containment):
         if failure:result["failure"]=failure
         report=sandbox/"health-report.json"
         report.write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
-    if failure or not result["status_ok"] or not result["cleanup_verified"] or not result["production_main_identity_preserved"]:
+    if (failure or not result["status_ok"] or not result["cleanup_verified"]
+        or not result["production_main_identity_preserved"]
+        or result["listener_pid_matches_status"] is not True
+        or result["host_identity_verified"] is not True
+        or result["host_exited_after_job_close"] is not True):
         raise RuntimeError("isolated v16 canary failed; forensic evidence "+str(sandbox/"health-report.json"))
     return result
 
