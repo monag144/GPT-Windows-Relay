@@ -70,7 +70,7 @@ class WholeProductStopContract(unittest.TestCase):
 
     def test_control_poll_survives_pause_but_runtime_reload_does_not(self):
         s=self.content
-        self.assertIn('operatorControlPollTimer=setInterval(pollOperatorControlState,250)',s)
+        self.assertIn('operatorControlPollTimer=setInterval(pollOperatorControlState,2000)',s)
         block=s[s.index('function scheduleBackgroundReconnect()'):s.index('function connectBackgroundPort()')]
         self.assertNotIn('if(operatorPaused)return;',block)
         self.assertIn('!operatorPaused &&',block)
