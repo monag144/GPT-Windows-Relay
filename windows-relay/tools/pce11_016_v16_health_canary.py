@@ -112,6 +112,32 @@ def static_gate(repo,live):
     original=(repo/"windows-relay"/"tools"/"pce11_013_isolated_supervisor.py").read_text(encoding="utf-8")
     if 'raise RuntimeError("canary disabled until suspended-start containment is tested")' not in original:
         raise RuntimeError("old uncontrolled canary unexpectedly enabled")
+    # Fresh full source acceptance is required before even an isolated canary.
+    for suite in ("windows-relay","consumer"):
+        res=subprocess.run([sys.executable,"-B","-m","unittest","discover",
+                 "-s","tests","-p","test_*.py"],cwd=str(repo/suite),
+                 stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,
+                 encoding="utf-8",errors="replace",timeout=100)
+        if res.returncode or "OK" not in res.stderr:
+            raise RuntimeError("full "+suite+" source suite failed: "+res.stderr[-700:])
+        tests.append({"pattern":suite+"/tests/test_*.py","pass":True,
+                      "suite_full":True})
+    node=shutil.which("node")
+    if not node:raise RuntimeError("node runtime not available for JS syntax gates")
+    js_paths=("windows-relay/extension/content.js",
+              "windows-relay/extension/service_worker.js",
+              "windows-relay/extension-persistent/content.js",
+              "windows-relay/extension-persistent/service_worker.js")
+    for relative in js_paths:
+        file=repo/relative
+        if not file.is_file():raise RuntimeError("missing JS syntax gate file "+relative)
+        command([node,"--check",str(file)],timeout=20)
+        tests.append({"pattern":relative,"pass":True,"js_syntax":True})
+    left=repo/"windows-relay"/"extension"/"content.js"
+    right=repo/"windows-relay"/"extension-persistent"/"content.js"
+    if hash_file(left)!=hash_file(right):
+        raise RuntimeError("content-script mirror bytes mismatch")
+    git(repo,"diff","--check")
     return tests
 
 def create_private(live):
