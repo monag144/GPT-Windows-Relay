@@ -140,6 +140,7 @@ class Tests(unittest.TestCase):
         self.assertIn("windows-relay/TASKS.md",body["stdout"])
         self.assertIn("docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",body["stdout"])
         self.assertIn("docs/windows-relay-mission-and-roadmap.md",body["stdout"])
+        self.assertIn("docs/relay-sandwich-procedure.md",body["stdout"])
         self.assertIn("monag144/GPT-Windows-Relay",body["stdout"])
         self.assertIn("sandwich technique",body["stdout"])
         empty=json.loads(wr.result({"id":"PCE10.004","status":"COMMAND_FAILED","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
@@ -148,11 +149,20 @@ class Tests(unittest.TestCase):
         already=json.loads(wr.result({"id":"PCE10.004","status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertTrue(already["stdout"].endswith(wr.SANDWICH_REMINDER))
 
-    def test_five_turn_audit_warning_is_emitted_on_fifth_operation_boundary(self):
-        due=json.loads(wr.result({"id":"PCE10.005","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+    def test_five_turn_audit_warning_precedes_next_operation_boundary(self):
+        # Response .024 must require audit BEFORE dispatching .025.
+        due=json.loads(wr.result({"id":"PCE10.024","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertIn(wr.FIVE_TURN_AUDIT_REMINDER,due["stdout"])
-        not_due=json.loads(wr.result({"id":"PCE10.004","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        not_due=json.loads(wr.result({"id":"PCE10.025","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertNotIn(wr.FIVE_TURN_AUDIT_REMINDER,not_due["stdout"])
+
+    def test_twenty_review_due_before_040_not_after(self):
+        due=json.loads(wr.result({"id":"PCE10.039","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertIn(wr.FIVE_TURN_AUDIT_REMINDER,due["stdout"])
+        self.assertIn(wr.TWENTY_TURN_REVIEW_REMINDER,due["stdout"])
+        self.assertIn(wr.CONTINUE_AUTONOMOUSLY_REMINDER,due["stdout"])
+        not_due=json.loads(wr.result({"id":"PCE10.040","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertNotIn(wr.TWENTY_TURN_REVIEW_REMINDER,not_due["stdout"])
 
     def test_engineering_operation_ordinal_supports_dot_and_legacy_forms(self):
         self.assertEqual(wr.engineering_operation_ordinal("PCE10.005"),5)
