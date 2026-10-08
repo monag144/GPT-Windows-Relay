@@ -13,7 +13,7 @@ $Bridge=Join-Path $env:APPDATA 'GPTWindowsRelay\bridge.json'
 $LiveHome=Join-Path $env:USERPROFILE 'Downloads\Dev\GPT\Client\Relay'
 $state=[ordered]@{
  schema='agent011-semantic-rotation-v1';phase='STARTED';source_packet_id=$SourcePacketId
- target_title='💻PC Engineering 12🔧';target_session='pce12.1';first_operation='PCE12.000'
+ target_title=([char]::ConvertFromUtf32(0x1F4BB)+'PC Engineering 12'+[char]::ConvertFromUtf32(0x1F527));target_session='pce12.1';first_operation='PCE12.000'
  started_at=[DateTime]::UtcNow.ToString('o');source_url=$null;new_url=$null
  source_tab=$null;firefox_pid=$null;send_invoked=$false;click_invoked=$false
  handoff_visible=$false;title_verified=$false;operator_stopped=$false;error=$null
