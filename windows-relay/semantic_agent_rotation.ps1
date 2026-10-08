@@ -139,7 +139,7 @@ try{
   if($open -ge 0){
    $close=$body.IndexOf('[/GPT_WINDOWS_RESULT]',$open)
    if($close -gt $open){
-    $span=$body.Substring($open,[Math]::Min(8000,$close-$open+22))
+    $span=$body.Substring($open,[Math]::Min(8000,$close-$open))
     if($span.Contains($SourcePacketId) -and $span.Contains('"status"')){$confirmed=$true;break}
    }
   }
