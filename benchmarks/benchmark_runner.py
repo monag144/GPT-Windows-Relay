@@ -7,6 +7,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from overnight_observer import summarize as summarize_observer
 
 HERE = Path(__file__).resolve().parent
 CATALOG = HERE / "CASES_2026-10-08T0805Z_A_TO_Z.json"
@@ -46,6 +47,8 @@ def create(args):
         raise FileExistsError("refusing to overwrite a previous run")
     if not re.fullmatch("[A-Fa-f0-9]{40}", args.sha):
         raise ValueError("exact 40-character commit SHA required")
+    if args.runtime_sha and not re.fullmatch("[A-Fa-f0-9]{64}", args.runtime_sha):
+        raise ValueError("runtime hash must be 64-character SHA-256")
     p.mkdir(parents=True)
     save(p / "run.json", {
         "schema": "pce011-run-v1",
@@ -110,12 +113,13 @@ def proof(case_id, item):
                 return "FAIL", "safety/rescue count nonzero or omitted"
         if case_id in "UZ":
             threshold = 43200 if case_id == "U" else 86400
-            observer = e.get("observer_summary", {})
-            if (observer.get("complete") is not True
-                or observer.get("duration_seconds", 0) < threshold
-                or observer.get("uptime_percent", 0) < 99.5
-                or observer.get("max_gap_seconds", 999999) > 120):
-                return "FAIL", "independent observer coverage failed"
+            source = e.get("observer_log", {})
+            observer_path = Path(source["path"])
+            if not observer_path.is_file() or digest(observer_path) != source["sha256"]:
+                return "BLOCKED", "independent raw observer evidence missing/changed"
+            observer = summarize_observer(observer_path, threshold)
+            if not observer.get("qualified_for_tcp_gate"):
+                return "FAIL", "independent raw observer coverage failed"
             receipts = e.get("hourly_receipts", [])
             hours = threshold // 3600
             if sorted({r.get("hour") for r in receipts if r.get("executions") == 1
@@ -145,7 +149,8 @@ def assessment(folder):
     passed = sum(v["state"] == "PASS" for v in active.values())
     blockers = [k for k,v in active.items() if v["state"] != "PASS"]
     overnight = all(statuses[x]["state"] == "PASS" for x in "CKLMOUVY")
-    release = not blockers and statuses["Z"]["state"] == "PASS"
+    release = (not blockers and statuses["Z"]["state"] == "PASS"
+               and bool(meta.get("loaded_runtime_sha256")))
     summary = {
         "schema": "pce011-score-v1", "product": meta["product"], "browser": meta["browser"],
         "label": meta["label"], "source_sha": meta["source_sha"],
