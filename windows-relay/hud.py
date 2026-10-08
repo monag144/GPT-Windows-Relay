@@ -57,7 +57,7 @@ def browser_state(events,now=None):
         "content_script_started","content_port_connected","browser_integration_connected",
         "browser_integration_disconnected","action_received","action_result","scanner_snapshot",
         "relay_packet_discovered","relay_packet_settle_stale_rearmed","relay_recovery_packet_seen","relay_scanner_stalled",
-        "relay_page_refresh_requested","relay_result_delivery_complete"
+        "relay_page_refresh_requested","relay_result_delivery_complete","relay_engineering_action_render_collapsed"
     }
     relevant=[e for e in events if e.get("event") in wanted]
     runtime=None; browser_id=None
@@ -87,6 +87,7 @@ PHASES={
     "relay_result_delivery_retry_deferred":("WAITING","result delivery deferred for recovery"),
     "relay_result_delivery_complete":("READY","result visibly delivered"),
     "relay_scanner_stalled":("STALLED","visible packet not consumed within patience window"),
+    "relay_engineering_action_render_collapsed":("RENDER COLLAPSED","PCE action presentation collapsed; execution unverified, replay blocked"),
     "relay_page_refresh_requested":("RECOVERING","refreshing ChatGPT after forced reinspection failed"),
     "chatgpt_tool_approval_prompt_detected":("APPROVAL REQUIRED","ChatGPT is waiting for tool approval"),
     "gpt_recovery_advice_observed":("RECOVERY ADVICE","bounded GPT recovery advice visible; awaiting supervisor claim"),
