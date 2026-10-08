@@ -96,6 +96,10 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertNotIn(private[3],str(record))
             self.assertFalse(record["browser_control_used"])
             self.assertFalse(record["operator_stop_triggered"])
+            self.assertEqual(record["observed_status_pid"],123456)
+            self.assertEqual(record["observed_pending_missions"],0)
+            self.assertIs(record["status_pid_matches_child"],True)
+            self.assertIs(record["status_missions_zero"],True)
 
     def test_foreign_listener_response_blocks_and_releases_job(self):
         with tempfile.TemporaryDirectory() as t:
@@ -116,7 +120,56 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertFalse(private[2].exists())
             evidence=json.loads((private[0]/"health-report.json").read_text())
             self.assertFalse(evidence["status_ok"])
-            self.assertIn("foreign sidecar PID",evidence["failure"])
+            self.assertEqual(evidence["observed_status_pid"],998877)
+            self.assertEqual(evidence["expected_child_pid"],123456)
+            self.assertEqual(evidence["observed_pending_missions"],0)
+            self.assertIs(evidence["status_pid_matches_child"],False)
+            self.assertIs(evidence["status_missions_zero"],True)
+            self.assertIn("isolated sidecar status PID mismatch",evidence["failure"])
+
+    def test_nonzero_private_missions_are_reported_independently_and_cleanup(self):
+        with tempfile.TemporaryDirectory() as t:
+            live=Path(t);private=self.private(live)
+            baseline={"pid":555,"armed":True,"outbound_owner":"browser","pending_missions":2}
+            with patch.object(m,"verify_no_sidecar"),\
+                 patch.object(m,"main_baseline",return_value=baseline),\
+                 patch.object(m,"create_private",return_value=private),\
+                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"get_status",return_value={
+                    "ok":True,"pid":123456,"pending_missions":5,"armed":True}):
+                with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
+                    m.run_health_canary(live,{"source":str(live/"s.py")},
+                                        Mock(),Mock(ContainedProcess=FakeContained))
+            result=json.loads((private[0]/"health-report.json").read_text())
+            self.assertTrue(result["job_contained"])
+            self.assertTrue(result["cleanup_verified"])
+            self.assertEqual(result["observed_status_pid"],123456)
+            self.assertEqual(result["observed_pending_missions"],5)
+            self.assertIs(result["status_pid_matches_child"],True)
+            self.assertIs(result["status_missions_zero"],False)
+            self.assertIn("nonzero or malformed mission count",result["failure"])
+            self.assertNotIn(private[3],str(result))
+            self.assertFalse(private[2].exists())
+
+    def test_missing_or_string_pid_is_rejected_and_recorded(self):
+        with tempfile.TemporaryDirectory() as t:
+            live=Path(t);private=self.private(live)
+            baseline={"pid":555,"armed":True,"outbound_owner":"browser","pending_missions":2}
+            with patch.object(m,"verify_no_sidecar"),\
+                 patch.object(m,"main_baseline",return_value=baseline),\
+                 patch.object(m,"create_private",return_value=private),\
+                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"get_status",return_value={
+                    "ok":True,"pid":"123456","pending_missions":0,"armed":True}):
+                with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
+                    m.run_health_canary(live,{"source":str(live/"s.py")},
+                                        Mock(),Mock(ContainedProcess=FakeContained))
+            result=json.loads((private[0]/"health-report.json").read_text())
+            self.assertEqual(result["observed_status_pid"],"123456")
+            self.assertIs(result["status_pid_matches_child"],False)
+            self.assertIs(result["status_missions_zero"],True)
+            self.assertIn("status PID mismatch",result["failure"])
+            self.assertTrue(result["cleanup_verified"])
 
     def test_production_identity_drift_fails(self):
         with tempfile.TemporaryDirectory() as t:
