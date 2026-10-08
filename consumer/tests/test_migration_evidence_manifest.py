@@ -1,5 +1,5 @@
-import hashlib
 import json
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -7,9 +7,18 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "docs" / "migration" / "MIGRATION_2026-10-08T0110Z_TERMUX_WINDOWS_EVIDENCE_MANIFEST.json"
 
 
-def git_blob_sha1(data: bytes) -> str:
-    header = f"blob {len(data)}\0".encode("ascii")
-    return hashlib.sha1(header + data).hexdigest()
+def committed_blob(path: str) -> str:
+    p = subprocess.run(
+        ["git", "rev-parse", f"HEAD:{path}"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if p.returncode:
+        raise AssertionError(f"git rev-parse failed for {path}: {p.stderr}")
+    return p.stdout.strip()
 
 
 class MigrationEvidenceManifestTests(unittest.TestCase):
@@ -25,9 +34,8 @@ class MigrationEvidenceManifestTests(unittest.TestCase):
             path = entry["destination_path"]
             self.assertNotIn(path, seen)
             seen.add(path)
-            target = ROOT / path
-            self.assertTrue(target.is_file(), path)
-            self.assertEqual(git_blob_sha1(target.read_bytes()), entry["git_blob_sha1"], path)
+            self.assertTrue((ROOT / path).is_file(), path)
+            self.assertEqual(committed_blob(path), entry["git_blob_sha1"], path)
             self.assertTrue(entry["source_paths"], path)
 
 
