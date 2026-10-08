@@ -158,6 +158,13 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "external_runner_rule": "If an external runner such as pytest is used, capability-probe that exact interpreter and runner import before starting the suite. Executable existence is not proof of runner capability.",
             "bytecode_rule": "Run acceptance with bytecode generation disabled where practical."
         },
+        "migration_evidence": {
+            "manifest_path": "docs/migration/MIGRATION_2026-10-08T0110Z_TERMUX_WINDOWS_EVIDENCE_MANIFEST.json",
+            "source_repository": "monag144/GPT-Termux-Relay",
+            "source_commit": "249e3bb46c6ea57968d9ecf5157d73867a7f918d",
+            "verification_rule": "A migrated historical file may be exempted from source-style whitespace normalization only while its current Git blob SHA exactly matches the manifest entry.",
+            "diff_check_rule": "Run git diff --check over the branch; every reported path must either be absent from the error set or be an exact manifest match. Any non-manifest whitespace error blocks promotion."
+        },
         "source_tree_hygiene": {
             "dirty_preflight_rule": "Classify every dirty path before cleanup. Only deterministic generated caches may be removed automatically; any unknown or source-like path fails closed.",
             "test_rule": "Run source acceptance with Python bytecode generation disabled when practical so tests do not create the next preflight failure.",
