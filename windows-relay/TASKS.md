@@ -21,7 +21,8 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 
 ## PCE11.005 checkpoint and read-only inventory
 - [x] GitHub audit covering PCE11.000–.004 saved at `docs/audits/AUDIT_2026-10-08T0916Z_PCE11_OPERATIONS_000_004.md` (COMPLETE as an audit; live gates BLOCKED).
-- [ ] PCE11.005 blocked by pre-dispatch governance (2026-10-08T09:17:59Z): GitHub audit is committed but source checkout has not pulled it. No action reserved/executed. First do a narrowly scoped, separately identified canonical-source fast-forward synchronization with exact remote/audit evidence and post-pull PCE11.005 preflight. Do not replay the original action ID. Then proceed under a new unique action ID to passive file/port/PID inventory; do not activate or mutate the running Relay.
+- [x] PCE11.005B read-only inventory completed after exact audited GOVSYNC: original 2,532-file backup verified, candidates clean, no changed live-vs-archive source hashes, 8766 loopback listener PID 18632, no 8767 listener. Live extension and browser identity unverified; live cutover blocked. Saved `Client/Relay/bin/RUNTIME_INVENTORY_2026-10-08T092221Z.json`.
+- [ ] PCE11.006: read-only listener PID ancestry, watchdog/HUD candidates, STOP sentinel existence, distinct product/process roles. No browser mutation or STOP. Confirm whether 8767 consumer is independently deployed before treating it as a standalone Relay failure.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
