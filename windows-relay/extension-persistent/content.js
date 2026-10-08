@@ -154,15 +154,10 @@ function hydrateAttemptedHistory(){
    delivery.  In particular, assistant prose, code examples, quoted results,
    and broad conversation wrappers are not receipts. */
 const RESULT_TURN_SELECTOR=USER_SELECTOR;
-function resultPacketIdFromUserUnit(unit){
-  if(!unit?.matches?.(USER_SELECTOR))return null;
-  const text=(unit.textContent||'').trim();
-  const composer=findComposer();
-  if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  // GPT_WINDOWS_RESULT_SINGLE_LINE_OR_MULTILINE_RECEIPT_V1
-  // A full user-turn envelope may render inline OR across lines. Neither an
-  // assistant example nor a bare packet ID is a delivery acknowledgement.
-  const match=text.match(/^\[GPT_WINDOWS_RESULT\]\s+([\s\S]+?)\s+\[\/GPT_WINDOWS_RESULT\]$/);
+// GPT_WINDOWS_RESULT_SINGLE_LINE_OR_MULTILINE_RECEIPT_V1
+function resultPacketIdFromExactEnvelope(text){
+  // Require a complete result object, never a substring or an assistant quote.
+  const match=String(text||'').trim().match(/^\[GPT_WINDOWS_RESULT\]\s+([\s\S]+?)\s+\[\/GPT_WINDOWS_RESULT\]$/);
   if(!match)return null;
   try{
     const result=JSON.parse(match[1]);
@@ -171,16 +166,40 @@ function resultPacketIdFromUserUnit(unit){
       ? result.id : null;
   }catch{return null;}
 }
+function resultPacketIdFromUserUnit(unit){
+  if(!unit?.matches?.(USER_SELECTOR))return null;
+  const composer=findComposer();
+  if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
+  return resultPacketIdFromExactEnvelope(unit.textContent);
+}
+// GPT_WINDOWS_STRUCTURAL_USER_BUBBLE_RECEIPT_V1
+// 2026-10-08 live diagnostic: seven user results lacked role attributes but
+// had the exact user bubble nested directly in a right-aligned container.
+// The broad user-bubble class is never enough without its verified parent.
+const STRUCTURAL_RESULT_BUBBLE_SELECTOR='div.bg-user-message.text-user-message';
+function resultPacketIdFromStructuralUserBubble(unit){
+  if(!unit || unit.tagName!=='DIV' || !unit.classList?.contains('bg-user-message') ||
+     !unit.classList?.contains('text-user-message'))return null;
+  const parent=unit.parentElement;
+  if(!parent || !['flex','flex-col','items-end','gap-1'].every(c=>parent.classList?.contains(c)))return null;
+  // Positive structural role plus negative provenance checks. A message
+  // rendered within an assistant, input form or contenteditable is not a receipt.
+  if(unit.closest?.('[data-message-role="assistant"],[data-message-author-role="assistant"],[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"],form,[contenteditable="true"],[role="textbox"]'))return null;
+  const composer=findComposer();
+  if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
+  return resultPacketIdFromExactEnvelope(unit.textContent);
+}
 
 function hydrateAttemptedFromConversation(){
   if(attemptedConversationHydrated)return;
-  const nodes=document.querySelectorAll(RESULT_TURN_SELECTOR);
+  const nodes=[...document.querySelectorAll(RESULT_TURN_SELECTOR),
+    ...document.querySelectorAll(STRUCTURAL_RESULT_BUBBLE_SELECTOR)];
   if(!nodes.length)return;
   attemptedConversationHydrated=true;
   let added=0;
   const start=Math.max(0,nodes.length-RESULT_SCAN_LIMIT);
   for(let i=start;i<nodes.length;i++){
-    const id=resultPacketIdFromUserUnit(nodes[i]);
+    const id=resultPacketIdFromUserUnit(nodes[i])||resultPacketIdFromStructuralUserBubble(nodes[i]);
     if(!id || attempted.has(id))continue;
     attempted.add(id);
     attemptedOrder.push(id);
@@ -896,6 +915,12 @@ function userTurnContainsPacketId(packetId){
   const nodes=document.querySelectorAll(RESULT_TURN_SELECTOR);
   for(let i=nodes.length-1;i>=0 && i>=nodes.length-32;i--){
     if(resultPacketIdFromUserUnit(nodes[i])===packetId)return true;
+  }
+  // Search separately to preserve strict role recognition, never to promote
+  // generic conversation wrappers or assistant examples into receipts.
+  const bubbles=document.querySelectorAll(STRUCTURAL_RESULT_BUBBLE_SELECTOR);
+  for(let i=bubbles.length-1;i>=0 && i>=bubbles.length-32;i--){
+    if(resultPacketIdFromStructuralUserBubble(bubbles[i])===packetId)return true;
   }
   emitResultTurnMatchDiagnostic(packetId,nodes,false);
   return false;
