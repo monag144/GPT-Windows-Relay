@@ -236,6 +236,10 @@ Therefore:
 
 Do not redo profile archaeology merely to rediscover that source path. Use the live `about:debugging` card / UI Automation first if the active temporary instance needs to be checked again.
 
+## Current Firefox identity checkpoint (2026-10-08T06:35Z)
+
+**Required reading:** `docs/handoffs/HANDOFF_2026-10-08T0635Z_PCE10_037_TO_NEXT_AGENT_FIREFOX_IDENTITY.md`. The `3awtt83g.default-release` Firefox profile, temporary addon ID `55840853a4b817e65769e2378ca65e060cbe18d1@temporary-addon`, and unique installed addon card above were **historically proven on Oct 2–3**. They do not prove a current browser PID, loaded code, installed addon, selected ChatGPT tab, or matching conversation URL. PCE10.035 source acceptance is fully GREEN and PCE10.036 backup integrity was reverified, but PCE10.037 `resolve-conversation-tab` failed with `FIREFOX_CONVERSATION_MATCH_COUNT_0`. This is a specific **unresolved identity gate**, not proof of Firefox absence. The exact resolver's offscreen/tab-parent filtering and possible stale target URL must be investigated once using bounded read-only evidence, not repeated generic browser scans or profile archaeology. No automatic addon reload / live promotion before positive identity.
+
 ## Current scroll work status
 
 The user requested a user-benefit behavior where relay result injection brings the conversation down to the newest turn and follows the beginning of the next assistant response briefly, then yields manual scroll control.
