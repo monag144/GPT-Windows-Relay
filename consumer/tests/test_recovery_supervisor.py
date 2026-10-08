@@ -33,6 +33,71 @@ class RecoverySupervisorTests(unittest.TestCase):
         base.update(updates)
         return rs.Snapshot(**base)
 
+    def test_supervisor_reads_server_canonical_state_and_journal(self):
+        # Direct correspondence with the running windows_relay.py server:
+        # browser-event POST appends in state.path.parent, not consumer state.
+        self.assertEqual(rs.RELAY_BACKEND_DIR.name, "GPTWindowsRelay")
+        self.assertEqual(rs.RELAY_STATE_PATH, rs.RELAY_BACKEND_DIR / "state.json")
+        self.assertEqual(rs.EVENT_PATH, rs.RELAY_BACKEND_DIR / "browser-events.jsonl")
+        self.assertEqual(rs.SUPERVISOR_STATE_PATH.parent.name, "GPTWindowsRelayConsumer")
+        server_source = (CONSUMER.parent / "windows-relay" / "windows_relay.py").read_text(encoding="utf-8")
+        self.assertIn("self.server.state.path.parent/'browser-events.jsonl'", server_source)
+
+    def test_recent_events_from_backend_journal_support_ui_error_and_delivery(self):
+        with tempfile.TemporaryDirectory() as raw:
+            original_path = rs.EVENT_PATH
+            try:
+                rs.EVENT_PATH = Path(raw) / "browser-events.jsonl"
+                events = [
+                    {"time":"2026-10-08T22:01:00+00:00","event":"chatgpt_ui_error_detected",
+                     "detail":{"browser_id":"firefox","kind":"model_load_error","text":"The model cannot be loaded"}},
+                    {"time":"2026-10-08T22:01:01+00:00","event":"relay_result_send_clicked",
+                     "detail":{"browser_id":"firefox","packet_id":"PCE11.011-test"}},
+                    {"time":"2026-10-08T22:01:02+00:00","event":"relay_result_delivery_complete",
+                     "detail":{"browser_id":"firefox","packet_id":"PCE11.011-test"}},
+                    {"time":"2026-10-08T22:01:03+00:00","event":"chatgpt_ui_error_cleared",
+                     "detail":{"browser_id":"firefox"}},
+                ]
+                rs.EVENT_PATH.write_text(
+                    "\n".join(json.dumps(e) for e in events)+"\n", encoding="utf-8"
+                )
+                found = rs._recent_events(limit=5)
+                self.assertEqual(found, events)
+                self.assertEqual(rs._last_relevant_event(found, "firefox")["event"],
+                                 "chatgpt_ui_error_cleared")
+                self.assertIn("relay_result_delivery_complete", rs.PROGRESS_EVENTS)
+            finally:
+                rs.EVENT_PATH = original_path
+
+    def test_journal_tail_is_bounded_and_discards_partial_start(self):
+        with tempfile.TemporaryDirectory() as raw:
+            old = rs.EVENT_PATH
+            try:
+                rs.EVENT_PATH = Path(raw) / "browser-events.jsonl"
+                rs.EVENT_PATH.write_bytes(
+                    (b"z" * (rs.EVENT_TAIL_MAX_BYTES + 99)) +
+                    b"\n" +
+                    (json.dumps({"event":"relay_result_send_confirmed",
+                                 "detail":{"packet_id":"PCE11.012-test"}}) + "\n").encode()
+                )
+                found = rs._recent_events(96)
+                self.assertEqual(len(found), 1)
+                self.assertEqual(found[0]["event"], "relay_result_send_confirmed")
+            finally:
+                rs.EVENT_PATH = old
+
+    def test_journal_reader_gracefully_handles_missing_and_invalid_rows(self):
+        with tempfile.TemporaryDirectory() as raw:
+            old = rs.EVENT_PATH
+            try:
+                rs.EVENT_PATH = Path(raw) / "missing.jsonl"
+                self.assertEqual(rs._recent_events(), [])
+                rs.EVENT_PATH.write_bytes(b"{bad-json}\n{\"event\":\"ok\"}\n")
+                self.assertEqual(rs._recent_events(), [{"event": "ok"}])
+                self.assertEqual(rs._recent_events(0), [])
+            finally:
+                rs.EVENT_PATH = old
+
     def test_disconnected_browser_is_actionable_without_five_minute_wait(self):
         d = rs.decide(self.snapshot(browser_connected=False))
         self.assertEqual(d.phase, "RECOVERING")
