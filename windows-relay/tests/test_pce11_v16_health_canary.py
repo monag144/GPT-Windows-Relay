@@ -5,7 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock,patch
+from unittest.mock import MagicMock,Mock,patch
 
 MODULE=Path(__file__).resolve().parents[1]/"tools"/"pce11_016_v16_health_canary.py"
 spec=importlib.util.spec_from_file_location("pce11_016_v16_health_canary",MODULE)
@@ -49,9 +49,8 @@ class V16HealthCanaryTests(unittest.TestCase):
         data={"ok":True,"pid":123456,"armed":True,"pending_missions":0}
         response=Mock()
         response.read.return_value=json.dumps(data).encode()
-        context=Mock()
-        context.__enter__=Mock(return_value=response)
-        context.__exit__=Mock(return_value=False)
+        context=MagicMock()
+        context.__enter__.return_value=response
         with patch.object(m.urllib.request,"urlopen",return_value=context) as opener:
             actual=m.get_status(8768,"test-private-token")
         self.assertEqual(actual["pid"],123456)
