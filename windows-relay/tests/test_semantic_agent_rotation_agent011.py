@@ -53,7 +53,7 @@ class SemanticAgentRotationContractTests(unittest.TestCase):
 
     def test_worker_start_receipt_precedes_control_and_ui_checks(self):
         source=self.src
-        start=source.index("try{\n # POSITIVE WORKER-START RECEIPT")
+        start=source.index("# POSITIVE WORKER-START RECEIPT")
         entry=source.index("Save 'WORKER_ENTRY'",start)
         validated=source.index("Save 'HANDOFF_VALIDATED'",entry)
         control=source.index("Save 'CONTROL_GATE_PASSED'",validated)
