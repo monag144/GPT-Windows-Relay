@@ -51,6 +51,21 @@ class SemanticAgentRotationContractTests(unittest.TestCase):
         self.assertIn("[GPT_ENGINEERING_ROTATION_HANDOFF_V1]",self.src)
         self.assertIn("engineering_preflight",self.src)
 
+    def test_worker_start_receipt_precedes_control_and_ui_checks(self):
+        source=self.src
+        start=source.index("try{\n # POSITIVE WORKER-START RECEIPT")
+        entry=source.index("Save 'WORKER_ENTRY'",start)
+        validated=source.index("Save 'HANDOFF_VALIDATED'",entry)
+        control=source.index("Save 'CONTROL_GATE_PASSED'",validated)
+        selected=source.index("Save 'SOURCE_TAB_RECOGNIZED'",control)
+        wait=source.index("Save 'WAITING_FOR_SOURCE_RESULT'",selected)
+        click=source.index("Save 'NEW_CHAT_CLICK_UNCERTAIN'",wait)
+        self.assertLess(entry,validated)
+        self.assertLess(validated,control)
+        self.assertLess(control,selected)
+        self.assertLess(selected,wait)
+        self.assertLess(wait,click)
+
     def test_worker_script_has_valid_windows_powershell_syntax(self):
         engine=shutil.which("powershell.exe")
         if not engine:
