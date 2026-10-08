@@ -7,7 +7,7 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [x] GitHub verified legacy source references: historic full-tree One-Click GO r28 `d5b9db7ad785b5cae8dc3b64219303b9fcfa634a`; PCE8 v16 source `694d47ab89596d5c3801f749caa352b951a2be52`. Both original Git objects exist in Termux history; Termux branch tips have no `windows-relay/` folder.
 - [x] A–Z Relay and consumer benchmark criteria committed; no overnight pass is yet claimed.
 - [x] Corrected PCE011 harness scheduled reads/audit-reviews and created dated PCE011 queue on canonical Windows GitHub branch.
-- [ ] PCE11.002: run current PCE011 harness/staging/benchmark regressions and offline v16/r28 Windows/consumer suites with JS syntax. GitHub Actions CI previously failed; no claim of GREEN until returned evidence.
+- [ ] PCE11.004: rerun PCE011 harness/staging/benchmark regressions plus both candidate source suites. PCE11.003 had 17/19 passing jobs (697 tests); two new PCE011 test-contract assertions failed and were corrected on GitHub. No runtime acceptance or promotion until green evidence.
 - [x] PCE11.001: exact PCE011 SHA pulled by fast-forward on clean canonical checkout; 5-control governance receipt returned. Preserve Codex-mapped paths and do not overwrite dirty future changes.
 - [x] PCE11.001: 2532-file current Relay ZIP and SHA256 manifest saved non-destructively at `Client/Relay/bin/BROKEN_2026-10-08T090413Z.zip`; running listener left untouched.
 - [x] PCE11.001: immutable historical v16 `694d47ab` and r28 `d5b9db7` staged in separate `Client/Relay/builds/` checkout trees; exact source HEAD verified. Live deployment NOT performed.
