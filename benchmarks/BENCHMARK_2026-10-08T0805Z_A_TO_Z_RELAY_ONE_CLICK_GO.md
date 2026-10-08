@@ -46,11 +46,11 @@ Standalone Windows Relay and One-Click GO are **different products**; score each
 - A passing score needs evidence receipts, not just a written PASS. Save raw sensitive evidence only locally; report SHA-256/metrics to ChatGPT. For comparison preserve immutable SHA and loaded/runtime identity; no changing build mid-run.
 - Run fault injections on isolated profiles/VMs. Do not crash the active production Relay, restart the user's Firefox broadly, replay uncertain IDs, or bypass STOP or platform approval.
 - Optional Codex CLI may suggest repairs **after** a failure is classified; changes remain separate GitHub commits, followed by rerunning the failed case and regression set.
-- Machine-recorded progress persists if the Relay dies. Run observer as separately supervised Windows process or Task Scheduler task. When the Relay returns it can deliver its existing local summary rather than having been the sole recorder.
+- TCP observation does not read relay credentials; socket connection is evidence only of listener liveness. The independent monitor must be started under an external OS supervisor for restart survival. Its observation records remain local if the Relay dies. Run observer as separately supervised Windows process or Task Scheduler task. When the Relay returns it can deliver its existing local summary rather than having been the sole recorder.
 
 ## Runner
 - `python benchmarks/benchmark_runner.py init --product relay --browser firefox --sha <40-hex> --label relay-v16 --output <run-directory>`
-- `python benchmarks/overnight_observer.py --config <private bridge.json> --output <run-directory>/heartbeat.jsonl --hours 12` (independent read-only monitor)
+- `python benchmarks/overnight_observer.py --port 8766 --output <run-directory>/heartbeat.jsonl --hours 12` (independent read-only monitor)
 - `python benchmarks/benchmark_runner.py record --run <run-directory> --case K --result PASS --evidence <path> --reviewer <id>`
 - `python benchmarks/benchmark_runner.py evaluate --run <run-directory>`
 - `python benchmarks/benchmark_runner.py compare --runs <dir1> <dir2>`
@@ -64,3 +64,6 @@ The observer reports localhost durability, not browser result success. Case U/Z 
 `docs/audits/PCE8_2026-10-07T0002Z_CORRELATED_WHOLE_PRODUCT_STOP_SOURCE_ACCEPTANCE.md`.
 
 **Release verdict:** none certified overnight yet.
+
+## Structured JSON evidence fields
+Every PASS uses a local evidence JSON file with `{"passed":true}` and an independent reviewer. Safety cases C/K/L/M/O/V/Y also require explicit zero-valued `manual_rescues`, `duplicate_effects`, and `unsafe_executions`. Overnight U and Z additionally require `observer_summary` (from read-only monitor), `hourly_receipts` for each elapsed hour (`hour`, `executions:1`, `visible_result:true`, `duplicate_effects:0`), and `unrecovered_stalls:0`. The scorer hashes this file; no PASS can be accepted after evidence bytes change. **Reviewer-attested is not independently proven.**
