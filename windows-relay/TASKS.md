@@ -22,7 +22,8 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 ## PCE11.005 checkpoint and read-only inventory
 - [x] GitHub audit covering PCE11.000–.004 saved at `docs/audits/AUDIT_2026-10-08T0916Z_PCE11_OPERATIONS_000_004.md` (COMPLETE as an audit; live gates BLOCKED).
 - [x] PCE11.005B read-only inventory completed after exact audited GOVSYNC: original 2,532-file backup verified, candidates clean, no changed live-vs-archive source hashes, 8766 loopback listener PID 18632, no 8767 listener. Live extension and browser identity unverified; live cutover blocked. Saved `Client/Relay/bin/RUNTIME_INVENTORY_2026-10-08T092221Z.json`.
-- [ ] PCE11.006: read-only listener PID ancestry, watchdog/HUD candidates, STOP sentinel existence, distinct product/process roles. No browser mutation or STOP. Confirm whether 8767 consumer is independently deployed before treating it as a standalone Relay failure.
+- [x] PCE11.006: passive topology verified main PID 18632 on 8766; 8767 absent, all STOP/OFF/KILL sentinel flags false. Role classifier matched 2 HUD, 2 relay-server, 1 supervisor, 1 watchdog and 1 consumer-candidate; these are *unverified matches*, not proved independently running instances. Evidence in `Client/Relay/bin/PASSIVE_TOPOLOGY_2026-10-08T092500Z.json`.
+- [ ] PCE11.007: inspect saved role PID/PPID/image and parent mapping, specifically whether role matches indicate actual duplicate HUD/server versus wrapper/launch commandline false positives. No process changes, STOP, Firefox interaction or cutover.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
