@@ -181,6 +181,20 @@ class FirefoxAdapterContractTests(unittest.TestCase):
         self.assertNotIn("Clipboard",block)
         self.assertNotIn("SetValue(",block)
 
+    def test_pce11_resolver_accepts_offscreen_tabs_and_audits_scoped_selection(self):
+        ps=(HERE/"firefox_tab_adapter.ps1").read_text(encoding="utf-8-sig")
+        start=ps.index("# GPT_WINDOWS_FIREFOX_MANAGED_CONVERSATION_RESOLVER_V1")
+        end=ps.index("$chatTarget=$null",start)
+        resolver=ps[start:end]
+        self.assertIn("RawViewWalker",resolver)
+        self.assertIn("$depth -lt 6",resolver)
+        self.assertIn("if(-not $tab.Current.IsEnabled){continue}",resolver)
+        self.assertNotIn("if($tab.Current.IsOffscreen -or -not $tab.Current.IsEnabled){continue}",resolver)
+        self.assertIn("parent_rejected=",resolver)
+        self.assertIn("urlbar_readbacks=",resolver)
+        self.assertIn("FIREFOX_CONVERSATION_ORIGINAL_SELECTION_RESTORE_FAILED",resolver)
+        self.assertNotIn("$sendInvoke.Invoke()",resolver)
+
     def test_send_relay_result_requires_and_normalizes_conversation_url(self):
         with tempfile.TemporaryDirectory() as d:
             wire=Path(d)/"wire.txt"

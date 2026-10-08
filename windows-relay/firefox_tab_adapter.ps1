@@ -116,19 +116,33 @@ if($fw.Count -lt 1){
 $tc=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::TabItem)
 if($Action -eq 'resolve-conversation-tab'){
  # GPT_WINDOWS_FIREFOX_MANAGED_CONVERSATION_RESOLVER_V1
+ # PCE11: UIA TabItems can be offscreen when not selected. Do not infer absence from that flag.
  $walker=[System.Windows.Automation.TreeWalker]::ControlViewWalker
+ $rawWalker=[System.Windows.Automation.TreeWalker]::RawViewWalker
  $matches=@();$restore=@();$scanError=$null;$restoreFailed=$false
+ $seenTabs=0;$canonicalTabs=0;$parentRejected=0;$valueReadbacks=0
  try{
   foreach($candidate in $fw){
    $candidateTabs=$candidate.FindAll([System.Windows.Automation.TreeScope]::Descendants,$tc)
    $canonical=@()
    foreach($tab in $candidateTabs){
+    $seenTabs++
     try{
-     if($tab.Current.IsOffscreen -or -not $tab.Current.IsEnabled){continue}
-     $parent=$walker.GetParent($tab)
-     if($null -eq $parent -or $parent.Current.ControlType -ne [System.Windows.Automation.ControlType]::Tab -or $parent.Current.AutomationId -ne 'tabbrowser-tabs'){continue}
-     $canonical+=,$tab
-    }catch{}
+     if(-not $tab.Current.IsEnabled){continue}
+     # UIA may wrap the real Firefox tab strip. Search only bounded ancestors.
+     $isCanonical=$false
+     foreach($navigation in @($walker,$rawWalker)){
+      $parent=$tab
+      for($depth=0;$depth -lt 6;$depth++){
+       $parent=$navigation.GetParent($parent)
+       if($null -eq $parent){break}
+       if($parent.Current.ControlType -eq [System.Windows.Automation.ControlType]::Tab -and $parent.Current.AutomationId -eq 'tabbrowser-tabs'){$isCanonical=$true;break}
+      }
+      if($isCanonical){break}
+     }
+     if(-not $isCanonical){$parentRejected++;continue}
+     $canonical+=,$tab;$canonicalTabs++
+    }catch{$parentRejected++}
    }
    if($canonical.Count -eq 0){continue}
    $selected=@()
@@ -147,6 +161,7 @@ if($Action -eq 'resolve-conversation-tab'){
     if($bars.Count -ne 1){throw ('FIREFOX_CONVERSATION_URLBAR_COUNT_'+$bars.Count)}
     $vp=$null
     if(-not $bars[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp)){throw 'FIREFOX_CONVERSATION_URLBAR_VALUE_UNAVAILABLE'}
+    $valueReadbacks++
     $actual=Normalize-RelayConversationUrl ([string]$vp.Current.Value) $false
     if($null -ne $actual -and $actual -eq $ConversationUrl){
      $matches+=,[ordered]@{firefox_pid=[int]$candidate.Current.ProcessId;tab_name=[string]$tab.Current.Name;conversation_url=$actual}
@@ -166,7 +181,12 @@ if($Action -eq 'resolve-conversation-tab'){
  }
  if($restoreFailed){throw 'FIREFOX_CONVERSATION_ORIGINAL_SELECTION_RESTORE_FAILED'}
  if(-not [string]::IsNullOrWhiteSpace($scanError)){throw $scanError}
- if($matches.Count -ne 1){throw ('FIREFOX_CONVERSATION_MATCH_COUNT_'+$matches.Count)}
+ if($matches.Count -ne 1){
+  # Distinguish filtering and URL mismatch without revealing other tab URLs.
+  throw ('FIREFOX_CONVERSATION_MATCH_COUNT_'+$matches.Count+
+   ' windows='+$fw.Count+' tabs_seen='+$seenTabs+' canonical='+$canonicalTabs+
+   ' parent_rejected='+$parentRejected+' urlbar_readbacks='+$valueReadbacks)
+ }
  $m=$matches[0]
  [ordered]@{ok=$true;action='resolve-conversation-tab';firefox_pid=[int]$m.firefox_pid;tab_name=[string]$m.tab_name;conversation_url=[string]$m.conversation_url;match_count=1}|ConvertTo-Json -Compress
  exit 0
