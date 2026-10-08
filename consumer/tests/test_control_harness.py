@@ -61,6 +61,8 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertEqual(c["turn_discipline"]["read_every_turn"],["consumer/control_harness.py","windows-relay/TASKS.md","docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md","docs/windows-relay-mission-and-roadmap.md"])
         self.assertEqual(c["turn_discipline"]["canonical_windows_repository"],"monag144/GPT-Windows-Relay")
         self.assertTrue(c["turn_discipline"]["sandwich_required"])
+        self.assertIn("failed multi-file connector action",c["source_tree_hygiene"]["partial_write_rule"])
+        self.assertIn("Never assume an error rolled back",c["source_tree_hygiene"]["partial_write_rule"])
         self.assertIn("durable FINAL assistant response",c["turn_discipline"]["durable_final_packet_rule"])
         self.assertIn("commentary/progress",c["turn_discipline"]["durable_final_packet_rule"])
         self.assertIn("even without consumerRecoveryContext",c["turn_discipline"]["collapsed_engineering_rule"])
