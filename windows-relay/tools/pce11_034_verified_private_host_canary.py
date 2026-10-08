@@ -53,7 +53,7 @@ def main():
     proof=engineering_preflight(repo,34,series=11)
     if not proof["ok"]:raise RuntimeError("five mandatory controls rejected")
     accepted=read(live/"bin"/SOURCE_REPORT/"acceptance.json")
-    if (accepted.get("schema")!="pce011-031-native-host-identity-v1" or
+    if (accepted.get("schema")!="pce011-033-native-host-identity-v1" or
         accepted.get("sha")!=PREVIOUS or accepted.get("source_acceptance_passed") is not True or
         accepted.get("historic_v16_blob")!=SOURCE_BLOB or
         accepted.get("isolated_v16_launched") is not False):
