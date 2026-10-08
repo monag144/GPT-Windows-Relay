@@ -19,6 +19,7 @@
 
 ## Where the audit is
 - `docs/audits/AUDIT_2026-10-08T0650Z_BRANCH_BUILD_CONTAMINATION_AND_REDUNDANCY.md` — counts, contaminated history, live drift, preserved mirrors.
+- `docs/audits/AUDIT_2026-10-08T0720Z_PCE0_PCE10_LINEAGE_AND_PROVENANCE_GAPS.md` — PCE0–PCE10 work ancestry, retained features and **pre-migration history gaps**; the Windows repo's commit count does not represent the full project history.
 - `docs/audits/CLEANUP_2026-10-08T0650Z_DOCUMENT_DELETION_LOG.md` — actual removals and documentation debt.
 - Legacy status catalog: `docs/index/INDEX_2026-10-07T2034Z_DOCUMENT_CATALOG.md` (frozen, not current totals).
 
