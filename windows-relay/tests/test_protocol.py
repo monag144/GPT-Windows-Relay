@@ -138,6 +138,7 @@ class Tests(unittest.TestCase):
         self.assertIn(wr.TURN_DISCIPLINE_REMINDER,body["stdout"])
         self.assertIn("consumer/control_harness.py",body["stdout"])
         self.assertIn("windows-relay/TASKS.md",body["stdout"])
+        self.assertIn("docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",body["stdout"])
         self.assertIn("docs/windows-relay-mission-and-roadmap.md",body["stdout"])
         self.assertIn("monag144/GPT-Windows-Relay",body["stdout"])
         self.assertIn("sandwich technique",body["stdout"])
