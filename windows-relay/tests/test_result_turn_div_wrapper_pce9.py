@@ -1,23 +1,16 @@
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MIRRORS = [
-    ROOT / "content.js",
-    ROOT / "extension" / "content.js",
-    ROOT / "extension-persistent" / "content.js",
-]
+ROOT=Path(__file__).resolve().parents[1]
+MIRRORS=(ROOT/'content.js',ROOT/'extension'/'content.js',ROOT/'extension-persistent'/'content.js')
 
-class ResultTurnDivWrapperPce9Tests(unittest.TestCase):
-    def test_result_confirmation_accepts_div_conversation_turn_wrapper_in_all_mirrors(self):
-        needle = 'div[data-testid^="conversation-turn-"]'
+class StrictResultTurnPce9Tests(unittest.TestCase):
+    def test_result_confirmation_requires_exact_user_result_without_broad_wrapper(self):
         for path in MIRRORS:
-            text = path.read_text(encoding="utf-8")
-            selector = next(line for line in text.splitlines() if line.startswith("const RESULT_TURN_SELECTOR="))
-            self.assertIn("USER_SELECTOR+", selector, path.name)
-            self.assertIn('article[data-testid^="conversation-turn-"]', selector, path.name)
-            self.assertIn('section[data-testid^="conversation-turn-"]', selector, path.name)
-            self.assertIn(needle, selector, path.name)
+            source=path.read_text(encoding="utf-8")
+            selector=next(line for line in source.splitlines() if line.startswith("const RESULT_TURN_SELECTOR="))
+            self.assertEqual(selector,"const RESULT_TURN_SELECTOR=USER_SELECTOR;")
+            self.assertIn("if(!unit?.matches?.(USER_SELECTOR))return null;",source)
+            self.assertNotIn("USER_SELECTOR+",selector)
 
-if __name__ == "__main__":
-    unittest.main()
+if __name__=="__main__":unittest.main()
