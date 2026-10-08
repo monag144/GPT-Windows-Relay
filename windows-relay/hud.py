@@ -97,6 +97,9 @@ PHASES={
     "content_script_started":("READY","content script started"),
 }
 
+# GPT_WINDOWS_DISCOVERY_STALL_AGE_GATE_V1
+DISCOVERY_STALL_SECONDS=45
+
 def lifecycle(events,state,now=None):
     now=now or datetime.now(timezone.utc)
     active=state.get("active_action")
@@ -106,6 +109,10 @@ def lifecycle(events,state,now=None):
     relevant=[e for e in events if e.get("event") in PHASES]
     if not relevant:return {"phase":"READY","reason":"no active relay operation","packet_id":None,"age":None,"event":"none"}
     e=relevant[-1]; phase,reason=PHASES[e.get("event")]
+    event_age=age_seconds(e.get("time"),now)
+    if phase=="DISCOVERED" and event_age is not None and event_age>=DISCOVERY_STALL_SECONDS:
+        phase="STALLED"
+        reason="discovered packet not executed after "+str(int(event_age))+"s; recovery evidence required"
     if e.get("event")=="chatgpt_tool_approval_prompt_detected":
         d=e.get("detail") if isinstance(e.get("detail"),dict) else {}
         reason=f"ChatGPT tool approval • {d.get('provider') or 'unknown app'}"
