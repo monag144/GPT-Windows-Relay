@@ -4,10 +4,12 @@ import importlib.util
 import json
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock,Mock,patch
 
 MODULE=Path(__file__).resolve().parents[1]/"tools"/"pce11_016_v16_health_canary.py"
+sys.path.insert(0,str(MODULE.parent))
 spec=importlib.util.spec_from_file_location("pce11_016_v16_health_canary",MODULE)
 m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -16,6 +18,7 @@ class FakeContained:
     last=None
     def __init__(self):
         self.pid=123456
+        self.job=101
         self.resumed=False
         self.contained=False
         self.disposed=False
@@ -33,6 +36,19 @@ class FakeContained:
     def close(self):
         self.disposed=True
         self.events.extend(["private_job_terminated","child_handles_closed"])
+
+class FakeHost:
+    def __init__(self,pid=123456,parent=123456,fail_exit=False):
+        self.pid=pid
+        self.parent_pid=parent
+        self.job_member=True
+        self.verified=True
+        self.closed=False
+        self.fail_exit=fail_exit
+    def wait_for_exit(self):
+        if self.fail_exit:raise RuntimeError("private host exit timeout")
+        return True
+    def close(self):self.closed=True
 
 class V16HealthCanaryTests(unittest.TestCase):
     def test_main_and_canary_ports_are_distinct(self):
@@ -79,7 +95,8 @@ class V16HealthCanaryTests(unittest.TestCase):
             with patch.object(m,"verify_no_sidecar"),\
                  patch.object(m,"main_baseline",return_value=base) as livecheck,\
                  patch.object(m,"create_private",return_value=private),\
-                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"port_pids",side_effect=[[123456],[],[]]),\
+                 patch.object(m,"attest_private_host",return_value=FakeHost()),\
                  patch.object(m,"get_status",return_value=status):
                 result=m.run_health_canary(live,stage,legacy,containment)
             self.assertEqual(result["private_missions_count"],0)
@@ -100,6 +117,10 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertEqual(record["observed_pending_missions"],0)
             self.assertIs(record["status_pid_matches_child"],True)
             self.assertIs(record["status_missions_zero"],True)
+            self.assertTrue(record["listener_pid_matches_status"])
+            self.assertTrue(record["host_identity_verified"])
+            self.assertTrue(record["host_exited_after_job_close"])
+            self.assertTrue(record["host_handle_closed"])
 
     def test_foreign_listener_response_blocks_and_releases_job(self):
         with tempfile.TemporaryDirectory() as t:
@@ -110,7 +131,8 @@ class V16HealthCanaryTests(unittest.TestCase):
             with patch.object(m,"verify_no_sidecar"),\
                  patch.object(m,"main_baseline",return_value=baseline),\
                  patch.object(m,"create_private",return_value=private),\
-                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"port_pids",side_effect=[[998877],[],[]]),\
+                 patch.object(m,"attest_private_host",side_effect=RuntimeError("foreign child ancestry")),\
                  patch.object(m,"get_status",return_value={
                     "ok":True,"pid":998877,"pending_missions":0,"armed":True}):
                 with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
@@ -125,7 +147,7 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertEqual(evidence["observed_pending_missions"],0)
             self.assertIs(evidence["status_pid_matches_child"],False)
             self.assertIs(evidence["status_missions_zero"],True)
-            self.assertIn("isolated sidecar status PID mismatch",evidence["failure"])
+            self.assertIn("foreign child ancestry",evidence["failure"])
 
     def test_nonzero_private_missions_are_reported_independently_and_cleanup(self):
         with tempfile.TemporaryDirectory() as t:
@@ -134,7 +156,8 @@ class V16HealthCanaryTests(unittest.TestCase):
             with patch.object(m,"verify_no_sidecar"),\
                  patch.object(m,"main_baseline",return_value=baseline),\
                  patch.object(m,"create_private",return_value=private),\
-                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"port_pids",side_effect=[[123456],[],[]]),\
+                 patch.object(m,"attest_private_host",return_value=FakeHost()),\
                  patch.object(m,"get_status",return_value={
                     "ok":True,"pid":123456,"pending_missions":5,"armed":True}):
                 with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
@@ -171,6 +194,64 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertIn("status PID mismatch",result["failure"])
             self.assertTrue(result["cleanup_verified"])
 
+    def test_verified_direct_child_venv_host_is_accepted(self):
+        with tempfile.TemporaryDirectory() as t:
+            live=Path(t); private=self.private(live)
+            baseline={"pid":555,"armed":True,"outbound_owner":"browser","pending_missions":2}
+            server={"ok":True,"pid":778899,"armed":True,"pending_missions":0}
+            host=FakeHost(pid=778899,parent=123456)
+            with patch.object(m,"verify_no_sidecar"),\
+                 patch.object(m,"main_baseline",return_value=baseline),\
+                 patch.object(m,"create_private",return_value=private),\
+                 patch.object(m,"port_pids",side_effect=[[778899],[],[]]),\
+                 patch.object(m,"attest_private_host",return_value=host) as verifier,\
+                 patch.object(m,"get_status",return_value=server):
+                receipt=m.run_health_canary(live,{"source":str(live/"s.py")},Mock(),Mock(ContainedProcess=FakeContained))
+            verifier.assert_called_once_with(778899,123456,101)
+            self.assertIs(receipt["status_pid_matches_child"],False)
+            self.assertTrue(receipt["host_identity_verified"])
+            self.assertEqual(receipt["host_parent_pid"],123456)
+            self.assertTrue(receipt["host_exited_after_job_close"])
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(host.closed)
+
+    def test_foreign_listener_port_pid_blocks(self):
+        with tempfile.TemporaryDirectory() as t:
+            live=Path(t);private=self.private(live)
+            baseline={"pid":555,"armed":True,"outbound_owner":"browser","pending_missions":2}
+            with patch.object(m,"verify_no_sidecar"),\
+                 patch.object(m,"main_baseline",return_value=baseline),\
+                 patch.object(m,"create_private",return_value=private),\
+                 patch.object(m,"port_pids",side_effect=[[444444],[],[]]),\
+                 patch.object(m,"attest_private_host") as verifier,\
+                 patch.object(m,"get_status",return_value={
+                    "ok":True,"pid":123456,"armed":True,"pending_missions":0}):
+                with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
+                    m.run_health_canary(live,{"source":str(live/"s.py")},Mock(),Mock(ContainedProcess=FakeContained))
+            verifier.assert_not_called()
+            receipt=json.loads((private[0]/"health-report.json").read_text())
+            self.assertFalse(receipt["listener_pid_matches_status"])
+            self.assertTrue(receipt["cleanup_verified"])
+
+    def test_host_nonexit_blocks_health_acceptance(self):
+        with tempfile.TemporaryDirectory() as t:
+            live=Path(t);private=self.private(live)
+            baseline={"pid":555,"armed":True,"outbound_owner":"browser","pending_missions":2}
+            host=FakeHost(fail_exit=True)
+            with patch.object(m,"verify_no_sidecar"),\
+                 patch.object(m,"main_baseline",return_value=baseline),\
+                 patch.object(m,"create_private",return_value=private),\
+                 patch.object(m,"port_pids",side_effect=[[123456],[],[]]),\
+                 patch.object(m,"attest_private_host",return_value=host),\
+                 patch.object(m,"get_status",return_value={
+                    "ok":True,"pid":123456,"armed":True,"pending_missions":0}):
+                with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
+                    m.run_health_canary(live,{"source":str(live/"s.py")},Mock(),Mock(ContainedProcess=FakeContained))
+            receipt=json.loads((private[0]/"health-report.json").read_text())
+            self.assertFalse(receipt["cleanup_verified"])
+            self.assertFalse(receipt["host_exited_after_job_close"])
+            self.assertTrue(host.closed)
+
     def test_production_identity_drift_fails(self):
         with tempfile.TemporaryDirectory() as t:
             live=Path(t)
@@ -180,7 +261,8 @@ class V16HealthCanaryTests(unittest.TestCase):
             with patch.object(m,"verify_no_sidecar"),\
                  patch.object(m,"main_baseline",side_effect=[baseline,changed]),\
                  patch.object(m,"create_private",return_value=private),\
-                 patch.object(m,"port_pids",return_value=[]),\
+                 patch.object(m,"port_pids",side_effect=[[123456],[],[]]),\
+                 patch.object(m,"attest_private_host",return_value=FakeHost()),\
                  patch.object(m,"get_status",return_value={
                     "ok":True,"pid":123456,"pending_missions":0,"armed":True}):
                 with self.assertRaisesRegex(RuntimeError,"forensic evidence"):
