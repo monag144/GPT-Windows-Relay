@@ -1,5 +1,8 @@
 # PCE10 controlled reconciliation roadmap — 2026-10-08T0020Z
 
+**PCE011 succession notice (2026-10-08T0756Z):** This is retained for provenance. Current consumer-release priority is [One-Click GO PCE011](../roadmap/ROADMAP_2026-10-08T0735Z_PCE11_ONE_CLICK_GO_RECOVERY.md). Treat PCE9/PCE10 as unaccepted live release baselines; source fixes remain candidates until independently tested and safely activated.
+
+
 Canonical repository: `monag144/GPT-Windows-Relay`.
 
 ## Per-turn control contract
