@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.007 passed all targeted tests and the full consumer suite, then the full Windows unittest suite failed before live staging. Because compact output hid the exact failing test names, PCE10.008 is diagnostic-only: extract the saved-result/full-suite failure evidence and rerun Windows tests to a dedicated log. No source mutation until the exact failure set is known.
+- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.008 isolated one stale test: `test_result_turn_recognition.py` forbade article/section conversation-turn wrappers while the newer live-proven PCE9 regression requires article/section/div fallbacks. Generic `[data-turn]` compatibility remains in production. Only the stale test was updated. PCE10.009 reruns exact + full Windows + full consumer suites, then may stage the already-tested stale-settle browser repair with rollback.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
