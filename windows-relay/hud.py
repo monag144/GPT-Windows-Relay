@@ -170,7 +170,7 @@ def headline(online,life,browser):
     if life["phase"]=="STALLED":return "STALLED"
     if life["phase"]=="RECOVERING":return "RECOVERING"
     if life["phase"]=="RUNNING":return "RUNNING"
-    if life["phase"] in {"WAITING","WAITING FOR GPT TURN END","DELIVERING","RESULT READY","STARTING","DISCOVERED","APPROVAL REQUIRED","RECOVERY ADVICE","RECOVERY INVALID"}:return life["phase"]
+    if life["phase"] in {"WAITING","WAITING FOR GPT TURN END","DELIVERING","RESULT READY","STARTING","DISCOVERED","APPROVAL REQUIRED","RECOVERY ADVICE","RECOVERY INVALID","RENDER COLLAPSED"}:return life["phase"]
     if browser["state"]=="DISCONNECTED":return "STALLED"
     return "READY"
 
