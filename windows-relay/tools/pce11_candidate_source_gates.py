@@ -55,6 +55,7 @@ def main():
     parser.add_argument("--expected-head",required=True)
     parser.add_argument("--repo",type=Path,required=True)
     parser.add_argument("--live",type=Path,required=True)
+    parser.add_argument("--ordinal",type=int,default=2)
     opts=parser.parse_args()
     repo=opts.repo.resolve()
     live=opts.live.resolve()
@@ -70,12 +71,12 @@ def main():
     if git(gitbin,repo,"rev-parse","HEAD")!=opts.expected_head: raise RuntimeError("fast-forward SHA mismatch")
     sys.path.insert(0,str(repo/"consumer"))
     from control_harness import engineering_preflight,github_first_workflow_gate
-    preflight=engineering_preflight(repo,2,series=11)
+    preflight=engineering_preflight(repo,opts.ordinal,series=11)
     gate=github_first_workflow_gate(
         {"canonical_repo_confirmed":True,"github_commit_sha":opts.expected_head,
          "remote_sha_verified":True,"relay_pull_sha_matches_remote":True},"source_acceptance")
     if not gate["ok"]:raise RuntimeError("source workflow gate denied "+str(gate["blockers"]))
-    print("PCE11_002_GOVERNANCE="+json.dumps({"id":preflight["id"],"reads":preflight["reads"]},separators=(",",":")))
+    print("PCE11_GOVERNANCE="+json.dumps({"id":preflight["id"],"reads":preflight["reads"]},separators=(",",":")))
     manifests=sorted((live/"bin").glob("BROKEN_*.manifest.json"),reverse=True)
     if not manifests: raise RuntimeError("PCE11.001 bin archive manifest missing")
     manifest=json.loads(manifests[0].read_text(encoding="utf-8"))
@@ -83,6 +84,13 @@ def main():
     if not archive.is_file() or sha(archive)!=manifest["zip_sha256"]:
         raise RuntimeError("original Relay backup SHA mismatch")
     if manifest.get("file_count",0)<1: raise RuntimeError("empty original Relay backup")
+    old_reports=sorted((live/"bin").glob("SOURCE_GATES_*/source-gates.json"),reverse=True)
+    if old_reports:
+        prior=json.loads(old_reports[0].read_text(encoding="utf-8"))
+        print("PCE11_PRIOR_SOURCE_GATES="+json.dumps({"report":str(old_reports[0]),"source_sha":prior.get("source_sha"),
+            "jobs":[{"label":x.get("label"),"status":x.get("status"),"test_count":x.get("test_count"),
+                     "failure_excerpt":str(x.get("failure_excerpt",""))[:210]} for x in prior.get("results",[])]},
+            separators=(",",":")))
     paths={}
     for label,exact in REFERENCES.items():
         d=live/"builds"/(label+"_"+exact[:12])
@@ -142,7 +150,7 @@ def main():
     report.write_text(json.dumps(record,indent=2,default=str)+"\n",encoding="utf-8")
     concise=[{k:item.get(k) for k in ("label","status","test_count","seconds","failure_excerpt")
              if k in item} for item in results]
-    print("PCE11_002="+json.dumps({"report":str(report),"source_sha":opts.expected_head,
+    print("PCE11_SOURCE_GATES="+json.dumps({"report":str(report),"source_sha":opts.expected_head,
         "backup_verified":True,"candidate_sha_verified":True,
         "all_source_checks_pass":all(x["status"]=="PASS" for x in results),
         "results":concise},separators=(",",":")))
