@@ -245,7 +245,7 @@ def acquire_mutex():
     return None if (not h or k.GetLastError()==183) else h
 
 def run_ui():
-    if (Path(__file__).with_name(".relay-kill")).exists() and not (Path(__file__).with_name(".relay-kill-failed")).exists():return 0
+    # Keep the HUD available to show kill/offline state; only the relay is stopped by its latch.
     mutex=acquire_mutex()
     if os.name=="nt" and mutex is None:return 0
     root=tk.Tk(); root.title("GPT Relay HUD"); root.overrideredirect(True); root.resizable(False,False)
