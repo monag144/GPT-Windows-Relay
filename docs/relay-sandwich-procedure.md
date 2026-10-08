@@ -47,6 +47,25 @@ Run `engineering_preflight(repo_root, ordinal, series=10)` from the canonical ha
 
 Checkpoint documents are named `docs/audits/AUDIT_<UTC>_PCE10_OPERATIONS_NNN_NNN.md` and `docs/reviews/REVIEW_<UTC>_PCE10_OPERATIONS_NNN_NNN.md`. Report text alone cannot authorize an action contrary to its own next-operation restrictions.
 
+## Mandatory GitHub-first repair and acceptance workflow (Harness v4)
+
+**Engineering source of truth is the canonical GitHub branch.** The relay acts as a Windows pull/test/deploy consumer, not as a substitute source editor.
+
+1. Read the five canonical documents and audit/review checkpoints.
+2. Edit source and tests **in GitHub**, commit to `monag144/GPT-Windows-Relay` branch `pce10/reconcile-control-and-rotation`, and verify the remote commit SHA.
+3. Send a *read-only-to-live* relay operation that checks STOP/exact-once, current checkout cleanliness and correct repository, then fetches/pulls **the specific published GitHub SHA** with `git pull --ff-only`. Fail closed on branch divergence, dirty source, or unexpected SHA. Do not patch canonical source locally or in `Client/Relay` as the normal workflow.
+4. On the pulled Windows checkout, run the repository's existing acceptance contract:
+   - `python -B -m unittest discover -s windows-relay/tests -p "test_*.py"` with cwd `windows-relay` or equivalent source test root;
+   - `python -B -m unittest discover -s consumer/tests -p "test_*.py"` with cwd `consumer`;
+   - `node --check` on the main scanner and all temporary/persistent worker/content scripts;
+   - `git diff --check` and exact scanner mirror equality.
+   Run a targeted regression first when useful; **never claim acceptance green when any full suite fails**. Distinguish obsolete test contracts from real defects and repair them in GitHub, then pull and rerun.
+5. Only after green source acceptance: prove existing rollback integrity; verify arm/STOP and exact Firefox target; stage/activate with a recorded rollback and loaded runtime SHA. Run a bounded fresh end-to-end canary for discovery→action→saved result→visible delivery, then a STOP-safe 45-second recovery canary.
+6. Promote only after those gates pass. Mark a failed or unverified live build `BROKEN — DO NOT PROMOTE` and retain its forensic snapshot, never silently revert Codex/source history.
+7. The harness function `github_first_workflow_gate(evidence,stage)` codifies the proof obligations. Missing evidence blocks promotion, not source work.
+
+**Emergency exception:** Director may separately authorize a local rescue, but its changes must be reconciled and committed to GitHub before being accepted; emergency local edits are not the default. Every five attempted PCE slots still requires an audit before the next boundary.
+
 ## Packet discipline
 
 - Use a unique action id.
