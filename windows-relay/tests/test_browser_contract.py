@@ -509,5 +509,20 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("elementText(nodes[i]).includes(packetId)",body)
         self.assertIn("emitResultTurnMatchDiagnostic(packetId,nodes,false)",body)
 
+    def test_discovery_settle_has_bounded_stale_pending_lease(self):
+        self.assertIn("GPT_WINDOWS_DISCOVERY_SETTLE_REACQUIRE_V2",self.src)
+        self.assertIn("const DISCOVERY_SETTLE_MS=500;",self.src)
+        self.assertIn("const DISCOVERY_SETTLE_LEASE_MS=5000;",self.src)
+        start=self.src.index("function inspectUnit(unit){")
+        end=self.src.index("function latestAssistantPair(){",start)
+        block=self.src[start:end]
+        self.assertIn("const age=Math.max(0,now-Number(prior.started_at||0));",block)
+        self.assertIn("if(age<DISCOVERY_SETTLE_LEASE_MS)return;",block)
+        self.assertIn("pending.delete(p.id);",block)
+        self.assertIn("relay_packet_settle_stale_rearmed",block)
+        self.assertIn("pending.set(p.id,{sig,unit,timer,started_at:now});",block)
+        self.assertIn("},DISCOVERY_SETTLE_MS);",block)
+
+
 if __name__=="__main__":
     unittest.main()
