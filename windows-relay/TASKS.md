@@ -7,7 +7,7 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [x] GitHub verified legacy source references: historic full-tree One-Click GO r28 `d5b9db7ad785b5cae8dc3b64219303b9fcfa634a`; PCE8 v16 source `694d47ab89596d5c3801f749caa352b951a2be52`. Both original Git objects exist in Termux history; Termux branch tips have no `windows-relay/` folder.
 - [x] A–Z Relay and consumer benchmark criteria committed; no overnight pass is yet claimed.
 - [x] Corrected PCE011 harness scheduled reads/audit-reviews and created dated PCE011 queue on canonical Windows GitHub branch.
-- [ ] PCE11.004: rerun PCE011 harness/staging/benchmark regressions plus both candidate source suites. PCE11.003 had 17/19 passing jobs (697 tests); two new PCE011 test-contract assertions failed and were corrected on GitHub. No runtime acceptance or promotion until green evidence.
+- [x] PCE11.004 source acceptance: backup integrity and staged SHA checks, **19/19 jobs PASS, 697 tests counted**, report `Client/Relay/bin/SOURCE_GATES_2026-10-08T091457Z/source-gates.json`; live activation and overnight qualification remain untested.
 - [x] PCE11.001: exact PCE011 SHA pulled by fast-forward on clean canonical checkout; 5-control governance receipt returned. Preserve Codex-mapped paths and do not overwrite dirty future changes.
 - [x] PCE11.001: 2532-file current Relay ZIP and SHA256 manifest saved non-destructively at `Client/Relay/bin/BROKEN_2026-10-08T090413Z.zip`; running listener left untouched.
 - [x] PCE11.001: immutable historical v16 `694d47ab` and r28 `d5b9db7` staged in separate `Client/Relay/builds/` checkout trees; exact source HEAD verified. Live deployment NOT performed.
@@ -18,6 +18,11 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [ ] After five distinct repeated failures, optional Codex CLI scoped repair, preferred 5.6 or 6 Luna **if installed**, with GitHub-first commit and rollback.
 - [ ] At PCE011.050 compile finding and send via connected mail only when an actual sender action is available; report send receipt, don't fake delivery.
 - [ ] At PCE011.100 hand off/rotate to verified `💻PC Engineering 12🔧`, not OP101.
+
+## PCE11.005 checkpoint and read-only inventory
+- [x] GitHub audit covering PCE11.000–.004 saved at `docs/audits/AUDIT_2026-10-08T0916Z_PCE11_OPERATIONS_000_004.md` (COMPLETE as an audit; live gates BLOCKED).
+- [ ] PCE11.005: run audited source preflight, verify branch+backup and passive file/port/PID inventory; do not activate historical Relay, change extension, kill process or replay uncertain IDs.
+- [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
 - Five-operation audit every .005/.010/... covering preceding five attempted IDs, including 0 baseline slot, failures and missing results. **Historical audit PCE10.015-.019 already recorded:** `docs/audits/AUDIT_2026-10-08T0316Z_PCE10_OPERATIONS_015_019.md`.
