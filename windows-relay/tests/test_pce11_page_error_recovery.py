@@ -74,7 +74,7 @@ class PCE11PageErrorRecoveryTests(unittest.TestCase):
                      "elementText(composer).trim()"):
             self.assertIn(gate,block)
         self.assertIn("replay_allowed:false",s)
-        self.assertIn("do NOT repeat any command",s)
+        self.assertIn("Do NOT repeat any command",s)
 
     def test_existing_rotation_and_relay_packet_recovery_remain_present(self):
         s=self.source
