@@ -33,7 +33,8 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [x] PCE11.013 attempted and BLOCKED (source preflight, no launch): v16 raw worktree Git blob did not match pinned historical blob; likely CRLF/filter mismatch, not yet proven. Windows returned COMMAND_FAILED exit 2 before any sidecar start, while canonical source had pulled to `1483167b0c0e376bec883f048d4f315169aac090`. Incident `docs/incidents/INCIDENT_2026-10-08T0946Z_PCE11_013_HISTORIC_GIT_BLOB_MISMATCH.md`. Separate launch-before-Job-assign race found and canary mode hard-disabled until repaired.
 - [x] PCE11.014 static source validation succeeded: nine targeted tests; pinned historical Git tree blob and normalized working-file blob match; raw bytes differ. No process started. Canary still disabled pending safety changes.
 - [x] PCE11.010–.014 audit published: `docs/audits/AUDIT_2026-10-08T0951Z_PCE11_OPERATIONS_010_014.md` includes failed PCE11.013 and rollback limitations.
-- [ ] PCE11.015 must follow exact audited GitHub checkpoint sync before static-only safety design and tests. Keep running Relay unchanged.
+- [x] PCE11.015 audited source acceptance PASSED: separate GOVSYNC accepted .010–.014 audit; source commit `7f894e2e90e5f35156558957ed3b148d49be50e6`; nine historic supervisor and nine suspended-start containment tests passed (18 total). Held old canary remains disabled, no process launched. Evidence `Client/Relay/bin/CONTAINMENT_GATE_2026-10-08T095526Z.json`.
+- [ ] PCE11.016: integrate safe suspended-launch Windows Job containment into a **new isolated** historic v16 localhost health probe, with private config/state, stable source fingerprint, exact listener PID and cleanup checks. Full simulated failure suite first, no sidecar launch until separate next operation. Preserve 8766 and pending missions.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
