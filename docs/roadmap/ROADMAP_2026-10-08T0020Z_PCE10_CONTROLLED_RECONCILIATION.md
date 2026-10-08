@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Source/migration/scoped-diff acceptance is green. PCE10.012 failed read-only at exact `resolve-conversation-tab` before canary staging; the visible compact result omitted the nested semantic-adapter error. PCE10.013 is diagnostic-only: extract the saved resolver failure, rerun the existing semantic resolver, and capture only bounded Firefox process/window telemetry required to classify the browser-state failure. No source/live mutation until exact diagnosis.
+- [~] Source/migration/scoped-diff acceptance is green. PCE10.013 established `FIREFOX_CONVERSATION_MATCH_COUNT_0`; PCE10.014 completed a read-only URL/PID diagnostic but its compact visible result truncated the final verdict. PCE10.015 must extract the saved PCE10.014 diagnostic, establish whether the configured conversation URL is stale/absent/ambiguous, and identify the current visible ChatGPT conversation URL/PID. No source/live mutation until that identity is positive.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
@@ -34,6 +34,8 @@ Before every engineering turn:
 PCE10.000-.004 audit: `docs/audits/AUDIT_2026-10-08T0024Z_PCE10_OPERATIONS_000_004.md`.
 
 PCE10.005-.009 audit: `docs/audits/AUDIT_2026-10-08T0108Z_PCE10_OPERATIONS_005_009.md`.
+
+PCE10.010-.014 audit: `docs/audits/AUDIT_2026-10-08T0128Z_PCE10_OPERATIONS_010_014.md`.
 
 Promotion verdict: **BLOCKED** until the scoped diff gate and Firefox live canary are green.
 
