@@ -48,7 +48,7 @@ def build_cases(repo):
     py=sys.executable
     work=repo/"windows-relay"
     for name,flags,folder in (
-      ("target_protocol",[py,"-B","-m","unittest",INCIDENT_TEST,"-v"],repo/"windows-relay"/"tests"),
+      ("target_protocol",[py,"-B","-m","unittest","discover","-s","tests","-p","test_protocol.py","-v"],work),
       ("windows_full",[py,"-B","-m","unittest","discover","-s","tests","-p","test_*.py","-v"],work),
       ("consumer_full",[py,"-B","-m","unittest","discover","-s","tests","-p","test_*.py","-v"],repo/"consumer")):
         yield name,flags,folder
