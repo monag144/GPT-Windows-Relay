@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.003 proved clone/control reads but failed targeted ordinal tests before live mutation; repaired by incident `INCIDENT_2026-10-08T0018Z_PCE10_003_ORDINAL_ESCAPE_AND_DUPLICATE_OVERRIDE.md`. PCE10.004 re-runs targeted + full acceptance.
+- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.003 repaired ordinal parsing; PCE10.004 failed before fetch because prior tests generated unignored `consumer/**/__pycache__`. Root ignore + Harness source-tree hygiene are committed. PCE10.005 must classify/remove only those known generated caches, sync, and run bytecode-free targeted + full acceptance.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
@@ -28,6 +28,12 @@ Before every engineering turn:
 - [ ] Merge/promote the reconciliation branch to Windows `main`.
 - [ ] Close the signed persistent Firefox XPI/policy external gate, then full Firefox + Windows/login restart acceptance.
 - [ ] Run Chrome/Edge clean-consumer acceptance matrix.
+
+## Five-operation audit status
+
+PCE10.000-.004 audit: `docs/audits/AUDIT_2026-10-08T0024Z_PCE10_OPERATIONS_000_004.md`.
+
+Promotion verdict: **BLOCKED** until PCE10.005 source acceptance is green.
 
 ## Reliability invariants
 
