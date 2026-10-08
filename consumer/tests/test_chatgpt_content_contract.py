@@ -95,11 +95,15 @@ class ChatGPTContentContractTests(unittest.TestCase):
 
     def test_discovered_packet_reacquires_if_chatgpt_remounts_during_settle(self):
         src=(ROOT/"windows-relay"/"extension"/"content.js").read_text(encoding="utf-8-sig")
-        self.assertIn("GPT_WINDOWS_DISCOVERY_SETTLE_REACQUIRE_V1",src)
+        self.assertIn("GPT_WINDOWS_DISCOVERY_SETTLE_REACQUIRE_V2",src)
         self.assertIn("relay_packet_settle_reacquire",src)
         self.assertIn("recoverDiscoveredPacket(p,'unit_disconnected')",src)
         self.assertIn("recoverDiscoveredPacket(p,'packet_changed_during_settle')",src)
         self.assertIn("setTimeout(()=>recoverLatestAssistant(),0)",src)
+        self.assertIn("DISCOVERY_SETTLE_MS=500",src)
+        self.assertIn("DISCOVERY_SETTLE_LEASE_MS=5000",src)
+        self.assertIn("relay_packet_settle_stale_rearmed",src)
+        self.assertIn("started_at:now",src)
 
     def test_service_worker_rotates_firefox_chat_every_100_operations(self):
         src=(ROOT/"windows-relay"/"extension"/"service_worker.js").read_text(encoding="utf-8-sig")
