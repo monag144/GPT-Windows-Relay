@@ -31,6 +31,8 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [ ] Before PCE11.020, independent restricted GOVSYNC must install BOTH documents locally. Verify Harness due audit and review; then source-only tests. No live cutover.
 - [x] PCE11.020 source-only: audited GOVSYNC passed; protocol 50/50 and Windows full 476/476 PASS; consumer 117 tests FAIL (PCE10 fixture defaults and migration Git blob mismatch suspected). JS/archive/v16 gates not reached. Incident `docs/incidents/INCIDENT_2026-10-08T1016Z_PCE11_020_CONSUMER_GOVERNANCE_AND_MANIFEST_FAILURES.md`. Evidence `Client/Relay/bin/SOURCE_ACCEPTANCE_2026-10-08T101602Z/acceptance.json`; no canary.
 - [ ] PCE11.021: inspect persisted .020 consumer test output, exact failed assertions and full 42-entry manifest-to-Git comparison, report masked paths/IDs and complete durable log. GitHub-first sync and governance preflight before reading; no suite replay or live mutation.
+- [x] PCE11.021 persisted consumer forensics: 117 tests, 4 FAIL + 1 ERROR; PCE10 fixtures invoked PCE11 default; all 42 original Termux migration Git blobs validated at pinned source commit, 15 current Windows destination blobs differ. No tests replayed. Evidence `Client/Relay/bin/CONSUMER_FORENSICS_2026-10-08T101845Z.json`.
+- [ ] PCE11.022: GitHub-first source repairs only to legacy governance tests (`series=10`) and immutable migration provenance assertions; run targeted, full Windows/consumer, JS, original ZIP and staged v16 source gates. No runtime or browser mutation.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## Full original queue preserved
