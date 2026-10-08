@@ -10,3 +10,6 @@ coverage.xml
 # OS/editor noise
 Thumbs.db
 Desktop.ini
+
+# Benchmark local runs, raw observations and potentially sensitive evidence
+benchmarks/results/
