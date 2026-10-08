@@ -14,7 +14,7 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source behavior is green and PCE10.011 reached the Firefox preflight after migration/blob/source gates. It then failed because acceptance bootstrapped with unscoped `list-tabs`, which intentionally requires exactly one visible Firefox window. Harness now requires exact `resolve-conversation-tab` first when the conversation URL is known, then PID-scoped list/reload/refresh. PCE10.012 must diagnose current browser state through that resolver, prove the managed PID/tab, and only then proceed to the rollback-backed stale-settle canary.
+- [~] Source behavior and migration/scoped-diff gates are green. PCE10.012 then failed read-only at exact `resolve-conversation-tab` before any live staging. The compact visible result omitted the nested adapter error. Incident `INCIDENT_2026-10-08T0123Z_PCE10_012_EXACT_CONVERSATION_RESOLVER_FAILURE.md` is open. PCE10.013 is diagnostic-only: extract the saved exact resolver error, rerun the semantic resolver, and collect bounded Firefox process/window telemetry before any mutation.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
