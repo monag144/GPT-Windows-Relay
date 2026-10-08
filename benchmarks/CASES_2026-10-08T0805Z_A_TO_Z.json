@@ -1,0 +1,223 @@
+{
+  "schema": "pce011-az-v1",
+  "stamp_utc": "2026-10-08T0805Z",
+  "limits": {
+    "overnight_seconds": 43200,
+    "release_seconds": 86400,
+    "uptime_percent": 99.5,
+    "max_gap_seconds": 120,
+    "manual_rescues": 0,
+    "duplicate_effects": 0,
+    "unsafe_executions": 0
+  },
+  "cases": [
+    {
+      "id": "A",
+      "title": "Pinned acquisition/SHA",
+      "scope": "both",
+      "pass_condition": "Verify commit and package hashes",
+      "scenario": "Corrupt package",
+      "critical": true
+    },
+    {
+      "id": "B",
+      "title": "Clean bootstrap",
+      "scope": "both",
+      "pass_condition": "Bootstrap from clean Windows user profile",
+      "scenario": "Missing Python and path spaces",
+      "critical": true
+    },
+    {
+      "id": "C",
+      "title": "Credentials isolation",
+      "scope": "both",
+      "pass_condition": "Loopback/token access; deny unauthorized requests",
+      "scenario": "Invalid token and wrong host",
+      "critical": true
+    },
+    {
+      "id": "D",
+      "title": "Operator lifecycle",
+      "scope": "both",
+      "pass_condition": "START STOP OFF RESTART KILL, no duplicate processes",
+      "scenario": "Crash during START",
+      "critical": true
+    },
+    {
+      "id": "E",
+      "title": "Extension pairing/runtime",
+      "scope": "both",
+      "pass_condition": "Current installed addon hash, handshake, one correct instance",
+      "scenario": "Stale worker",
+      "critical": true
+    },
+    {
+      "id": "F",
+      "title": "Exact Firefox tab/PID/URL",
+      "scope": "firefox",
+      "pass_condition": "Unique exact URL-bound Firefox identity or fail closed",
+      "scenario": "Offscreen tab and wrapped UIA",
+      "critical": true
+    },
+    {
+      "id": "G",
+      "title": "One-Click GUI/Update",
+      "scope": "consumer",
+      "pass_condition": "GO.bat setup choose browser connected GO and Update work",
+      "scenario": "False READY",
+      "critical": true
+    },
+    {
+      "id": "H",
+      "title": "Authenticated transport",
+      "scope": "both",
+      "pass_condition": "Correct selected browser and token-scoped request delivery",
+      "scenario": "Bridge disconnect",
+      "critical": true
+    },
+    {
+      "id": "I",
+      "title": "30-minute idle",
+      "scope": "both",
+      "pass_condition": "No false STALLED and recovers instantly after idle",
+      "scenario": "30 minute idle",
+      "critical": true
+    },
+    {
+      "id": "J",
+      "title": "Packet discovery/settling",
+      "scope": "both",
+      "pass_condition": "Correct assistant packet; bounded discovery timeout",
+      "scenario": "DISCOVERED hang",
+      "critical": true
+    },
+    {
+      "id": "K",
+      "title": "Exactly-once effect",
+      "scope": "both",
+      "pass_condition": "One side effect/reservation/saved result/visible receipt",
+      "scenario": "Duplicate scanner",
+      "critical": true
+    },
+    {
+      "id": "L",
+      "title": "Lost HTTP reply replay",
+      "scope": "both",
+      "pass_condition": "Saved result on same-ID retry, no repeat effect",
+      "scenario": "Drop HTTP reply post-commit",
+      "critical": true
+    },
+    {
+      "id": "M",
+      "title": "Malformed and collision denial",
+      "scope": "both",
+      "pass_condition": "Reject wrong platform, bad syntax and same-ID different payload",
+      "scenario": "Forged packet",
+      "critical": true
+    },
+    {
+      "id": "N",
+      "title": "Connectivity recovery",
+      "scope": "both",
+      "pass_condition": "Bounded reconnect, correct chat, no lost or duplicate action",
+      "scenario": "Temporary network outage",
+      "critical": true
+    },
+    {
+      "id": "O",
+      "title": "STOP whole-product barrier",
+      "scope": "both",
+      "pass_condition": "Exact generation browser/backend quiescence, no late actions",
+      "scenario": "STOP mid-retry",
+      "critical": true
+    },
+    {
+      "id": "P",
+      "title": "Crash supervision",
+      "scope": "both",
+      "pass_condition": "Supervised backend/HUD restart retaining state",
+      "scenario": "Controlled process crash",
+      "critical": true
+    },
+    {
+      "id": "Q",
+      "title": "Scoped page refresh",
+      "scope": "both",
+      "pass_condition": "Refresh exact tab, reacquire, no reexecute",
+      "scenario": "Refresh mid-result",
+      "critical": true
+    },
+    {
+      "id": "R",
+      "title": "Firefox addon lifetime",
+      "scope": "firefox",
+      "pass_condition": "Reinstall temporary after refresh; full restart only signed persistent",
+      "scenario": "Dedicated Firefox restart",
+      "critical": true
+    },
+    {
+      "id": "S",
+      "title": "Error screenshot/recovery advice",
+      "scope": "both",
+      "pass_condition": "Independent screenshot delivery plus whitelisted recovery",
+      "scenario": "Error in input stream",
+      "critical": true
+    },
+    {
+      "id": "T",
+      "title": "Post-result GPT turn stall",
+      "scope": "both",
+      "pass_condition": "Finalization watchdog acts without executing command again",
+      "scenario": "Stuck generation",
+      "critical": true
+    },
+    {
+      "id": "U",
+      "title": "12h overnight endurance",
+      "scope": "both",
+      "pass_condition": "43200s, >=99.5% heartbeat, zero rescue/effects, hourly full loops",
+      "scenario": "Injected bounded failures",
+      "critical": true
+    },
+    {
+      "id": "V",
+      "title": "Exact visible result",
+      "scope": "both",
+      "pass_condition": "Unique exact user result, no stale/false acknowledgment",
+      "scenario": "Old receipt beside new packet",
+      "critical": true
+    },
+    {
+      "id": "W",
+      "title": "Windows restart/resume",
+      "scope": "both",
+      "pass_condition": "Persist state/STOP and recover safely after reboot",
+      "scenario": "Isolated Windows restart",
+      "critical": true
+    },
+    {
+      "id": "X",
+      "title": "Chrome/Edge consumer matrix",
+      "scope": "consumer",
+      "pass_condition": "Separate Chrome and Edge E2E; Firefox only signed",
+      "scenario": "Edge load race",
+      "critical": true
+    },
+    {
+      "id": "Y",
+      "title": "Zero unexpected manual rescues",
+      "scope": "both",
+      "pass_condition": "Zero clicks, refreshes, retries, pastes or continue requests",
+      "scenario": "Old babysitting failure",
+      "critical": true
+    },
+    {
+      "id": "Z",
+      "title": "24h release qualification",
+      "scope": "both",
+      "pass_condition": "86400s, >=99.5% heartbeat, zero rescue/safety incident",
+      "scenario": "24h fault campaign",
+      "critical": true
+    }
+  ]
+}
