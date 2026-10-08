@@ -2,6 +2,7 @@
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -53,12 +54,22 @@ class BenchmarkContract(unittest.TestCase):
             p.write_text(json.dumps(payload))
             rec={"result":"PASS","reviewer":"reviewer",
                  "evidence":{"local_path":str(p),"sha256":bm.digest(p)}}
-            self.assertEqual(bm.proof("U",rec)[0],"FAIL")
-            payload["hourly_receipts"].append({"hour":11,"executions":1,
-                                                "visible_result":True,"duplicate_effects":0})
+            # A claimed summary can never substitute for hashed independent raw evidence.
+            self.assertEqual(bm.proof("U",rec)[0],"BLOCKED")
+            raw=Path(d)/"observer.jsonl"
+            raw.write_text('{"kind":"start"}\\n',encoding="utf-8")
+            payload["observer_log"]={"path":str(raw),"sha256":bm.digest(raw)}
             p.write_text(json.dumps(payload))
             rec["evidence"]["sha256"]=bm.digest(p)
-            self.assertEqual(bm.proof("U",rec)[0],"BLOCKED")  # hourly claims alone cannot replace raw independent observation
+            with mock.patch.object(bm,"summarize_observer",return_value={"qualified_for_tcp_gate":True}):
+                self.assertEqual(bm.proof("U",rec)[0],"FAIL") # 11 of 12 hourly receipts
+                payload["hourly_receipts"].append({"hour":11,"executions":1,
+                                                    "visible_result":True,"duplicate_effects":0})
+                p.write_text(json.dumps(payload))
+                rec["evidence"]["sha256"]=bm.digest(p)
+                self.assertEqual(bm.proof("U",rec)[0],"PASS") # independent observer assumed valid in this unit test
+            raw.write_text('{"kind":"tampered"}\\n',encoding="utf-8")
+            self.assertEqual(bm.proof("U",rec)[0],"BLOCKED")
 
 if __name__=="__main__":
     unittest.main()
