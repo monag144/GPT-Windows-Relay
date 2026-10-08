@@ -131,6 +131,20 @@ def restore(record: dict, manifest_path: Path, live: Path):
             raise RuntimeError("ROLLBACK_NOT_EXACT " + row["relative_path"])
 
 
+def operator_allows_activation(live: Path) -> bool:
+    # STOP has priority over even a recovery/rollback attempt.
+    if (live / ".relay-paused").exists():
+        return False
+    state_path = Path(os.environ["LOCALAPPDATA"]) / "GPTWindowsRelay" / "state.json"
+    if not state_path.is_file():
+        return False
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8-sig"))
+        return state.get("armed") is True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def activate(manifest_path: Path, live: Path, py: str, url: str, tab: str, delay: float, wait: float):
     log_path = manifest_path.parent / "activation-events.jsonl"
     verdict_path = manifest_path.parent / "activation-verdict.json"
@@ -144,21 +158,37 @@ def activate(manifest_path: Path, live: Path, py: str, url: str, tab: str, delay
     time.sleep(delay)
     # A newer local operation may have changed the files while we waited.
     preflight(manifest_path, live)
-    started = datetime.now(timezone.utc)
+    if not operator_allows_activation(live):
+        final = {"status": "OPERATOR_STOPPED_NO_ACTION", "at": utc_now(),
+                 "runtime_mutation": False, "files_left_staged": True}
+        temporary = verdict_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(final, indent=2), encoding="utf-8")
+        os.replace(temporary, verdict_path)
+        log(log_path, "OPERATOR_STOPPED_NO_ACTION")
+        return final
     reload_invoked = False
+    managed_pid = None
     try:
         reload_invoked = True
         addon = call_adapter(py, live, "reload-addon", log_path, "--addon-name", ADDON)
         if addon.get("invoked") is not True:
             raise RuntimeError("ADDON_RELOAD_NOT_INVOKED")
-        tab_result = call_adapter(py, live, "refresh-tab", log_path, "--tab-name", tab)
-        if tab_result.get("invoked") is not True or tab_result.get("selected_name") != tab:
+        managed_pid = int(addon.get("firefox_pid") or 0)
+        if managed_pid <= 0:
+            raise RuntimeError("ADDON_RELOAD_MANAGED_PID_MISSING")
+        if not operator_allows_activation(live):
+            raise RuntimeError("OPERATOR_STOPPED_DURING_ACTIVATION")
+        refreshed_after = datetime.now(timezone.utc)
+        tab_result = call_adapter(py, live, "refresh-tab", log_path,
+                                  "--tab-name", tab, "--firefox-pid", str(managed_pid))
+        if (tab_result.get("invoked") is not True or tab_result.get("selected_name") != tab or
+                int(tab_result.get("firefox_pid") or 0) != managed_pid):
             raise RuntimeError("CHATGPT_TAB_REFRESH_NOT_VERIFIED")
         events = Path(os.environ["LOCALAPPDATA"]) / "GPTWindowsRelay" / "browser-events.jsonl"
         observed = None
         end = time.monotonic() + wait
         while time.monotonic() < end:
-            observed = fresh_event(events, started, url)
+            observed = fresh_event(events, refreshed_after, url)
             if observed:
                 break
             time.sleep(1)
@@ -179,8 +209,15 @@ def activate(manifest_path: Path, live: Path, py: str, url: str, tab: str, delay
                      "at": utc_now(), "runtime_rollback_confirmed": False}
             if reload_invoked:
                 try:
-                    call_adapter(py, live, "reload-addon", log_path, "--addon-name", ADDON)
-                    call_adapter(py, live, "refresh-tab", log_path, "--tab-name", tab)
+                    if operator_allows_activation(live):
+                        call_adapter(py, live, "reload-addon", log_path, "--addon-name", ADDON)
+                        if managed_pid:
+                            call_adapter(py, live, "refresh-tab", log_path,
+                                         "--tab-name", tab, "--firefox-pid", str(managed_pid))
+                        else:
+                            raise RuntimeError("ROLLBACK_MANAGED_PID_UNKNOWN")
+                    else:
+                        raise RuntimeError("OPERATOR_STOPPED_BEFORE_RUNTIME_ROLLBACK")
                     final["runtime_rollback_confirmed"] = True
                     log(log_path, "ROLLBACK_ADDON_AND_TAB_REFRESHED")
                 except BaseException as rollback_error:
