@@ -56,7 +56,7 @@ def browser_state(events,now=None):
     wanted={
         "content_script_started","content_port_connected","browser_integration_connected",
         "browser_integration_disconnected","action_received","action_result","scanner_snapshot",
-        "relay_packet_discovered","relay_recovery_packet_seen","relay_scanner_stalled",
+        "relay_packet_discovered","relay_packet_settle_stale_rearmed","relay_recovery_packet_seen","relay_scanner_stalled",
         "relay_page_refresh_requested","relay_result_delivery_complete"
     }
     relevant=[e for e in events if e.get("event") in wanted]
@@ -74,6 +74,7 @@ def browser_state(events,now=None):
 PHASES={
     "relay_recovery_packet_seen":("DISCOVERED","valid packet visible; forced recovery inspection"),
     "relay_packet_discovered":("DISCOVERED","packet parsed; settling before execution"),
+    "relay_packet_settle_stale_rearmed":("RECOVERING","stale settle lease expired; packet re-armed"),
     "relay_action_execution_requested":("STARTING","packet handed to extension background"),
     "action_received":("STARTING","extension posted action to Windows relay"),
     "relay_result_received":("RESULT READY","Windows result returned to browser"),
