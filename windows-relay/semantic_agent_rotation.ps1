@@ -75,6 +75,16 @@ function UrlBar($window){
  if(-not $bars[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp)){throw 'ROTATION_URLBAR_NO_VALUE'}
  return [string]$vp.Current.Value
 }
+# Firefox UIA may omit https:// in the URL bar: accept exact host/path only.
+function Normalize-RotationConversationUrl([string]$Value){
+ $v=[string]$Value
+ if($v -notmatch '^(?i:(?:https://)?chatgpt[.]com/c/([a-z0-9][a-z0-9-]{14,127})/?)$'){throw 'ROTATION_CONVERSATION_ADDRESS_UNTRUSTED'}
+ $identifier=[string]$Matches[1]
+ return 'https://chatgpt.com/c/'+$identifier
+}
+function Test-RotationHomeAddress([string]$Value){
+ return $Value -cmatch '^(?:https://)?chatgpt[.]com/?$'
+}
 function DocumentBody($window){
  $dc=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Document)
  $docs=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$dc);$visible=@()
@@ -129,8 +139,8 @@ try{
  $source=SelectedSource
  Save 'SOURCE_TAB_RECOGNIZED'
  $window=$source.window;$tab=$source.tab;$selected=$source.selection
- $url=UrlBar $window
- if($url -notmatch '^https://chatgpt\.com/c/[^/?#]+/?$'){throw 'SOURCE_CONVERSATION_IDENTITY_INVALID'}
+ $rawSourceUrl=UrlBar $window
+ try{$url=Normalize-RotationConversationUrl $rawSourceUrl}catch{throw 'SOURCE_CONVERSATION_IDENTITY_INVALID'}
  $state.source_url=$url;$state.source_tab=[string]$tab.Current.Name
  $state.firefox_pid=[int]$window.Current.ProcessId
  Save 'WAITING_FOR_SOURCE_RESULT'
@@ -138,7 +148,7 @@ try{
  $confirmed=$false
  do{
   Start-Sleep -Milliseconds 500
-  if(-not $selected.Current.IsSelected -or (UrlBar $window) -ne $url){throw 'SOURCE_TAB_CHANGED_DURING_DELIVERY'}
+  if(-not $selected.Current.IsSelected -or (Normalize-RotationConversationUrl (UrlBar $window)) -cne $url){throw 'SOURCE_TAB_CHANGED_DURING_DELIVERY'}
   $body=DocumentBody $window
   $open=$body.LastIndexOf('[GPT_WINDOWS_RESULT]')
   if($open -ge 0){
@@ -153,7 +163,7 @@ try{
  Save 'SOURCE_RESULT_VISIBLE'
  $status=CheckControls
  if($status.pending_missions -ne $initialPending){throw 'PENDING_MISSIONS_CHANGED'}
- if(-not $selected.Current.IsSelected -or (UrlBar $window) -ne $url){throw 'SOURCE_IDENTITY_LOST'}
+ if(-not $selected.Current.IsSelected -or (Normalize-RotationConversationUrl (UrlBar $window)) -cne $url){throw 'SOURCE_IDENTITY_LOST'}
  $oldComposer=Composer $window
  if(-not [string]::IsNullOrWhiteSpace([string]$oldComposer.value.Current.Value)){throw 'SOURCE_COMPOSER_HAS_DRAFT'}
  $new=NewChatButton $window
@@ -165,9 +175,9 @@ try{
  do{
   Start-Sleep -Milliseconds 300
   $newUrl=UrlBar $window
-  if($newUrl -match '^https://chatgpt\.com/?(?:\?.*)?$'){break}
+  if(Test-RotationHomeAddress $newUrl){break}
  }while([DateTime]::UtcNow -lt $until)
- if($newUrl -notmatch '^https://chatgpt\.com/?(?:\?.*)?$'){throw 'NEW_CHAT_EMPTY_CONVERSATION_NOT_VERIFIED'}
+ if(-not(Test-RotationHomeAddress $newUrl)){throw 'NEW_CHAT_EMPTY_CONVERSATION_NOT_VERIFIED'}
  if(-not $selected.Current.IsSelected){throw 'SOURCE_TAB_SELECTION_CHANGED'}
  $state.new_url=$newUrl
  Save 'NEW_EMPTY_CHAT_VERIFIED'
@@ -202,7 +212,7 @@ try{
  if($send.Count -ne 1){throw ('HANDOFF_SEND_BUTTON_COUNT_'+$send.Count)}
  $ip=$null
  if(-not $send[0].TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$ip)){throw 'HANDOFF_SEND_INVOKE_NOT_AVAILABLE'}
- if(-not $selected.Current.IsSelected -or (UrlBar $window) -eq $url){throw 'NEW_CHAT_IDENTITY_LOST_BEFORE_SEND'}
+ if(-not $selected.Current.IsSelected -or -not(Test-RotationHomeAddress (UrlBar $window))){throw 'NEW_CHAT_IDENTITY_LOST_BEFORE_SEND'}
  $state.send_invoked=$true
  Save 'HANDOFF_SEND_UNCERTAIN'
  $ip.Invoke()
@@ -210,10 +220,11 @@ try{
  do{
   Start-Sleep -Milliseconds 300
   $newUrl=UrlBar $window
-  if($newUrl -match '^https://chatgpt\.com/c/[^/?#]+/?$' -and $newUrl -ne $url){
+  try{$canonicalNewUrl=Normalize-RotationConversationUrl $newUrl}catch{$canonicalNewUrl=$null}
+  if($null -ne $canonicalNewUrl -and $canonicalNewUrl -cne $url){
    $body=DocumentBody $window
    if($body.Contains('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]') -and $body.Contains('PCE12.000')){
-    $state.new_url=$newUrl
+    $state.new_url=$canonicalNewUrl
     $state.handoff_visible=$true
     break
    }
