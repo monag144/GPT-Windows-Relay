@@ -216,6 +216,9 @@ def main():
     ordinal=13 if a.mode=="preflight" else 14
     proof=engineering_preflight(repo,ordinal,series=11)
     if not proof["ok"]:raise RuntimeError("canonical governance blocked")
+    if a.mode=="preflight":
+        invoke([sys.executable,"-B","-m","unittest","discover","-s",
+          str(repo/"windows-relay"/"tests"),"-p","test_pce11_isolated_supervisor.py"],timeout=40)
     stage=candidate(repo,live)
     listeners=pid_for_port()
     if listeners:raise RuntimeError("port 8768 not free")
@@ -224,7 +227,7 @@ def main():
            "id":proof["id"],"repo_sha":a.expected_head,
            "five_control_sha256":{k:v["sha256"] for k,v in proof["reads"].items()},
            "staged_source":stage,"job_api_available":win_job_available(),
-           "self_test_passed":True,"port_8768_free":True,
+           "self_test_passed":True,"targeted_unit_tests_passed":True,"port_8768_free":True,
            "private_config_state_supported":True,
            "source_supervisor_missing_is_not_blocker_to_independent_harness":True,
            "process_launched":False,"canary_authorized":False},separators=(",",":")))
