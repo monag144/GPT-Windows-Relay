@@ -52,15 +52,14 @@ def main(args=None):
     if fetched!=a.expected_head:raise RuntimeError("fetched SHA mismatch")
     changes=set(g("diff","--name-only","HEAD","FETCH_HEAD").splitlines())
     if changes-ALLOWED:raise RuntimeError("unexpected paths in governance-only pull: "+str(sorted(changes-ALLOWED))[:180])
-    audit=g("show","FETCH_HEAD:"+AUDIT).encode("utf-8")
-    if blob_sha(audit)!=AUDIT_BLOB:raise RuntimeError("remote audit blob changed")
-    audit_text=audit.decode("utf-8")
-    if len(audit)<300 or not all((".%03d"%i) in audit_text for i in range(5)):
+    if g("rev-parse","FETCH_HEAD:"+AUDIT)!=AUDIT_BLOB:raise RuntimeError("remote audit blob changed")
+    audit_text=g("show","FETCH_HEAD:"+AUDIT)
+    if len(audit_text.encode("utf-8"))<300 or not all((".%03d"%i) in audit_text for i in range(5)):
         raise RuntimeError("audit missing one of five slot labels")
     if "COMPLETE" not in audit_text or "BLOCKED" not in audit_text:
         raise RuntimeError("unsubstantiated remote checkpoint")
     g("merge-base","--is-ancestor","HEAD","FETCH_HEAD")
-    g("pull","--ff-only","origin",BRANCH,timeout=60)
+    g("merge","--ff-only","FETCH_HEAD",timeout=60)  # exact pinned object without second fetch
     if g("rev-parse","HEAD")!=a.expected_head:raise RuntimeError("postpull head mismatch")
     after=reads(repo)
     module_file=repo/"consumer"/"control_harness.py"
