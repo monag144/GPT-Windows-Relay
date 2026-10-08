@@ -14,7 +14,7 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source behavior and migration/scoped-diff gates are green. PCE10.012 then failed read-only at exact `resolve-conversation-tab` before any live staging. The compact visible result omitted the nested adapter error. Incident `INCIDENT_2026-10-08T0123Z_PCE10_012_EXACT_CONVERSATION_RESOLVER_FAILURE.md` is open. PCE10.013 is diagnostic-only: extract the saved exact resolver error, rerun the semantic resolver, and collect bounded Firefox process/window telemetry before any mutation.
+- [~] Source behavior and migration/scoped-diff gates are green. PCE10.013 isolated `FIREFOX_CONVERSATION_MATCH_COUNT_0`; PCE10.014 then completed a read-only visible URL/PID diagnostic, but the compact result truncated its final verdict. The PCE10.010-.014 audit is complete at `docs/audits/AUDIT_2026-10-08T0128Z_PCE10_OPERATIONS_010_014.md`. PCE10.015 must extract the saved PCE10.014 verdict and positively establish the current visible ChatGPT conversation URL/PID before any identity repair or live canary.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
