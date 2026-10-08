@@ -43,9 +43,9 @@ class PCE11SidecarContractTests(unittest.TestCase):
             folder=live/"builds"/("RELAY_PCE8_V16_"+mod.V16_SHA[:12])
             path=folder/"windows-relay"/"windows_relay.py"
             path.parent.mkdir(parents=True)
-            raw="print('--config','--state-dir','server','127.0.0.1')\\r\\nState(a.state_dir)\\r\\nconfig(a.config)\\r\\n"
+            raw="print('--config','--state-dir','server','127.0.0.1')\r\nState(a.state_dir)\r\nconfig(a.config)\r\n"
             # Simulate Git checkout with Windows CRLF worktree but pinned normalized Git object.
-            path.write_bytes(raw.replace("\\\\r", "\\r").replace("\\\\n", "\\n").encode("utf-8"))
+            path.write_bytes(raw.encode("utf-8"))
             self.assertNotEqual(mod.git_blob(path.read_bytes()),mod.V16_BLOB)
             def fake_git(directory,*parts,**kwargs):
                 commands={
@@ -67,7 +67,7 @@ class PCE11SidecarContractTests(unittest.TestCase):
             folder=live/"builds"/("RELAY_PCE8_V16_"+mod.V16_SHA[:12])
             path=folder/"windows-relay"/"windows_relay.py"
             path.parent.mkdir(parents=True)
-            path.write_text("print('--config', '--state-dir', 'server', '127.0.0.1')\\nState(a.state_dir)\\nconfig(a.config)\\n",encoding="utf-8")
+            path.write_text("print('--config', '--state-dir', 'server', '127.0.0.1')\nState(a.state_dir)\nconfig(a.config)\n",encoding="utf-8")
             def wrong_git(directory,*parts,**kwargs):
                 if parts==("rev-parse","HEAD"):return mod.V16_SHA
                 if parts==("status","--porcelain"):return ""
