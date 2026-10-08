@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "purpose": "Exact-byte provenance for historical Windows Relay evidence migrated out of GPT-Termux-Relay. Entries may be exempted from source-style whitespace normalization only while their Git blob identity remains unchanged.",
+  "source_repository": "monag144/GPT-Termux-Relay",
+  "source_commit": "249e3bb46c6ea57968d9ecf5157d73867a7f918d",
+  "destination_repository": "monag144/GPT-Windows-Relay",
+  "generated_from_destination_commit": "4cfcc43b6fbed72839df1394c9e651dd9e7c9820",
+  "entry_count": 42,
+  "entries": [
+    {
+      "destination_path": "docs/ACCEPTANCE_2026-10-05T2333Z_A6_399F_FIREFOX_OUT_OF_BAND_CUTOVER_REPLAY.md",
+      "git_blob_sha1": "dc25feff024293c2bade60bd27a2a43ee03b9444",
+      "source_paths": [
+        "docs/ACCEPTANCE_2026-10-05T2333Z_A6_399F_FIREFOX_OUT_OF_BAND_CUTOVER_REPLAY.md"
+      ]
+    },
+    {
+      "destination_path": "docs/audits/ACCEPTANCE_2026-10-06T2219Z_PCE8_V16_BROWSER_RECOVERY.md",
+      "git_blob_sha1": "d3a069835247ae63ba3ec318e5eab2eb7c20817f",
+      "source_paths": [
+        "docs/ACCEPTANCE_2026-10-06T2219Z_PCE8_V16_BROWSER_RECOVERY.md"
+      ]
+    },
+    {
+      "destination_path": "docs/audits/ACCEPTANCE_2026-10-06T2236Z_PCE8_STALE_OWNER_LEASE_DEADMAN.md",
+      "git_blob_sha1": "88db2058d0f64df65aca310c5f9cb4eb501e08ab",
+      "source_paths": [
+        "docs/ACCEPTANCE_2026-10-06T2236Z_PCE8_STALE_OWNER_LEASE_DEADMAN.md"
+      ]
+    },
+    {
+      "destination_path": "docs/audits/PCE8_2026-10-07T0002Z_CORRELATED_WHOLE_PRODUCT_STOP_SOURCE_ACCEPTANCE.md",
+      "git_blob_sha1": "5af0e70fc0ed8e5714628e60d04e7c62ed8029c9",
+      "source_paths": [
+        "docs/PCE8_2026-10-07T0002Z_CORRELATED_WHOLE_PRODUCT_STOP_SOURCE_ACCEPTANCE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/facts/PCE8_2026-10-07T0101Z_WINDOWS_UIA_OUTBOUND_RESULT_DELIVERY_ARCHITECTURE_DECISION.md",
+      "git_blob_sha1": "c337f762f1c6539eb063ff6a23ffa2f7a0c53031",
+      "source_paths": [
+        "docs/PCE8_2026-10-07T0101Z_WINDOWS_UIA_OUTBOUND_RESULT_DELIVERY_ARCHITECTURE_DECISION.md"
+      ]
+    },
+    {
+      "destination_path": "docs/facts/PCE8_2026-10-07T0210Z_EXACT_WIRE_TARGET_RESOLUTION_AND_URL_BOUND_SENDER.md",
+      "git_blob_sha1": "155a6704d0f9982d48951f8eed249f6a84af4cbc",
+      "source_paths": [
+        "docs/PCE8_2026-10-07T0210Z_EXACT_WIRE_TARGET_RESOLUTION_AND_URL_BOUND_SENDER.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-05T1942Z_R29_LIVE_EXTENSION_RUNTIME_DRIFT_AND_RECOVERY.md",
+      "git_blob_sha1": "284e538899ce9ae6ee6842066d3ba51f9344b59f",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-05T1942Z_R29_LIVE_EXTENSION_RUNTIME_DRIFT_AND_RECOVERY.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-05T2306Z_A6_399_VALIDATION_PYTHONPATH_CROSS_SUITE.md",
+      "git_blob_sha1": "1a77db08ac00c4ef11a9aa14b864649c93890b17",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-05T2306Z_A6_399_VALIDATION_PYTHONPATH_CROSS_SUITE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-05T2310Z_A6_399A_HUD_OPERATION_REGEX_ESCAPE.md",
+      "git_blob_sha1": "dcabbdeb0cbab1dde0ae555d5b5ad05f0b15cb89",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-05T2310Z_A6_399A_HUD_OPERATION_REGEX_ESCAPE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-05T2326Z_A6_399C_FIREFOX_ADAPTER_UNICODE_CONSOLE.md",
+      "git_blob_sha1": "2ee41b83b703ab006e0e1cee14e3b01ec4ef7966",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-05T2326Z_A6_399C_FIREFOX_ADAPTER_UNICODE_CONSOLE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-05T2341Z_A6_399H_FIREFOX_LAUNCHER_GUI_PID_SPLIT.md",
+      "git_blob_sha1": "4a8889fcef324211cdecc7e64e916f09698d5cc4",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-05T2341Z_A6_399H_FIREFOX_LAUNCHER_GUI_PID_SPLIT.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0005Z_A6_399AF_STALE_VISIBLE_DELIVERY_STATUS.md",
+      "git_blob_sha1": "be929858833ff0d2044a2cb61917b73e89d894b0",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0005Z_A6_399AF_STALE_VISIBLE_DELIVERY_STATUS.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0120Z_A6_399AG_MALFORMED_PACKET_PLATFORM.md",
+      "git_blob_sha1": "f7276ec16f89064ac08c716af67c1a36681ca26e",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0120Z_A6_399AG_MALFORMED_PACKET_PLATFORM.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0134Z_A6_399AI_UNSUPERVISED_OOB_CHILD.md",
+      "git_blob_sha1": "a92c0cf4018e18585f382d986b15b9dd39a97ef9",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0134Z_A6_399AI_UNSUPERVISED_OOB_CHILD.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0152Z_A6_399AL_OOB_COMPOSER_NOT_SUBMITTED.md",
+      "git_blob_sha1": "c7b9e4b1cbbf7587a0503ea55a36de28261a7257",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0152Z_A6_399AL_OOB_COMPOSER_NOT_SUBMITTED.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0200Z_A6_399AL_RECOVERY_ADVICE_UNCONSUMED.md",
+      "git_blob_sha1": "c05ec65f91ebd1ea1bdf83f45748cdc7a957a964",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0200Z_A6_399AL_RECOVERY_ADVICE_UNCONSUMED.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0205Z_A6_399AM_CONTENT_CONTRACT_FIXTURE.md",
+      "git_blob_sha1": "c22fa68ad7ef7d952455c17e1ad6e0346c98b2a2",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0205Z_A6_399AM_CONTENT_CONTRACT_FIXTURE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0213Z_A6_399AR_JS_REPLACEMENT_RECURRENCE.md",
+      "git_blob_sha1": "144947cbf4e7e8a6295f9a72f644b10f44c13254",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0213Z_A6_399AR_JS_REPLACEMENT_RECURRENCE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0216Z_A6_399AS_BROWSER_MANAGER_FUTURE_IMPORT.md",
+      "git_blob_sha1": "b1969ec570945ccff36968153e2ce3ce6f08508e",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0216Z_A6_399AS_BROWSER_MANAGER_FUTURE_IMPORT.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0220Z_A6_399AU_INDEPENDENT_READBACK_CONTEXT.md",
+      "git_blob_sha1": "7b335cc24227f2b6eadcd8160e1b12653447abc2",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0220Z_A6_399AU_INDEPENDENT_READBACK_CONTEXT.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0230Z_A6_399AY_VISIBLE_RESULT_LONG_ACTIVE_TURN.md",
+      "git_blob_sha1": "28a12b4cab20c6bd2c8aedf595feb25eb7b76bf2",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0230Z_A6_399AY_VISIBLE_RESULT_LONG_ACTIVE_TURN.md"
+      ]
+    },
+    {
+      "destination_path": "docs/INCIDENT_2026-10-06T0245Z_A6_400_ROTATION_DISCOVERED_NOT_EXECUTED.md",
+      "git_blob_sha1": "c9aad00e6a8b6f5de0909ab8aa7256eb4c4141d8",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T0245Z_A6_400_ROTATION_DISCOVERED_NOT_EXECUTED.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-06T1742Z_PCE8_26B_V14_CANARY_SESSION_ESCAPE.md",
+      "git_blob_sha1": "6cd4eed6139ecf389d1d3514caef58858cc207c2",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T1742Z_PCE8_26B_V14_CANARY_SESSION_ESCAPE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-06T2031Z_PCE8_61_STALE_DRAFT_RECOVERY_OWNER_LEAK.md",
+      "git_blob_sha1": "60c28c2f9f4771be194995d26b38fdc92340399d",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T2031Z_PCE8_61_STALE_DRAFT_RECOVERY_OWNER_LEAK.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-06T2200Z_PCE8_89_SYNTHETIC_COMPOSER_PROBE_SUBMISSION.md",
+      "git_blob_sha1": "a8f67d3fb6ba52f8a49c6110858c1f183654a7be",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T2200Z_PCE8_89_SYNTHETIC_COMPOSER_PROBE_SUBMISSION.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-06T2231Z_PCE8_113_STALE_OWNER_HELPER_FALSE_NEGATIVE.md",
+      "git_blob_sha1": "89a0ceb322cfd8c8984de5e2531c9af47a41f365",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-06T2231Z_PCE8_113_STALE_OWNER_HELPER_FALSE_NEGATIVE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_FORENSIC_OUTPUT_EXPLOSION.md",
+      "git_blob_sha1": "2a7430b0aed2b11e025d3e68ba889e56bfff82ed",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_FORENSIC_OUTPUT_EXPLOSION.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_HUD_TEST_PATH_AND_PACKET_HYPOTHESIS_CORRECTION.md",
+      "git_blob_sha1": "b411d56ea592ed5cc8f0137d235b7769697b48f8",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_HUD_TEST_PATH_AND_PACKET_HYPOTHESIS_CORRECTION.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_MATCHER_DIAGNOSTIC_FALSE_EARLY_TRIGGER.md",
+      "git_blob_sha1": "2ace1804cad706a52c531ec125cf12d66c8a649b",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_MATCHER_DIAGNOSTIC_FALSE_EARLY_TRIGGER.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_NATIVE_STDERR_PROBE_ABORT.md",
+      "git_blob_sha1": "347ddb445e025775a3ed90c4804af5e689674999",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_NATIVE_STDERR_PROBE_ABORT.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_OP111_TEST_EDIT_ESCAPE_FAILURE.md",
+      "git_blob_sha1": "7adedf9611bf5f5b70d14d46026d20a3062d8f00",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_OP111_TEST_EDIT_ESCAPE_FAILURE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_OP119_POWERSHELL_SELECTOR_QUOTING_PARSE_FAILURE.md",
+      "git_blob_sha1": "404d348283bc74cfe9caa31c79dc9c7bc6d4018e",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_OP119_POWERSHELL_SELECTOR_QUOTING_PARSE_FAILURE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_OP122_PARTIAL_ACTIVATION_REFRESH_ADAPTER_FAILURE.md",
+      "git_blob_sha1": "5d6d75165852577c851efc27eb6069d11b9fee72",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_OP122_PARTIAL_ACTIVATION_REFRESH_ADAPTER_FAILURE.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_RELAY_COMMAND_LENGTH_206.md",
+      "git_blob_sha1": "b98c082378f0aa8b9d9edf3ba03b2faa9424c873",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_RELAY_COMMAND_LENGTH_206.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_REPEAT_POWERSHELL_ALIAS_COLLISION.md",
+      "git_blob_sha1": "950b0acc255acfb4d50313696a6a4e9bf24ac8e3",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_REPEAT_POWERSHELL_ALIAS_COLLISION.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07_PCE9_WRONG_PYTEST_INTERPRETER.md",
+      "git_blob_sha1": "c2708e1137f5535c9cc2beda8ef4acbc759771f8",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07_PCE9_WRONG_PYTEST_INTERPRETER.md"
+      ]
+    },
+    {
+      "destination_path": "docs/incidents/INCIDENT_2026-10-07T0013Z_PCE8_149A_GET_HISTORY_ALIAS_AND_INPUT_STREAM_ERROR.md",
+      "git_blob_sha1": "e606e70bedd2e8375a5e2db07d225f57dbd1fc27",
+      "source_paths": [
+        "docs/INCIDENT_2026-10-07T0013Z_PCE8_149A_GET_HISTORY_ALIAS_AND_INPUT_STREAM_ERROR.md"
+      ]
+    },
+    {
+      "destination_path": "docs/job-application-automation-defaults.md",
+      "git_blob_sha1": "c4fe20ad0bd962313444a308b352c3d33a20163d",
+      "source_paths": [
+        "docs/job-application-automation-defaults.md"
+      ]
+    },
+    {
+      "destination_path": "docs/job-applications/README.md",
+      "git_blob_sha1": "47472ef69bfb9b41a40b31a5e0a618e6d8ae2ab0",
+      "source_paths": [
+        "docs/job-applications/README.md"
+      ]
+    },
+    {
+      "destination_path": "docs/job-applications/spokane-county-road-maintenance-specialist-JR100708-execution-log.md",
+      "git_blob_sha1": "b45c15a928b0127e31a892f2f2ab9649a10735b9",
+      "source_paths": [
+        "docs/job-applications/spokane-county-road-maintenance-specialist-JR100708-execution-log.md"
+      ]
+    },
+    {
+      "destination_path": "docs/job-applications/spokane-county-road-maintenance-specialist-JR100708.md",
+      "git_blob_sha1": "2c8ac10403b74f8168c78708c843e2ebcd348a44",
+      "source_paths": [
+        "docs/job-applications/spokane-county-road-maintenance-specialist-JR100708.md"
+      ]
+    },
+    {
+      "destination_path": "docs/relay-rendering-incident-2026-10-03.md",
+      "git_blob_sha1": "c650d10bbeb472ec72a6abcc539715c21b289243",
+      "source_paths": [
+        "docs/relay-rendering-incident-2026-10-03.md"
+      ]
+    }
+  ]
+}
