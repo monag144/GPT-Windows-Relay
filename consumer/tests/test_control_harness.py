@@ -62,6 +62,11 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertIn("docs/relay-sandwich-procedure.md",c["turn_discipline"]["read_every_turn"])
         self.assertEqual(c["turn_discipline"]["preflight_method"],"engineering_preflight")
         self.assertEqual(c["turn_discipline"]["review_every_engineering_turns"],20)
+        watchdog=c["runtime_gates"]["independent_stall_supervision"]
+        self.assertIn("cannot recover a healthy-port browser discovery stall", watchdog["source_limit"])
+        self.assertIn("45 seconds",watchdog["detection_rule"])
+        self.assertIn("No blind replay",watchdog["recovery_rule"])
+        self.assertIn("live browser canary",watchdog["acceptance_rule"])
         self.assertIn("Before PCE10.025",c["turn_discipline"]["audit_boundary_rule"])
         self.assertIn("PCE10.040",c["turn_discipline"]["review_rule"])
         self.assertIn("continue autonomously",c["turn_discipline"]["autonomy_rule"])
