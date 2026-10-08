@@ -45,6 +45,7 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] PCE11.032 pre-suite BLOCKED: wrong .030 evidence source SHA. `docs/incidents/INCIDENT_2026-10-08T1100Z_PCE11_032_WRONG_NATIVE_PROOF_SOURCE_SHA.md`.
 - [x] PCE11.033 full HOST source acceptance PASS at `e4e89c4075ddc49e6bb6bae8db8bed2e48cad280`: 12 v16, 9 host, 12 Job, 493 Windows, 119 consumer; JS4, ZIP/source guards. `Client/Relay/bin/SOURCE_HOST_IDENTITY_ACCEPTANCE_033_2026-10-08T110349Z/acceptance.json`. No runtime launch.
 - [ ] PCE11.034: one NEW bounded v16 on private 8768; require .033 acceptance, .030 real host-in-Job proof, .023/.025 cleanup, fresh tests, archival backup, exact listener PID+parent+Job+host exit, main 18632 identity. No production cutover; diagnostic fail-closed.
+- [ ] USER INCIDENT (investigation pending): ChatGPT `Connection interrupted. Waiting for the complete answer` during partial PCE11.033 reply; issue #1, `docs/incidents/INCIDENT_2026-10-08T1928Z_PCE11_USER_REPORTED_CONNECTION_INTERRUPTED_WAITING_COMPLETE_ANSWER.md`. Design guarded same-chat refresh/New Chat continuity; no automatic replay or live mutation.
 
 ## Full original queue preserved
 [Complete 2026-10-08T1011Z snapshot](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md).
