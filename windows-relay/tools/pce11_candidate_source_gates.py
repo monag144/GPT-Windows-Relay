@@ -9,6 +9,7 @@ BRANCH="pce11/one-click-go-recovery-and-doc-hygiene"
 REFERENCES={"RELAY_PCE8_V16":"694d47ab89596d5c3801f749caa352b951a2be52",
             "ONE_CLICK_GO_R28":"d5b9db7ad785b5cae8dc3b64219303b9fcfa634a"}
 RESULT_PATTERN=re.compile(r"Ran (\d+) tests? in ([0-9.]+)s")
+RUN_DEADLINE=None
 def utc():return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
 def git(gitbin,folder,*args,timeout=30):
     r=subprocess.run([gitbin,"-C",str(folder),*args],text=True,capture_output=True,timeout=timeout)
@@ -21,6 +22,10 @@ def sha(path):
     return h.hexdigest()
 def run(label,command,cwd,env,root,timeout=36):
     t=time.monotonic()
+    if RUN_DEADLINE is not None:
+        if RUN_DEADLINE-t < 3:
+            return {"label":label,"status":"BLOCKED","reason":"bounded test operation deadline reached"}
+        timeout=min(timeout,max(2,int(RUN_DEADLINE-t)-1))
     try:
         r=subprocess.run(command,cwd=cwd,env=env,text=True,encoding="utf-8",
                          errors="replace",capture_output=True,timeout=timeout)
@@ -90,6 +95,8 @@ def main():
     env=os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"]="1"
     env["PYTHONNOUSERSITE"]="1"
+    global RUN_DEADLINE
+    RUN_DEADLINE=time.monotonic()+210
     results=[]
     results.append(run("pce11-harness",[
         sys.executable,"-B","-m","unittest","discover","-s","tests",
