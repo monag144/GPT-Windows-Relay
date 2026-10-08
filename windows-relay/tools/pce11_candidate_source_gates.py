@@ -70,6 +70,7 @@ def main():
         {"canonical_repo_confirmed":True,"github_commit_sha":opts.expected_head,
          "remote_sha_verified":True,"relay_pull_sha_matches_remote":True},"source_acceptance")
     if not gate["ok"]:raise RuntimeError("source workflow gate denied "+str(gate["blockers"]))
+    print("PCE11_002_GOVERNANCE="+json.dumps({"id":preflight["id"],"reads":preflight["reads"]},separators=(",",":")))
     manifests=sorted((live/"bin").glob("BROKEN_*.manifest.json"),reverse=True)
     if not manifests: raise RuntimeError("PCE11.001 bin archive manifest missing")
     manifest=json.loads(manifests[0].read_text(encoding="utf-8"))
@@ -115,6 +116,16 @@ def main():
                                    folder,env,evidence,timeout=8))
         else:
             results.append({"label":label+"-JS","status":"BLOCKED","reason":"node not installed"})
+        ps=shutil.which("pwsh") or shutil.which("powershell")
+        if ps:
+            powershell_file=folder/"windows-relay"/"firefox_tab_adapter.ps1"
+            literal=str(powershell_file).replace("'","''")
+            ast=("$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile('"+
+                 literal+"',[ref]$t,[ref]$e)|Out-Null;if($e.Count -gt 0){$e|ForEach-Object{Write-Error $_.Message};exit 1}")
+            results.append(run(label+"-PS_Ast",[ps,"-NoLogo","-NoProfile","-NonInteractive","-Command",ast],
+                               folder,env,evidence,timeout=12))
+        else:
+            results.append({"label":label+"-PS_Ast","status":"BLOCKED","reason":"PowerShell not installed"})
     record={"schema":"pce011-source-gates-v1","source_sha":opts.expected_head,
             "preflight":preflight,"backup_sha256":manifest["zip_sha256"],
             "backup_file_count":manifest["file_count"],
