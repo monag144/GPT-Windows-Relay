@@ -20,6 +20,7 @@ REPORT_029="PCE11_029_PID_IDENTITY_DIAG_2026-10-08T104655Z.json"
 EXPECTED_MAIN=18632
 PROCESS_QUERY_LIMITED_INFORMATION=0x1000
 WAIT_OBJECT_0=0
+SYNCHRONIZE=0x00100000
 
 def run(argv,timeout=60):
     p=subprocess.run(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
@@ -49,6 +50,27 @@ def job_member(pid,job):
     finally:
         if not kernel.CloseHandle(handle):
             raise OSError("query-only process handle close failed")
+
+def open_sync_handle(pid):
+    """Hold a read-only lifetime handle across Job termination for exit proof."""
+    kernel=ctypes.WinDLL("kernel32",use_last_error=True)
+    kernel.OpenProcess.argtypes=(wintypes.DWORD,wintypes.BOOL,wintypes.DWORD)
+    kernel.OpenProcess.restype=wintypes.HANDLE
+    handle=kernel.OpenProcess(SYNCHRONIZE,False,pid)
+    if not handle:raise OSError("cannot open private child wait handle")
+    return handle
+
+def await_exit_and_close(handle):
+    kernel=ctypes.WinDLL("kernel32",use_last_error=True)
+    kernel.WaitForSingleObject.argtypes=(wintypes.HANDLE,wintypes.DWORD)
+    kernel.WaitForSingleObject.restype=wintypes.DWORD
+    kernel.CloseHandle.argtypes=(wintypes.HANDLE,)
+    kernel.CloseHandle.restype=wintypes.BOOL
+    try:
+        return kernel.WaitForSingleObject(handle,4000)==WAIT_OBJECT_0
+    finally:
+        if not kernel.CloseHandle(handle):
+            raise OSError("private child wait handle close failed")
 
 def read_json(path):
     if not path.is_file() or path.stat().st_size>131072:
@@ -126,12 +148,13 @@ def main():
       "observed_python_host_ppid":None,"host_same_as_launcher":None,
       "host_direct_child_of_launcher":None,
       "host_is_in_exact_private_job":None,"launcher_in_exact_private_job":None,
-      "job_kill_verified":False,"main_preserved":False,
+      "job_kill_verified":False,"observed_host_exit_after_job_close":False,
+      "main_preserved":False,
       "port8768_free_after":False,"no_relay_service_started":True,
       "browser_touched":False,"operator_STOP_used":False,
       "production_mutated":False,"v16_relaunch_authorized":False,
       "success":False,"job_events":[]}
-    owned=None;failure=None
+    owned=None;host_wait_handle=None;failure=None
     try:
         owned=containment.ContainedProcess()
         owned.start([sys.executable,"-B","-c",program,str(reply)],cwd=str(sandbox))
@@ -154,6 +177,7 @@ def main():
         result["host_executable"]=Path(payload["executable"]).name
         result["host_base_executable"]=Path(payload["base_executable"]).name
         result["host_is_in_exact_private_job"]=job_member(host,owned.job)
+        host_wait_handle=open_sync_handle(host)
         if not result["launcher_in_exact_private_job"] or not result["host_is_in_exact_private_job"]:
             raise RuntimeError("inert interpreter host not safely contained in exact owned job")
         if not result["host_same_as_launcher"] and not result["host_direct_child_of_launcher"]:
@@ -170,6 +194,13 @@ def main():
                 owned.disposed and "private_job_terminated" in owned.events and
                 "child_handles_closed" in owned.events and
                 "job_handle_closed" in owned.events and not any(x.startswith("native cleanup") for x in [failure or ""]))
+        if host_wait_handle is not None:
+            try:
+                result["observed_host_exit_after_job_close"]=await_exit_and_close(host_wait_handle)
+                if not result["observed_host_exit_after_job_close"]:
+                    failure=failure or "private interpreter child did not exit after Job close"
+            except BaseException as ex:
+                failure=failure or "private interpreter exit verification failed: "+type(ex).__name__
         try:
             after=health.main_baseline()
             result["main_after"]=after
@@ -180,6 +211,7 @@ def main():
         if failure:result["failure"]=failure
         result["success"]=bool(not failure and result["job_kill_verified"]
            and result["main_preserved"] and result["port8768_free_after"]
+           and result["observed_host_exit_after_job_close"]
            and result["host_is_in_exact_private_job"] and
            result["launcher_in_exact_private_job"])
         record.write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
@@ -193,6 +225,7 @@ def main():
       "launcher_inside_job":result["launcher_in_exact_private_job"],
       "host_inside_job":result["host_is_in_exact_private_job"],
       "job_cleanup":result["job_kill_verified"],
+      "host_exit_observed":result["observed_host_exit_after_job_close"],
       "main_pid_preserved":result["main_preserved"],
       "port8768_free_after":result["port8768_free_after"],
       "success":result["success"],"failure":failure,
