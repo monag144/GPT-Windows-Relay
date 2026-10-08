@@ -34,3 +34,12 @@ Every operation must read roadmap/facts/incidents/log, prove net-new progress, p
 18. **Documentation size discipline:** every maintained documentation file targets <=10 KiB. When a subject would exceed the limit, split sideways by subject/component rather than append indefinitely. Oversized historical files become frozen legacy references and receive compact timestamped replacements/index entries.
 19. **Timestamped source-of-truth naming:** new source-of-truth docs use a descriptive type + UTC timestamp + subject (for example `AUDIT_2026-10-07T2034Z_TERMUX_CONTAMINATION.md`). Avoid untimestamped authority labels such as CURRENT, ACTIVE, LATEST, LOOK HERE, MASTER, or AUTHORITATIVE. Compatibility filenames may remain only as small pointers to timestamped truth.
 20. **Repository-map first:** before broad forensics, consult the timestamped repository/documentation index. Do not rediscover canonical paths, browser lifecycle facts, or repo ownership when the index already proves them.
+
+
+## PCE10 mandatory turn discipline
+
+21. **Read controls every engineering turn:** before planning or issuing the next Windows Relay operation, re-read `consumer/control_harness.py`, `windows-relay/TASKS.md`, and `docs/windows-relay-mission-and-roadmap.md`. Do not rely on memory alone.
+22. **Five-turn audit:** at least every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents/user rescues, repeated or disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift. Record actionable findings.
+23. **Harness holes are work items:** if the control harness is stale, contradictory, unenforced, or missing a necessary guard, repair the harness and its tests before risky mutation continues.
+24. **Windows-only repository boundary:** Windows Relay source, tests, docs, incidents, roadmaps, and runtime-control changes belong in `monag144/GPT-Windows-Relay`. The Termux repository must not be used as a Windows development destination.
+25. **Relay reminder contract:** every serialized Windows relay result must explicitly remind the next agent to read the harness/TODO/roadmap, verify the Windows repository, use the sandwich technique, honor the five-turn audit cadence, and repair discovered harness holes.
