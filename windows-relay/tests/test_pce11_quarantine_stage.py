@@ -52,7 +52,7 @@ class PCE11SafeQuarantineTests(unittest.TestCase):
         self.assertEqual(len(stage.CANDIDATES),2)
         for label,ref,sha in stage.CANDIDATES:
             self.assertEqual(len(sha),40)
-            self.assertTrue(set(sha)<set("0123456789abcdef"))
+            self.assertRegex(sha,r"^[0-9a-f]{40}$")
             self.assertTrue(ref.startswith("consumer/"))
             self.assertIn(label,("RELAY_PCE8_V16","ONE_CLICK_GO_R28"))
     def test_stage_existing_tree_never_overwrites_nonmatching_sha(self):
