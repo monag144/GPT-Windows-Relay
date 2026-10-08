@@ -116,9 +116,15 @@ def main():
         "sidecar_launched":False,"main_listener_touched":False,
         "canary_authorized":False}
     (dest/"summary.json").write_text(json.dumps(info,indent=2)+"\n",encoding="utf-8")
+    compact_details={
+      "failure_ids":brief["failure_ids"][:5],
+      "failure_count_listed":brief["failure_count_listed"],
+      "sample_tracebacks":[v[:350] for v in brief["sample_tracebacks"][:1]],
+      "summary":brief["summary"],"tests_ran":brief["tests_ran"]
+    }
     transport={"report":str(dest/"summary.json"),"git_sha":args.expected_head,
       "five_control_sha256":{k:v["sha256"] for k,v in proof["reads"].items()},
-      "exit_code":rc,"timeout":timed_out,"details":brief,
+      "exit_code":rc,"timeout":timed_out,"details":compact_details,
       "stderr_sha256":info["stderr_sha256"],"stderr_characters":len(stderr),
       "source_mutations":"GitHub fast-forward only","canary_authorized":False}
     print("PCE11_018_SUITE_FORENSICS="+json.dumps(transport,separators=(",",":")))
