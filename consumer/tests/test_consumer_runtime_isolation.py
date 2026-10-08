@@ -43,7 +43,9 @@ class ConsumerRuntimeIsolationTests(unittest.TestCase):
         self.assertIn("periodInMinutes:0.5",worker)
         self.assertIn("const alarms=chrome?.alarms;",worker)
         self.assertIn("alarms.onAlarm.addListener",worker)
-        self.assertNotIn("chrome.alarms.onAlarm.addListener",worker)
+        self.assertIn("function installScannerRecoveryAlarm()",worker)
+        self.assertIn("try{chrome.alarms.onAlarm.addListener",worker)
+        self.assertLess(worker.index("chrome.runtime.onConnect.addListener"),worker.index("installScannerRecoveryAlarm();",worker.index("chrome.runtime.onConnect.addListener")))
         self.assertIn("installBrowserHeartbeatLifecycle();",worker)
         self.assertIn("chrome.runtime.onStartup.addListener",worker)
 
