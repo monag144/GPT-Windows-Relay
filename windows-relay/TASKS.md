@@ -11,10 +11,10 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 ## P0 now
 
 - [x] Control Harness v3 and per-turn discipline.
-- [x] Five-turn audit cadence encoded in harness and relay-result source.
+- [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source-test the current PCE10 reconciliation branch from a canonical local Windows clone. PCE10.003 reached the canonical clone and control-read gate but failed targeted tests on PCE ordinal escaping / duplicate JS ordinal parser; source repair is committed and PCE10.004 must re-run targeted + full suites.
+- [~] Source-test the current PCE10 reconciliation branch from a canonical local Windows clone. PCE10.003 exposed/fixed ordinal parsing; PCE10.004 then failed closed on test-generated `consumer/**/__pycache__`. Root ignore + Harness source-tree hygiene are now committed; PCE10.005 must classify/remove only known generated caches, then run bytecode-free targeted + full suites.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
