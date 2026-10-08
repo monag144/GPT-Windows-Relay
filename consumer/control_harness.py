@@ -135,17 +135,109 @@ def assess_engineering_operation_budget(current_operation:int,max_operation:int=
     successor_title=next_chat_title or f"💻PC Engineering {current_series+1}🔧"
     return {"current_series":current_series,"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":successor_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
 
+# Checkpoints apply to attempted ordinal slots, including stalled or unsent packets.
+# These guards are callable by every Windows preflight and by source-level tests.
+MANDATORY_ENGINEERING_READS = (
+    "consumer/control_harness.py",
+    "windows-relay/TASKS.md",
+    "docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",
+    "docs/windows-relay-mission-and-roadmap.md",
+    "docs/relay-sandwich-procedure.md",
+)
+ENGINEERING_AUDIT_INTERVAL = 5
+ENGINEERING_REVIEW_INTERVAL = 20
+
+def due_engineering_checkpoints(ordinal: int, series: int = 10) -> dict:
+    if type(ordinal) is not int or not 0 <= ordinal <= 100:
+        raise ControlHarnessError("engineering ordinal outside 000..100")
+    if type(series) is not int or series < 1:
+        raise ControlHarnessError("invalid engineering series")
+    audit = ordinal > 0 and ordinal % ENGINEERING_AUDIT_INTERVAL == 0
+    review = ordinal > 0 and ordinal % ENGINEERING_REVIEW_INTERVAL == 0
+    return {
+        "next_id": f"PCE{series}.{ordinal:03d}",
+        "audit_due": audit,
+        "review_due": review,
+        "audit_window": [ordinal - ENGINEERING_AUDIT_INTERVAL, ordinal - 1] if audit else None,
+        "review_window": [ordinal - ENGINEERING_REVIEW_INTERVAL, ordinal - 1] if review else None,
+        "next_audit": ordinal + (ENGINEERING_AUDIT_INTERVAL - ordinal % ENGINEERING_AUDIT_INTERVAL),
+        "next_review": ordinal + (ENGINEERING_REVIEW_INTERVAL - ordinal % ENGINEERING_REVIEW_INTERVAL),
+    }
+
+def engineering_preflight(repo_root: Path, ordinal: int, series: int = 10) -> dict:
+    """Read every mandatory control, then verify due audit/review evidence before work.
+
+    A present report is necessary, not sufficient: approval for a risky
+    mutation still depends on exact action scope, accepted tests, rollback,
+    STOP state, and positive runtime evidence.
+    """
+    root = Path(repo_root).resolve()
+    schedule = due_engineering_checkpoints(ordinal, series)
+    reads = {}
+    for rel in MANDATORY_ENGINEERING_READS:
+        target = (root / rel).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise ControlHarnessError("mandatory control missing: " + rel)
+        raw = target.read_bytes()
+        if not raw.strip():
+            raise ControlHarnessError("mandatory control empty: " + rel)
+        reads[rel] = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    checkpoints = {}
+    for kind, due, window in (
+        ("audit", schedule["audit_due"], schedule["audit_window"]),
+        ("review", schedule["review_due"], schedule["review_window"]),
+    ):
+        if not due:
+            continue
+        low, high = window
+        prefix = f"{kind.upper()}_"
+        name = f"_PCE{series}_OPERATIONS_{low:03d}_{high:03d}.md"
+        directory = root / "docs" / ("audits" if kind == "audit" else "reviews")
+        matches = sorted(
+            p for p in directory.glob(prefix + "*" + name)
+            if p.is_file() and p.name.endswith(name)
+        ) if directory.is_dir() else []
+        if not matches:
+            raise ControlHarnessError(
+                f"{kind} checkpoint missing before {schedule['next_id']}: "
+                f"PCE{series}.{low:03d}-.{high:03d}"
+            )
+        path = matches[-1]
+        raw = path.read_bytes()
+        body = raw.decode("utf-8-sig")
+        if len(raw) < 300 or "BLOCKED" not in body.upper() and "COMPLETE" not in body.upper():
+            raise ControlHarnessError(kind + " checkpoint unsubstantiated: " + path.name)
+        for index in range(low, high + 1):
+            label = f".{index:03d}"
+            if label not in body and f"PCE{series}.{index:03d}" not in body:
+                raise ControlHarnessError(kind + " checkpoint missing slot " + label)
+        checkpoints[kind] = {
+            "path": str(path.relative_to(root)).replace("\\", "/"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "window": window,
+        }
+    return {
+        "ok": True,
+        "id": schedule["next_id"],
+        "reads": reads,
+        "checkpoints": checkpoints,
+        "schedule": schedule,
+        "source_only": True,
+        "mutation_authorized": False,
+    }
+
 def build_control_harness_contract(mission_id: str) -> dict:
     return {
         "version": CONTROL_HARNESS_VERSION,
         "mission_id": mission_id,
         "turn_discipline": {
-            "read_every_turn": [
-                "consumer/control_harness.py",
-                "windows-relay/TASKS.md",
-                "docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",
-                "docs/windows-relay-mission-and-roadmap.md"
-            ],
+            "read_every_turn": list(MANDATORY_ENGINEERING_READS),
+            "preflight_method": "engineering_preflight",
+            "preflight_rule": "Before every operation, read all five current source-of-truth files, record hashes, then verify checkpoint evidence by operation ordinal. This preflight does NOT authorize mutation.",
+            "review_every_engineering_turns": 20,
+            "review_rule": "Before PCE10.020, .040, .060, .080 and .100, review the preceding twenty attempted operation slots, including non-executed failures, and reconcile the four five-operation audits. After .020 the next review is before .040.",
+            "audit_boundary_rule": "Before PCE10.025 require an audit of .020-.024; before .030 require .025-.029. A written reminder is insufficient without a verified artifact.",
+            "autonomy_rule": "After an operation result, continue autonomously to the next SAFE operation, unless STOP or uncertain side effects require hold. Never request a routine manual continue; do not interpret a missing command as permission to replay it.",
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
             "sandwich_required": True,
             "durable_final_packet_rule": "The complete visible header, bare fenced GPT_WINDOWS_ACTION packet, and visible footer MUST be emitted within one durable FINAL assistant response. Never emit an action packet in commentary/progress, then finish with an empty final response.",
