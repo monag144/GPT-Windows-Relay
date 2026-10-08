@@ -28,9 +28,13 @@ APPDATA = Path(os.environ.get("APPDATA", Path.home() / ".config"))
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local"))
 CONFIG_DIR = APPDATA / "GPTWindowsRelayConsumer"
 STATE_DIR = LOCALAPPDATA / "GPTWindowsRelayConsumer"
+# The server's canonical state and browser event journal are adjacent to one
+# another. The consumer supervisor must OBSERVE these files but keep its own
+# mutable state/evidence in the separate consumer directory.
+RELAY_BACKEND_DIR = LOCALAPPDATA / "GPTWindowsRelay"
 BRIDGE_PATH = CONFIG_DIR / "bridge.json"
-RELAY_STATE_PATH = STATE_DIR / "state.json"
-EVENT_PATH = STATE_DIR / "browser-events.jsonl"
+RELAY_STATE_PATH = RELAY_BACKEND_DIR / "state.json"
+EVENT_PATH = RELAY_BACKEND_DIR / "browser-events.jsonl"
 SUPERVISOR_STATE_PATH = STATE_DIR / "recovery-supervisor.json"
 EVIDENCE_PATH = STATE_DIR / "recovery-evidence.jsonl"
 SCREENSHOT_DIR = STATE_DIR / "recovery-evidence"
@@ -135,16 +139,32 @@ def _relay_get(path: str, timeout: float = 1.0) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+# GPT_CONSUMER_CANONICAL_RELAY_JOURNAL_TAIL_V1
+EVENT_TAIL_MAX_BYTES = 1024 * 1024
+
+
 def _recent_events(limit: int = 96) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
     try:
-        lines = EVENT_PATH.read_text(encoding="utf-8", errors="replace").splitlines()[-limit:]
+        with EVENT_PATH.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            start = max(0, size - EVENT_TAIL_MAX_BYTES)
+            handle.seek(start)
+            raw = handle.read(EVENT_TAIL_MAX_BYTES)
     except OSError:
         return []
+    lines = raw.splitlines()
+    # Reading a bounded suffix can begin mid-record. Discard that partial
+    # first line; JSON recovery must never infer an event from malformed bytes.
+    if start and lines:
+        lines = lines[1:]
     result: list[dict[str, Any]] = []
-    for line in lines:
+    for line in lines[-limit:]:
         try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
+            value = json.loads(line.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
             continue
         if isinstance(value, dict):
             result.append(value)
