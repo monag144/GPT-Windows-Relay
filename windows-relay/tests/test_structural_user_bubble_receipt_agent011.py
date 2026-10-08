@@ -126,6 +126,16 @@ class StructuralUserBubbleReceiptTests(unittest.TestCase):
         self.assertIn("document.querySelectorAll(STRUCTURAL_RESULT_BUBBLE_SELECTOR)",section)
         self.assertIn("resultPacketIdFromStructuralUserBubble(nodes[i])",section)
 
+    def test_preexisting_role_receipt_contract_keeps_direct_envelope_parser(self):
+        start = self.source.index("function resultPacketIdFromUserUnit(unit){")
+        end = self.source.index("function resultPacketIdFromStructuralUserBubble(unit){", start)
+        block = self.source[start:end]
+        self.assertIn("if(!unit?.matches?.(USER_SELECTOR))return null;", block)
+        self.assertIn("const match=text.match(", block)
+        self.assertIn("JSON.parse(match[1])", block)
+        self.assertIn("result?.platform==='windows'", block)
+        self.assertIn("result?.action==='EXEC'", block)
+
     def test_all_mirrors_equal(self):
         self.assertEqual(MIRRORS[0].read_bytes(),MIRRORS[1].read_bytes())
         self.assertEqual(MIRRORS[0].read_bytes(),MIRRORS[2].read_bytes())
