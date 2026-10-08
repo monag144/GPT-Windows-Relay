@@ -2576,11 +2576,170 @@ chrome.runtime.onMessage.addListener((m,_s,reply)=>{
 });
 
 /* GPT_CHATGPT_VISIBLE_ERROR_DETECTOR_V1 */
+/* GPT_CHATGPT_PAGE_ERROR_REFRESH_NEW_CHAT_V1
+   Durable one-refresh/one-New-Chat recovery on the SAME operator-owned tab.
+   Never resubmit an old Windows action or abandon an active result/draft. */
+const PAGE_ERROR_RECOVERY_KEY='gptRelayPageErrorRecoveryV1';
+const PAGE_ERROR_FIRST_STABLE_MS=8000;
+const PAGE_ERROR_POST_REFRESH_MS=12000;
+const PAGE_ERROR_CLEAR_STABLE_MS=8000;
+const PAGE_ERROR_MAX_AGE_MS=600000;
+const PAGE_ERROR_HANDOFF_TOKEN='[GPT_RELAY_PAGE_RECOVERY_HANDOFF_V1]';
+let pageErrorFirstSeenAt=0;
+let pageErrorCleanSinceAt=0;
+let pageErrorRecoveryBusy=false;
+let pageErrorLastBlockedAt=0;
+function pageErrorRecoveryRead(){
+  try{
+    const st=JSON.parse(sessionStorage.getItem(PAGE_ERROR_RECOVERY_KEY)||'null');
+    if(!st || typeof st!=='object')return null;
+    if(!Number.isFinite(st.started_at)||Date.now()-st.started_at>PAGE_ERROR_MAX_AGE_MS){
+      sessionStorage.removeItem(PAGE_ERROR_RECOVERY_KEY);return null;
+    }
+    return st;
+  }catch{return null;}
+}
+function pageErrorRecoverySave(st){
+  const payload=JSON.stringify(st);
+  sessionStorage.setItem(PAGE_ERROR_RECOVERY_KEY,payload);
+  if(sessionStorage.getItem(PAGE_ERROR_RECOVERY_KEY)!==payload){
+    throw new Error('page_error_recovery_snapshot_not_durable');
+  }
+}
+function pageErrorRecoveryClear(){
+  sessionStorage.removeItem(PAGE_ERROR_RECOVERY_KEY);
+  pageErrorFirstSeenAt=0;
+  pageErrorCleanSinceAt=0;
+}
+function pageErrorNavigationBlocker(){
+  if(operatorPaused)return 'operator_stop_or_paused';
+  if(outboundOwner!=='browser')return 'outbound_owner_not_browser';
+  if(rotationLoad()?.phase && rotationLoad()?.phase!=='verified')return 'engineering_rotation_in_progress';
+  if(inflight.size || pending.size || deferredActions.size || activeRelayOperationId ||
+      submittedResults.size || draftRecoveryInFlight || consumerMissionInFlight ||
+      consumerMissionAwaitingAck())return 'uncertain_packet_or_mission';
+  const composer=findComposer();
+  if(composer && elementText(composer).trim())return 'draft_in_composer';
+  return null;
+}
+function pageErrorBlocked(reason,kind){
+  const now=Date.now();
+  if(now-pageErrorLastBlockedAt<10000)return;
+  pageErrorLastBlockedAt=now;
+  emitRelayEvent('chatgpt_page_recovery_blocked',{reason,kind,replay_allowed:false});
+}
+function pageErrorHandoff(st){
+  const ids=[...new Set([...attemptedOrder.slice(-6),...submittedResults.keys()])].slice(-8);
+  const engineering=/pc engineering|pce11/i.test(document.title||'');
+  return PAGE_ERROR_HANDOFF_TOKEN+'\n'+
+    'This is a NEW ChatGPT conversation opened by the Windows Relay after the previous page remained broken following ONE refresh.\n'+
+    'Previous conversation URL: '+st.source_url+'\n'+
+    'Visible failure: '+st.kind+' — '+String(st.detail||'').slice(0,180)+'\n'+
+    'Important: The previous assistant response might have failed after a Windows command executed. Do NOT repeat any command or treat browser text as proof; check the durable Windows Relay packet ledger/results first.\n'+
+    'Recent packet IDs for reconciliation (NOT reexecution): '+(ids.join(', ')||'none available')+'\n'+
+    (engineering
+       ? 'This is the PC Engineer 011 Windows Relay recovery mission. Continue the 20-operation audit cadence and the page-error detection → refresh → New Chat recovery work. Use canonical GitHub monag144/GPT-Windows-Relay, branch pce11/one-click-go-recovery-and-doc-hygiene, and the latest docs/handoffs/ on documentation branch pce11/context-pressure-handoff-20261008. Read the current control harness and PCE11 roadmap in full before engineering actions.\n'
+       : 'Resume the previous task only after reconciling durable state. Request missing context if it is unavailable.\n')+
+    'This handoff is a recovery notice, not permission to execute or replay any command.';
+}
+function exactVisibleNewChatControl(){
+  const candidates=[...document.querySelectorAll('a[href],button,[role="button"]')].filter(e=>{
+    if(!visibleUiElement(e) || e.closest?.(ASSISTANT_SELECTOR+','+USER_SELECTOR))return false;
+    const label=String(e.getAttribute?.('aria-label')||e.getAttribute?.('title')||e.textContent||'').trim().replace(/\s+/g,' ');
+    const tid=String(e.getAttribute?.('data-testid')||'');
+    return /^new chat$/i.test(label) || /^(new-chat-button|new-chat-link)$/i.test(tid);
+  });
+  return candidates.length===1?candidates[0]:null;
+}
+async function resumePageErrorHandoff(){
+  const st=pageErrorRecoveryRead();
+  if(!st || st.phase!=='new_chat_requested' || location.origin!==new URL(st.source_url).origin ||
+      location.pathname!=='/' || pageErrorRecoveryBusy)return;
+  const blocker=pageErrorNavigationBlocker();
+  if(blocker){pageErrorBlocked(blocker,st.kind);return;}
+  if(assistantUnits().length || !findComposer())return;
+  if(recentUserTurnContainsToken(PAGE_ERROR_HANDOFF_TOKEN)){
+    st.phase='verified';st.verified_at=Date.now();pageErrorRecoverySave(st);
+    emitRelayEvent('chatgpt_page_recovery_handoff_verified',{old_conversation:st.source_url,new_conversation:location.href});
+    return;
+  }
+  pageErrorRecoveryBusy=true;
+  try{
+    const text=st.handoff;
+    if(!text || !text.startsWith(PAGE_ERROR_HANDOFF_TOKEN))throw new Error('invalid_recovery_handoff');
+    setText(text);
+    st.phase='handoff_submitting';pageErrorRecoverySave(st); // never auto-repeat after an uncertain send
+    await new Promise(r=>setTimeout(r,250));
+    assertOperatorActive();
+    await send();
+    if(!await waitForUserToken(PAGE_ERROR_HANDOFF_TOKEN,15000)){
+      emitRelayEvent('chatgpt_page_recovery_handoff_uncertain',{source_url:st.source_url,automatic_resend:false});
+      return;
+    }
+    st.phase='verified';st.verified_at=Date.now();pageErrorRecoverySave(st);
+    emitRelayEvent('chatgpt_page_recovery_handoff_verified',{old_conversation:st.source_url,new_conversation:location.href});
+  }catch(e){
+    emitRelayEvent('chatgpt_page_recovery_handoff_failed',{reason:String(e?.message||e).slice(0,180),automatic_resend:false});
+  }finally{pageErrorRecoveryBusy=false;}
+}
+function maybeRecoverChatGPTPageError(found,now){
+  if(pageErrorRecoveryBusy)return;
+  let st=pageErrorRecoveryRead();
+  if(!found){
+    pageErrorFirstSeenAt=0;
+    if(st?.phase==='new_chat_requested'){
+      resumePageErrorHandoff().catch(()=>{});return;
+    }
+    if(st?.phase==='refreshed' && location.href===st.source_url && findComposer()){
+      if(!pageErrorCleanSinceAt)pageErrorCleanSinceAt=now;
+      if(now-pageErrorCleanSinceAt>=PAGE_ERROR_CLEAR_STABLE_MS){
+        emitRelayEvent('chatgpt_page_recovered_after_refresh',{source_url:st.source_url});
+        pageErrorRecoveryClear();
+      }
+    }
+    return;
+  }
+  pageErrorCleanSinceAt=0;
+  if(!pageErrorFirstSeenAt)pageErrorFirstSeenAt=now;
+  const stable=now-pageErrorFirstSeenAt;
+  if(st?.phase==='refreshed' && location.href===st.source_url){
+    if(now-st.refreshed_at<PAGE_ERROR_POST_REFRESH_MS || stable<5000)return;
+    const blocker=pageErrorNavigationBlocker();
+    if(blocker){pageErrorBlocked(blocker,found.kind);return;}
+    const button=exactVisibleNewChatControl();
+    if(!button){pageErrorBlocked('new_chat_button_missing_or_ambiguous',found.kind);return;}
+    st.phase='new_chat_requested';
+    st.handoff=pageErrorHandoff(st);
+    st.new_chat_requested_at=now;
+    try{
+      pageErrorRecoverySave(st);
+      emitRelayEvent('chatgpt_page_new_chat_requested',{old_conversation:st.source_url,reason:found.kind,replay_allowed:false});
+      button.click();
+    }catch(e){pageErrorBlocked('new_chat_navigation_failed:'+String(e?.message||e).slice(0,100),found.kind);}
+    return;
+  }
+  if(st)return; // never loop another refresh or re-click after an uncertain navigation
+  if(stable<PAGE_ERROR_FIRST_STABLE_MS)return;
+  if(!recoveryConversationKey())return;
+  const blocker=pageErrorNavigationBlocker();
+  if(blocker){pageErrorBlocked(blocker,found.kind);return;}
+  st={phase:'refreshed',source_url:location.href,started_at:now,
+      refreshed_at:now,kind:found.kind,detail:found.text.slice(0,180)};
+  try{
+    pageErrorRecoverySave(st);
+    emitRelayEvent('chatgpt_page_error_refresh_requested',{source_url:st.source_url,reason:found.kind,replay_allowed:false});
+    location.reload(); // one refresh only; snapshot is already committed/read back
+  }catch(e){pageErrorBlocked('page_refresh_failed:'+String(e?.message||e).slice(0,100),found.kind);}
+}
 function chatGPTUiErrorFromText(raw){
   const text=String(raw||'').trim().replace(/\s+/g,' ');
   if(!text)return null;
   if(/error in input stream/i.test(text))return {kind:'input_stream_error',text};
   if(/something went wrong/i.test(text))return {kind:'something_went_wrong',text};
+  if(/(?:could(?:n['’]t| not)|unable to|failed to|cannot|can['’]t)\s+load\s+(?:the\s+)?model|model\s+(?:could not|cannot|failed to)\s+load/i.test(text))return {kind:'model_load_error',text};
+  if(/(?:conversation|chat)\s+(?:not found|unavailable|failed to load|could not be loaded)|(?:could not|cannot|unable to|failed to)\s+load\s+(?:this\s+|the\s+)?conversation/i.test(text))return {kind:'conversation_load_error',text};
+  if(/waiting for (?:the )?(?:conversation (?:results?|response)|complete answer|response results?)/i.test(text))return {kind:'conversation_wait_error',text};
+  if(/connection interrupted|waiting for the complete answer/i.test(text))return {kind:'interrupted_wait_error',text};
   if(/network error|connection (?:was )?(?:interrupted|lost)|failed to (?:load|generate)/i.test(text))return {kind:'network_or_generation_error',text};
   return null;
 }
@@ -2596,9 +2755,12 @@ function visibleUiElement(node){
 
 function inspectChatGPTUiError(){
   let found=null;
-  for(const alert of document.querySelectorAll('[role="alert"],[role="status"],[data-testid*="error"]')){
+  for(const alert of document.querySelectorAll('[role="alert"],[role="status"],[data-testid*="error"],main h1,main h2,main p')){
     if(!visibleUiElement(alert))continue;
-    const parsed=chatGPTUiErrorFromText(alert.textContent);
+    if(alert.closest?.(ASSISTANT_SELECTOR+','+USER_SELECTOR))continue;
+    const visibleText=String(alert.textContent||'').trim();
+    if(visibleText.length>400)continue;
+    const parsed=chatGPTUiErrorFromText(visibleText);
     if(parsed){found={...parsed,retry_available:false};break;}
   }
   if(!found){
@@ -2619,6 +2781,7 @@ function inspectChatGPTUiError(){
   }
 
   const now=Date.now();
+  maybeRecoverChatGPTPageError(found,now);
   if(found){
     const signature=found.kind+'|'+found.text.slice(0,220);
     if(signature!==activeUiErrorSignature || now-lastUiErrorAt>=10000){
