@@ -29,3 +29,6 @@ Important failed attempted slots: .002 source false-green, .005 initial predispa
 
 ## Final disposition
 **REVIEW COMPLETE, live promotion BLOCKED.** The 50/50 protocol repair has been demonstrated but full 476-test Windows suite and consumer/JS/archive acceptance has NOT passed post-documentation change. No active v16 sidecar, no claimed 12-hour/24-hour reliability or released One-Click GO. Resume source-only tests after approved sync; keep original live loopback route untouched.
+
+## Complete ordinal index
+PCE11.000, PCE11.001, PCE11.002, PCE11.003, PCE11.004, PCE11.005, PCE11.006, PCE11.007, PCE11.008, PCE11.009, PCE11.010, PCE11.011, PCE11.012, PCE11.013, PCE11.014, PCE11.015, PCE11.016, PCE11.017, PCE11.018, PCE11.019
