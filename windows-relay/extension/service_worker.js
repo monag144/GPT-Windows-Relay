@@ -68,13 +68,6 @@ function extensionStorageSet(value){
   });
 }
 
-function operationOrdinal(id){
-  const matches=[...String(id||'').matchAll(/(?:^|[-.])(\d{2,})(?=[-.]|$)/g)];
-  if(!matches.length)return null;
-  const n=Number(matches[matches.length-1][1]);
-  return Number.isSafeInteger(n) && n>0?n:null;
-}
-
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
 const OPERATION_CURSOR_KEY='gptRelayOperationCursorV2';
 const RELAY_OWNER_KEY='gptRelayConversationOwnerV1';
