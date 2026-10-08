@@ -14,7 +14,7 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source-test the current PCE10 reconciliation branch from a canonical local Windows clone. PCE10.003 exposed/fixed ordinal parsing; PCE10.004 then failed closed on test-generated `consumer/**/__pycache__`. Root ignore + Harness source-tree hygiene are now committed; PCE10.005 must classify/remove only known generated caches, then run bytecode-free targeted + full suites.
+- [~] Source acceptance remains pending. PCE10.005 never reached Windows execution: browser discovery stalled indefinitely in `relay_packet_discovered` because an unchanged stale pending-settle record had no lease. Harness/content/test repair is committed; PCE10.006 must validate it, deploy the repaired managed Firefox content runtime with rollback, reload via the established Firefox adapter, and prove the browser escapes permanent DISCOVERED.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
