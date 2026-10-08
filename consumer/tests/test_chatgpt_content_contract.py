@@ -105,13 +105,13 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("scheduleToolApprovalPromptInspect();",src);self.assertIn("setInterval(scheduleToolApprovalPromptInspect,2000)",src);self.assertNotIn("MutationObserver(scheduleToolApprovalPromptInspect)",src)
         self.assertIn("bindToolApprovalPromptDetector();",src)
         self.assertIn("connectBackgroundPort();",src)
-        self.assertIn("operatorControlPollTimer=setInterval(pollOperatorControlState,250)",src)
+        self.assertIn("operatorControlPollTimer=setInterval(pollOperatorControlState,2000)",src)
         self.assertIn("if(m.armed===true && operatorPaused)resumeBrowserRelay('backend_armed');",src)
         resume_start=src.index("function resumeBrowserRelay(source='operator'){")
         resume_end=src.index("function applyOperatorControlState(",resume_start)
         resume=src[resume_start:resume_end]
         self.assertIn("bindToolApprovalPromptDetector();",resume)
-        bootstrap="hydrateRecoveryPacketWatch();\nconnectBackgroundPort();\noperatorControlPollTimer=setInterval(pollOperatorControlState,250);"
+        bootstrap="hydrateRecoveryPacketWatch();\nconnectBackgroundPort();\noperatorControlPollTimer=setInterval(pollOperatorControlState,2000);"
         self.assertIn(bootstrap,src)
         self.assertIn("for(let depth=0;depth<8 && node;depth++,node=node.parentElement)",src)
         self.assertIn("approval_detector_bound:!!approvalPromptObserver",src)
