@@ -128,14 +128,14 @@ class HudTests(unittest.TestCase):
 
 
 
- def test_result_dedupe_has_current_turn_wrapper_fallback(self):
+ def test_result_dedupe_requires_exact_user_envelope(self):
   from pathlib import Path
-  text=(Path(hud.__file__).resolve().parent/'extension'/'content.js').read_text(encoding='utf-8')
-  self.assertIn('GPT_WINDOWS_RESULT_TURN_WRAPPER_FALLBACK_V1',text)
-  self.assertIn('RESULT_TURN_SELECTOR',text)
-  self.assertIn('article[data-testid^="conversation-turn-"]',text)
-  self.assertIn('explicitAssistant && !explicitUser',text)
-  self.assertIn('resultPacketIdFromUserUnit(nodes[i])===packetId',text)
+  source=(Path(hud.__file__).resolve().parent/'extension'/'content.js').read_text(encoding='utf-8')
+  self.assertIn('GPT_WINDOWS_RESULT_ACK_STRICT_V1',source)
+  self.assertIn('const RESULT_TURN_SELECTOR=USER_SELECTOR;',source)
+  self.assertIn('resultPacketIdFromUserUnit(nodes[i])===packetId',source)
+  self.assertNotIn('elementText(nodes[i]).includes(packetId)',source)
+
 
 
 
