@@ -65,7 +65,8 @@ def syntax_parse(paths):
             "$tokens=$null; $errors=$null; "
             "[void][System.Management.Automation.Language.Parser]::ParseFile('"
             +literal+"',[ref]$tokens,[ref]$errors); "
-            "@{error_count=@($errors).Count} | ConvertTo-Json -Compress")
+            "$errorCount=if($null -eq $errors){0}else{@($errors).Count}; "
+            "@{error_count=$errorCount} | ConvertTo-Json -Compress")
         encoded=base64.b64encode(ps.encode("utf-16le")).decode("ascii")
         try:
             obj=json.loads(shell([pwsh,"-NoProfile","-NonInteractive","-EncodedCommand",encoded],timeout=22))
