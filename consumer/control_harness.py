@@ -282,7 +282,7 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "preflight_method": "engineering_preflight",
             "preflight_rule": "Before every operation, read all five current source-of-truth files, record hashes, then verify checkpoint evidence by operation ordinal. This preflight does NOT authorize mutation.",
             "review_every_engineering_turns": 20,
-            "review_rule": "Before PCE10.020, .040, .060, .080 and .100, review the preceding twenty attempted operation slots, including non-executed failures, and reconcile the four five-operation audits. After .020 the next review is before .040.",
+            "review_rule": "Before PCE10.020, PCE10.040, PCE10.060, PCE10.080 and PCE10.100, review the preceding twenty attempted operation slots, including non-executed failures, and reconcile the four five-operation audits. After .020 the next review is before .040.",
             "audit_boundary_rule": "Before PCE10.025 require an audit of .020-.024; before .030 require .025-.029. A written reminder is insufficient without a verified artifact.",
             "autonomy_rule": "After an operation result, continue autonomously to the next SAFE operation, unless STOP or uncertain side effects require hold. Never request a routine manual continue; do not interpret a missing command as permission to replay it.",
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
