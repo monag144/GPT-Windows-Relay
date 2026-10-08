@@ -168,7 +168,10 @@ def run_health_canary(live,stage,legacy,containment):
       "sandbox":str(sandbox),"port":SIDECAR_PORT,"baseline_main":baseline,
       "private_config_and_state":True,"token_exposed":False,
       "isolated_process_started":False,"job_contained":False,"status_ok":False,
-      "private_missions_count":None,"cleanup_verified":False,
+      "private_missions_count":None,"observed_status_pid":None,
+      "expected_child_pid":None,"observed_pending_missions":None,
+      "status_pid_matches_child":None,"status_missions_zero":None,
+      "cleanup_verified":False,
       "production_main_identity_preserved":False,
       "prod_process_modified":False,"operator_stop_triggered":False,
       "browser_control_used":False,"sidecar_released":False}
@@ -189,8 +192,21 @@ def run_health_canary(live,stage,legacy,containment):
             except (urllib.error.URLError,ConnectionError,TimeoutError,OSError):
                 time.sleep(0.15)
                 continue
-            if status["pid"]!=p.pid or status["pending_missions"]!=0:
-                raise RuntimeError("foreign sidecar PID or inherited production missions")
+            # Preserve separate response values before either assertion.
+            # PCE11.024's combined predicate lost the failed HTTP telemetry.
+            # These are safe status fields; the private token is never stored.
+            result["observed_status_pid"]=status.get("pid")
+            result["expected_child_pid"]=p.pid
+            result["observed_pending_missions"]=status.get("pending_missions")
+            result["observed_status_armed"]=status.get("armed")
+            result["status_pid_matches_child"]=(type(status.get("pid")) is int and status["pid"]==p.pid)
+            result["status_missions_zero"]=(type(status.get("pending_missions")) is int and status["pending_missions"]==0)
+            if not result["status_pid_matches_child"]:
+                raise RuntimeError("isolated sidecar status PID mismatch")
+            if not result["status_missions_zero"]:
+                raise RuntimeError("isolated sidecar reported nonzero or malformed mission count")
+            if status.get("armed") is not True:
+                raise RuntimeError("isolated sidecar is not armed")
             result["status_ok"]=True
             result["private_missions_count"]=0
             result["sidecar_status"]={k:status[k] for k in ("ok","pid","pending_missions","armed")}
@@ -243,6 +259,8 @@ def main():
     if git(repo,"status","--porcelain"):raise RuntimeError("dirty canonical checkout")
     remote=git(repo,"ls-remote","origin","refs/heads/"+BRANCH).split()
     if not remote or remote[0]!=a.expected_head:raise RuntimeError("remote SHA changed")
+    if a.mode=="canary":
+        raise RuntimeError("obsolete .018 canary entrypoint disabled; only a newly audited ordinal may launch")
     if a.mode=="preflight":
         if git(repo,"rev-parse","HEAD")!=BASE_SHA:raise RuntimeError("unexpected source base before .017")
         git(repo,"pull","--ff-only","origin",BRANCH,timeout=75)
