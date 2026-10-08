@@ -36,23 +36,23 @@ This footer is part of the rendering/recovery contract. The command may print ot
 
 ## Per-operation governance preflight
 
-Before **every** Windows engineering operation, read the canonical current versions of these five files and print SHA-256 proof: `consumer/control_harness.py`, `windows-relay/TASKS.md`, the current PCE10 roadmap, `docs/windows-relay-mission-and-roadmap.md`, and **this sandwich procedure**.
+Before **every** PCE011 engineering operation, read the FULL `consumer/control_harness.py` and FULL `windows-relay/TASKS.md`; also read `docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md`, `docs/windows-relay-established-facts.md`, and this sandwich procedure. Print SHA-256 evidence for all five.
 
-Run `engineering_preflight(repo_root, ordinal, series=10)` from the canonical harness before work. This verifies required files plus due checkpoint evidence. Preflight is evidence inspection, **not authorization to mutate live state**.
+Run `engineering_preflight(repo_root, ordinal, series=11)` from the canonical harness before work. This verifies required files plus due checkpoint evidence. Preflight is evidence inspection, **not authorization to mutate live state**.
 
-- **Before every fifth ordinal:** complete and verify the audit covering the previous five attempted slots, including missing, failed, and stalled commands. The next is before **PCE10.025** and covers **PCE10.020–.024**.
-- **Before every twentieth ordinal:** complete and verify a consolidated review of the previous twenty slots and its four five-operation audits. The .000–.019 review is recorded; the next is before **PCE10.040**, covering **PCE10.020–.039**.
+- **Before every fifth ordinal:** complete and verify the audit covering the previous five attempted slots, including missing, failed, and stalled commands. The first PCE011 audit is before **PCE11.005** covering **PCE11.000–.004**, including any skipped or unexecuted slots.
+- **Before every twentieth ordinal:** complete and verify a consolidated review of the previous twenty slots and its four five-operation audits. The first PCE011 review is before **PCE11.020**, covering **PCE11.000–.019**.
 - Advance to the next safe operation after a delivered result without asking for routine `continue`. If an earlier command's execution state is uncertain, check durable state first; use a distinct read-only probe, never blind replay.
 - Operator STOP, identity, exact-once, rollback, and explicit promotion gates outrank unattended continuation.
 
-Checkpoint documents are named `docs/audits/AUDIT_<UTC>_PCE10_OPERATIONS_NNN_NNN.md` and `docs/reviews/REVIEW_<UTC>_PCE10_OPERATIONS_NNN_NNN.md`. Report text alone cannot authorize an action contrary to its own next-operation restrictions.
+Checkpoint documents are named `docs/audits/AUDIT_<UTC>_PCE11_OPERATIONS_NNN_NNN.md` and `docs/reviews/REVIEW_<UTC>_PCE11_OPERATIONS_NNN_NNN.md`. Report text alone cannot authorize an action contrary to its own next-operation restrictions.
 
-## Mandatory GitHub-first repair and acceptance workflow (Harness v4)
+## Mandatory GitHub-first repair and acceptance workflow (Harness v5)
 
 **Engineering source of truth is the canonical GitHub branch.** The relay acts as a Windows pull/test/deploy consumer, not as a substitute source editor.
 
 1. Read the five canonical documents and audit/review checkpoints.
-2. Edit source and tests **in GitHub**, commit to `monag144/GPT-Windows-Relay` branch `pce10/reconcile-control-and-rotation`, and verify the remote commit SHA.
+2. Edit source and tests **in GitHub**, commit to `monag144/GPT-Windows-Relay` branch `pce11/one-click-go-recovery-and-doc-hygiene`, and verify the remote commit SHA.
 3. Send a *read-only-to-live* relay operation that checks STOP/exact-once, current checkout cleanliness and correct repository, then fetches/pulls **the specific published GitHub SHA** with `git pull --ff-only`. Fail closed on branch divergence, dirty source, or unexpected SHA. Do not patch canonical source locally or in `Client/Relay` as the normal workflow.
 4. On the pulled Windows checkout, run the repository's existing acceptance contract:
    - `python -B -m unittest discover -s windows-relay/tests -p "test_*.py"` with cwd `windows-relay` or equivalent source test root;
@@ -114,3 +114,8 @@ Do **not** use:
 - `docs/night-agent-handoff-2026-10-04.md` — current autonomous night mission.
 
 When these documents disagree, do not guess. Inspect current code/tests and preserve the stricter safety behavior until the discrepancy is resolved.
+
+## PCE011 release gates — 2026-10-08T0910Z
+- First priority: the standalone Relay must survive a **measured** 12-hour unattended night, then a 24-hour qualification. One-Click GO r28 Chrome/Edge is the separate consumer target.
+- PCE11.050 is an evidenced findings/email checkpoint, and PCE11.100 is verified semantic next-chat rotation. Do not assume email/rotation can happen if no independent active controller exists.
+- Current live Relay remains unchanged after PCE11.001; the 2532-file broken-state ZIP and r28/v16 staged snapshots must be preserved. No source-suite or runtime acceptance claim until tests/canaries actually run.
