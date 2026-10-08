@@ -15,6 +15,9 @@ Before every engineering turn:
 
 ## Immediate P0 sequence
 
+- [~] **Director-directed 5/20 governance repair:** per-turn canonical reads now include `docs/relay-sandwich-procedure.md` (five total). `engineering_preflight()` verifies artifact evidence and fails closed if a required five-operation audit or twenty-operation review is missing. Audit **before PCE10.025** (.020-.024), review **before PCE10.040** (.020-.039). Completed retrospective .000-.019 review is `docs/reviews/REVIEW_2026-10-08T0410Z_PCE10_OPERATIONS_000_019.md`. Serializer warnings moved to the response **preceding** checkpoint boundaries. Acceptance pending local suites.
+- [~] **Zero-babysitting follow-through:** after verified result delivery, advance to the next safe operation automatically; a stalled discovery, collapsed packet, or uncertain side effect must be diagnosed from durable evidence, not blindly repeated. Activation/canary of the staged Firefox source precedes claims of runtime self-healing.
+
 - [x] Control Harness v3: per-turn reads, canonical Windows repo, harness-hole rule, five-turn audit cadence.
 - [x] Relay result serializer source: explicit per-turn checklist + five-turn audit reminder.
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
