@@ -78,9 +78,11 @@ function UrlBar($window){
 # Firefox UIA may omit https:// in the URL bar: accept exact host/path only.
 function Normalize-RotationConversationUrl([string]$Value){
  $v=[string]$Value
- if($v -notmatch '^(?i:(?:https://)?chatgpt[.]com/c/([a-z0-9][a-z0-9-]{14,127})/?)$'){throw 'ROTATION_CONVERSATION_ADDRESS_UNTRUSTED'}
- $identifier=[string]$Matches[1]
- return 'https://chatgpt.com/c/'+$identifier
+ if($v -match '^(?i:(?:https://)?chatgpt[.]com/c/([a-z0-9][a-z0-9-]{14,127})/?)$'){
+  $identifier=[string]$Matches[1]
+  return 'https://chatgpt.com/c/'+$identifier
+ }
+ throw 'ROTATION_CONVERSATION_ADDRESS_UNTRUSTED'
 }
 function Test-RotationHomeAddress([string]$Value){
  return $Value -cmatch '^(?:https://)?chatgpt[.]com/?$'
