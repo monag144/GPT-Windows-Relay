@@ -279,7 +279,7 @@ class BrowserContractTests(unittest.TestCase):
         end=self.src.index("function hydrateAttemptedFromConversation()",start)
         block=self.src[start:end]
         self.assertIn("[GPT_WINDOWS_RESULT]",block)
-        self.assertIn('text.match(/"id"',block)
+        self.assertIn('JSON.parse(match[1])',block)
 
     def test_send_readiness_gate_does_not_burn_retry_attempts(self):
         self.assertIn("GPT_WINDOWS_SEND_READINESS_GATE_V1",self.src)
