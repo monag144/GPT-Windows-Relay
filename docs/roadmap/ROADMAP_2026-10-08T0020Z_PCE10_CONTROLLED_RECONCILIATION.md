@@ -20,7 +20,8 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Source/migration/scoped-diff acceptance is green. PCE10.013 established `FIREFOX_CONVERSATION_MATCH_COUNT_0`; PCE10.014 completed a read-only URL/PID diagnostic but its compact visible result truncated the final verdict. PCE10.015 must extract the saved PCE10.014 diagnostic, establish whether the configured conversation URL is stale/absent/ambiguous, and identify the current visible ChatGPT conversation URL/PID. No source/live mutation until that identity is positive.
+- [~] PCE10.015 experienced a repeated user-reported `Worked for X` rendering collapse because its packet was emitted in commentary followed by an empty final. PCE10.016/017 final-message probes succeeded; PCE10.015 has no saved result. Harness v3 now requires final-only sandwiches. Source includes a mission-independent PCE collapse observer (three identical content scripts), RENDER COLLAPSED HUD state, and regression tests; PCE10.018 must execute targeted/full tests and JS syntax verification. Browser/live promotion remains blocked.
+- [~] PCE10.014's visible URL probe reported zero visible ChatGPT conversation URLs, despite an armed/online relay. The UIA observation does not prove Firefox closure or target identity. Do not reload the add-on or assume the old URL until a managed conversation identity is positively established.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
