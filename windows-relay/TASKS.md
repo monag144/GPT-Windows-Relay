@@ -29,6 +29,8 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] PCE11.019: protocol 50/50 PASS; full Windows 476 tests with 1 documentation hygiene failure; consumer/JS and archive tests unrun. Canonical TASKS over 10KB was archived verbatim and compacted.
 - [x] GitHub published `.015–.019` audit at `docs/audits/AUDIT_2026-10-08T1012Z_PCE11_OPERATIONS_015_019.md` and 20-operation review at `docs/reviews/REVIEW_2026-10-08T1013Z_PCE11_OPERATIONS_000_019.md`.
 - [ ] Before PCE11.020, independent restricted GOVSYNC must install BOTH documents locally. Verify Harness due audit and review; then source-only tests. No live cutover.
+- [x] PCE11.020 source-only: audited GOVSYNC passed; protocol 50/50 and Windows full 476/476 PASS; consumer 117 tests FAIL (PCE10 fixture defaults and migration Git blob mismatch suspected). JS/archive/v16 gates not reached. Incident `docs/incidents/INCIDENT_2026-10-08T1016Z_PCE11_020_CONSUMER_GOVERNANCE_AND_MANIFEST_FAILURES.md`. Evidence `Client/Relay/bin/SOURCE_ACCEPTANCE_2026-10-08T101602Z/acceptance.json`; no canary.
+- [ ] PCE11.021: inspect persisted .020 consumer test output, exact failed assertions and full 42-entry manifest-to-Git comparison, report masked paths/IDs and complete durable log. GitHub-first sync and governance preflight before reading; no suite replay or live mutation.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## Full original queue preserved
