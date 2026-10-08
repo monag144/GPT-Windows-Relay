@@ -117,7 +117,9 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("event:'scanner_snapshot'",self.src)
         for src in (self.live_worker,self.persistent_worker):
             self.assertIn("m?.type==='relay_event'",src)
-            self.assertIn("browserEvent(m.event,m.detail??null)",src)
+            self.assertIn("browserEvent(m.event,detail)",src)
+            self.assertIn("tab_id:tabId",src)
+            self.assertIn("conversation_key:conversationKey",src)
 
     def test_relay_handoff_scroll_window_is_bounded(self):
         self.assertIn("GPT_WINDOWS_RELAY_HANDOFF_SCROLL_V5",self.src)
@@ -423,7 +425,13 @@ class BrowserContractTests(unittest.TestCase):
         self.assertLess(connect,lifecycle)
         self.assertIn('const alarms=chrome?.alarms;',src)
         self.assertIn("typeof alarms.onAlarm.addListener==='function'",src)
-        self.assertNotIn('chrome.alarms.onAlarm.addListener',src)
+        # An independent 45-second discovery watchdog requires alarm registration;
+        # it must be guarded and installed AFTER the core content Port listener.
+        self.assertIn("function installScannerRecoveryAlarm()",src)
+        alarm=src.index("installScannerRecoveryAlarm();",connect)
+        self.assertLess(connect,alarm)
+        self.assertIn("try{chrome.alarms.onAlarm.addListener",src)
+        self.assertIn("gpt-relay-scanner-recovery-",src)
 
     def test_consumer_missions_route_to_active_chatgpt_tab(self):
         self.assertIn("GPT_ONE_CLICK_ACTIVE_TAB_TARGET_V1",self.live_worker)
