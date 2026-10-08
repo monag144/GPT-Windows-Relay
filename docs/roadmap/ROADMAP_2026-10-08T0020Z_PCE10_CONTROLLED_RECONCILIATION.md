@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Run local source acceptance from a canonical `GPT-Windows-Relay` clone. PCE10.008 isolated one stale test: `test_result_turn_recognition.py` forbade article/section conversation-turn wrappers while the newer live-proven PCE9 regression requires article/section/div fallbacks. Generic `[data-turn]` compatibility remains in production. Only the stale test was updated. PCE10.009 reruns exact + full Windows + full consumer suites, then may stage the already-tested stale-settle browser repair with rollback.
+- [~] Source acceptance: PCE10.009 passed the exact prior failure, full Windows suite, full consumer suite, and all JS parse gates. Its only block was `git diff --check` on historical Termux evidence preserved byte-for-byte. PCE10.010 uses the 42-entry exact Git-blob migration manifest to allow only unchanged provenance records as whitespace exceptions; any active-source/current-doc whitespace error still blocks. If clean, stage the stale-settle browser repair with rollback and managed Firefox reload.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
@@ -33,7 +33,9 @@ Before every engineering turn:
 
 PCE10.000-.004 audit: `docs/audits/AUDIT_2026-10-08T0024Z_PCE10_OPERATIONS_000_004.md`.
 
-Promotion verdict: **BLOCKED** until PCE10.005 source acceptance is green.
+PCE10.005-.009 audit: `docs/audits/AUDIT_2026-10-08T0108Z_PCE10_OPERATIONS_005_009.md`.
+
+Promotion verdict: **BLOCKED** until the scoped diff gate and Firefox live canary are green.
 
 ## Reliability invariants
 
