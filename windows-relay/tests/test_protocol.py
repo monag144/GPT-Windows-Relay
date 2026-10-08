@@ -131,13 +131,32 @@ class Tests(unittest.TestCase):
             self.assertEqual(state.lookup(a.id),before)
 
 
-    def test_every_serialized_result_stdout_ends_with_sandwich_reminder(self):
-        body=json.loads(wr.result({"status":"OK","stdout":"hello"}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(body["stdout"],"hello\n"+wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
-        empty=json.loads(wr.result({"status":"COMMAND_FAILED","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(empty["stdout"],wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
-        already=json.loads(wr.result({"status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+    def test_every_serialized_result_stdout_enforces_turn_discipline_and_sandwich(self):
+        body=json.loads(wr.result({"id":"PCE10.003","status":"OK","stdout":"hello"}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertTrue(body["stdout"].endswith(wr.SANDWICH_REMINDER))
+        self.assertIn(wr.OPERATION_DISCIPLINE_REMINDER,body["stdout"])
+        self.assertIn(wr.TURN_DISCIPLINE_REMINDER,body["stdout"])
+        self.assertIn("consumer/control_harness.py",body["stdout"])
+        self.assertIn("windows-relay/TASKS.md",body["stdout"])
+        self.assertIn("docs/windows-relay-mission-and-roadmap.md",body["stdout"])
+        self.assertIn("monag144/GPT-Windows-Relay",body["stdout"])
+        self.assertIn("sandwich technique",body["stdout"])
+        empty=json.loads(wr.result({"id":"PCE10.004","status":"COMMAND_FAILED","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertIn(wr.TURN_DISCIPLINE_REMINDER,empty["stdout"])
+        self.assertTrue(empty["stdout"].endswith(wr.SANDWICH_REMINDER))
+        already=json.loads(wr.result({"id":"PCE10.004","status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertTrue(already["stdout"].endswith(wr.SANDWICH_REMINDER))
+
+    def test_five_turn_audit_warning_is_emitted_on_fifth_operation_boundary(self):
+        due=json.loads(wr.result({"id":"PCE10.005","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertIn(wr.FIVE_TURN_AUDIT_REMINDER,due["stdout"])
+        not_due=json.loads(wr.result({"id":"PCE10.004","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+        self.assertNotIn(wr.FIVE_TURN_AUDIT_REMINDER,not_due["stdout"])
+
+    def test_engineering_operation_ordinal_supports_dot_and_legacy_forms(self):
+        self.assertEqual(wr.engineering_operation_ordinal("PCE10.005"),5)
+        self.assertEqual(wr.engineering_operation_ordinal("PCE10-BOOT-OP010"),10)
+        self.assertIsNone(wr.engineering_operation_ordinal("not-pce"))
 
     def test_result_attachment_descriptor_is_extracted(self):
         out=json.dumps({"ok":True,"chatgpt_attachment":{"kind":"image","name":"screenshot-20261003T091921-123456789.png","mime":"image/png"}})
