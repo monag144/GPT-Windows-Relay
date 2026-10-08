@@ -58,7 +58,7 @@ class ControlHarnessTests(unittest.TestCase):
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
         self.assertEqual(c["version"],3)
-        self.assertEqual(c["turn_discipline"]["read_every_turn"],["consumer/control_harness.py","windows-relay/TASKS.md","docs/windows-relay-mission-and-roadmap.md"])
+        self.assertEqual(c["turn_discipline"]["read_every_turn"],["consumer/control_harness.py","windows-relay/TASKS.md","docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md","docs/windows-relay-mission-and-roadmap.md"])
         self.assertEqual(c["turn_discipline"]["canonical_windows_repository"],"monag144/GPT-Windows-Relay")
         self.assertTrue(c["turn_discipline"]["sandwich_required"])
         self.assertEqual(c["turn_discipline"]["audit_every_engineering_turns"],5)
