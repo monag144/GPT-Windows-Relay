@@ -1,2 +1,7 @@
-# Incident: newer relay command disappeared from ChatGPT
-The replacement command was rendered but disappeared before execution. This is an autonomy/UI-flow incident. OP078 adds an explicit HUD RETRY control and latest-instruction-wins handling for stale/deferred local ownership. A truly executing Windows action and an undelivered relay-result draft remain protected from unsafe preemption.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP077_COMMAND_DISAPPEARED_FROM_CHATGPT.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

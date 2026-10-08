@@ -1,2 +1,7 @@
-# Incident: OP076 packet rejected before execution
-OP076 attempted to combine too much process repair into one relay action. Canonical relay command decoding is capped at 20,000 characters (`MAX_CMD=20000`), and the oversized packet was rejected as `packet_rejected`. No source or live mutation occurred. Corrective action: keep relay operations bounded and split independent changes across operations.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP076_PACKET_REJECTED_COMMAND_TOO_LARGE.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

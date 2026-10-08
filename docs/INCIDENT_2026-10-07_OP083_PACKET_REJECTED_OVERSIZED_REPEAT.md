@@ -1,2 +1,7 @@
-# Incident: OP083 repeated oversized packet rejection
-OP083 again exceeded the relay command-size boundary already documented after OP076 and was rejected before execution. Rotation work is now split into bounded operations: trigger contract, create/rename handler, then activation/proof.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP083_PACKET_REJECTED_OVERSIZED_REPEAT.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

@@ -1,2 +1,7 @@
-# Incident: OP081 duplicate HUD race
-OP081 recovered isolated 8767 while preserving 8766, then observed two HUD PIDs during HUD replacement. OP082 began a singleton repair but failed before promotion and left an uncommitted source tree. OP085 preserves that complete dirty patch externally and rolls canonical source back to promoted f82d39d so PCE9 rotation work does not stack on unaccepted HUD source. Expanded HUD restoration remains deferred behind rotation.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP081_DUPLICATE_HUD_RACE.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

@@ -1,0 +1,2 @@
+# Incident: OP085 rotation gate ran zero tests — 2026-10-08T0745Z
+The rotation trigger source parsed successfully, but the new regression file used a pytest-style top-level function while OP085 invoked it through `python -m unittest`. Unittest therefore reported `Ran 0 tests` and returned exit code 5. No promotion or live mutation occurred. OP086 converts the file to a real `unittest.TestCase`, reruns the complete suites, and promotes only if green.

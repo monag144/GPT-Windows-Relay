@@ -1,2 +1,7 @@
-# Incident: OP078 integration gate failure
-OP078 implemented HUD RETRY, latest-instruction priority, operation-discipline reminders, direct watchdog launch hardening, and PCE9 budget priority, but its full Windows gate failed before promotion. Two integration mistakes caused it: the new HUD test was inserted outside the HudTests class, producing an IndentationError; and only extension/content.js was changed although the product contract requires content.js, extension/content.js, and extension-persistent/content.js to be byte-identical. No backend restart, Firefox reload, commit, push, or live cutover occurred. OP079 fixes only those integration defects and reruns complete suites.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP078_RETRY_INTEGRATION_TEST_AND_CONTENT_COPY_DRIFT.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->
