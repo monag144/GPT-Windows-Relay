@@ -66,6 +66,11 @@ class SemanticAgentRotationContractTests(unittest.TestCase):
         self.assertLess(selected,wait)
         self.assertLess(wait,click)
 
+    def test_delivery_wait_is_bounded_and_first_phase_is_durable(self):
+        self.assertIn("$deadline=[DateTime]::UtcNow.AddSeconds(180)",self.src)
+        self.assertIn("SOURCE_RESULT_VISIBLE_RECEIPT_NOT_PROVEN",self.src)
+        self.assertIn("Save 'WORKER_ENTRY'",self.src)
+
     def test_worker_script_has_valid_windows_powershell_syntax(self):
         engine=shutil.which("powershell.exe")
         if not engine:
