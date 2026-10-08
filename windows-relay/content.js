@@ -2736,10 +2736,10 @@ function chatGPTUiErrorFromText(raw){
   if(!text)return null;
   if(/error in input stream/i.test(text))return {kind:'input_stream_error',text};
   if(/something went wrong/i.test(text))return {kind:'something_went_wrong',text};
-  if(/(?:could(?:n['’]t| not)|unable to|failed to|cannot|can['’]t)\s+load\s+(?:the\s+)?model|model\s+(?:could not|cannot|failed to)\s+load/i.test(text))return {kind:'model_load_error',text};
+  if(/(?:could(?:n['’]t| not)|unable to|failed to|cannot|can['’]t)\s+load\s+(?:the\s+)?model|model\s+(?:(?:could not|cannot|can['’]t|failed to)\s+(?:be\s+)?load(?:ed)?|is unavailable)/i.test(text))return {kind:'model_load_error',text};
   if(/(?:conversation|chat)\s+(?:not found|unavailable|failed to load|could not be loaded)|(?:could not|cannot|unable to|failed to)\s+load\s+(?:this\s+|the\s+)?conversation/i.test(text))return {kind:'conversation_load_error',text};
-  if(/waiting for (?:the )?(?:conversation (?:results?|response)|complete answer|response results?)/i.test(text))return {kind:'conversation_wait_error',text};
   if(/connection interrupted|waiting for the complete answer/i.test(text))return {kind:'interrupted_wait_error',text};
+  if(/waiting for (?:the )?(?:conversation (?:results?|response)|complete answer|response results?)/i.test(text))return {kind:'conversation_wait_error',text};
   if(/network error|connection (?:was )?(?:interrupted|lost)|failed to (?:load|generate)/i.test(text))return {kind:'network_or_generation_error',text};
   return null;
 }
