@@ -1,0 +1,45 @@
+# Windows Relay Operational Rules — Compatibility Entry Point — 2026-10-08T0650Z — 2026-10-08T0755Z
+
+Snapshot: `2026-10-07T2034Z`
+
+These are persistent operating rules for the GPT Windows Relay. Keep this list compact and implementation-linked.
+
+1. Sandwich every relay action: ordinary visible header → bare Markdown fence containing only the `[GPT_WINDOWS_ACTION]` packet → ordinary visible footer. Never end a response at the fence. Relay-command stdout ends with `Reply to this with the sandwich technique`.
+2. Use a unique action ID. Never blindly replay a possibly side-effecting action. Backend duplicate and ID-collision protection remains authoritative.
+3. Every 100 operations, rotate the managed Firefox GPT session to a fresh ChatGPT chat. Use the explicit operation ordinal when an ID carries one (for example operation 400); otherwise use the persisted delivered-operation fallback counter. Rotation is idempotent across reconnects/reloads.
+4. Packet recovery is event-driven in steady state with a bounded 15-second recovery pass. The recovery pass must force reinspection of the newest valid unconsumed relay packet; binding or scrolling alone is not recovery.
+5. A valid packet that remains visibly unconsumed for approximately five minutes is a stall. First force reinspection; if still stuck after the grace check, refresh the ChatGPT page. If the extension background/content port itself remains unavailable for approximately five minutes, reload the extension runtime when possible. An external browser supervisor must handle cases where the extension is too dead to repair itself.
+6. Collapsed/folded-render recovery remains recovery-only and complements the normal packet scanner. Manual scrolling remains authoritative outside the short relay-owned handoff window.
+7. HUD status must describe end-to-end lifecycle, not merely HTTP/process liveness. Expose packet/operation ID, phase, elapsed/progress age, explicit wait/stall reason, a compact instruction preview, and an expandable exact decoded instruction for the active/last relay operation.
+8. Recovery must never create a retry storm. Persist/dedupe operation counting and rely on backend replay suppression for previously processed packets.
+9. On Windows virtual environments, do not infer duplicate relay/HUD instances from raw `python.exe` / `pythonw.exe` process counts. The venv launcher can remain as the parent of the base Python interpreter. Count logical leaf processes and, for the backend, confirm the actual TCP listener owner.
+10. Quiet time is not a stall. Browser/event age may be shown as `IDLE`, but elapsed inactivity alone must never make the HUD say `STALLED`. `STALLED` requires evidence that expected work failed to progress (for example `relay_scanner_stalled`) or an explicit browser integration disconnect.
+11. Out-of-band GPT recovery prompts are mandatory when expected work cannot use the extension/content transport after bounded independent repair. Select a versioned prompt from the failure classification and insert it through browser control independent of the relay. Prefer semantic composer text/value insertion; clipboard copy/paste is a fail-closed fallback with verified composer identity and clipboard preservation. GPT returns bounded advice only; the supervisor executes only the deterministic recovery whitelist.
+12. `result visibly delivered` is exact-packet state, not a global or historical success flag. It requires live conversation evidence for the matching `[GPT_WINDOWS_RESULT]` packet ID. A newer unresolved visible packet must supersede the prior packet's READY headline.
+13. Recovery obligations are durable state. Scheduling or delegating a repair is not completion. Persist the incident ID, phase, exact operation, deadline, delegated action, and outcome before control is released; a missed transition must automatically surface as `RECOVERING`, `RECOVERY STALLED`, or `RECOVERY FAILED`. Natural-language recovery prompts crossing a shell/native-process boundary use an opaque transport such as verified base64 UTF-8, never whitespace-sensitive raw argv.
+
+## 2026-10-05 incident evidence
+
+A valid relay packet was visibly rendered while the HUD reported relay online/armed and a connected Firefox content port, but the packet was not consumed. A later assistant-turn DOM mutation woke the missed packet. Reload testing also resurfaced an already completed action; backend replay protection correctly returned its cached result rather than executing it again. These observations motivated rules 3–8. A later live check showed that the HUD incorrectly mapped more than five minutes without a browser lifecycle event to `STALLED` even though a new action executed immediately; rule 10 records the corrected contract. A6.399af then proved the inverse failure: Firefox integration was actually disconnected, the visible A6.399af packet had zero local matches, and the HUD retained A6.399ae historical delivery success. Rules 11–13 record the independent prompt-recovery, exact-packet visibility, and durable recovery-obligation contracts.
+14. **Source patch payloads are literal data, not replacement templates.** Automation that rewrites source through JavaScript or another regex engine must use literal slicing/function replacers whenever replacement code can contain metacharacters such as `$`. Run structural duplication checks and the target language parser before deployment. A downstream parse gate catching generated corruption is containment, not permission to repeat the generation mechanism.
+
+## PCE8 per-operation discipline
+Marker: `PCE8_PER_OPERATION_DISCIPLINE_V1`
+Every operation must read roadmap/facts/incidents/log, prove net-new progress, preserve rollback before mutation, log failures/manual rescue, update the engineering log, and check the PCE8→PCE9 operation budget. Repeating a disproven approach is an incident.
+
+## PCE9 corrective controls
+15. **Canonical Windows repository gate:** Windows relay engineering targets `monag144/GPT-Windows-Relay`. The old `monag144/GPT-Termux-Relay` is migration provenance only. Before any mutation or push, verify the repository/remote and fail closed on the Termux destination.
+16. **Series budget is checked before naming:** a managed engineering series may not emit an operation ordinal above 100. Rotate before the next operation and restart the successor series at `OP001`.
+17. **Established-proof reuse:** read established facts before probing. Do not repeat Firefox restart, temporary-extension identity, profile archaeology, or equivalent continuity proofs unless a browser-affecting mutation occurred, contradictory evidence appeared, or the acceptance test explicitly requires that proof.
+18. **Documentation size discipline:** every maintained documentation file targets <=10 KiB. When a subject would exceed the limit, split sideways by subject/component rather than append indefinitely. Oversized historical files become frozen legacy references and receive compact timestamped replacements/index entries.
+19. **Timestamped source-of-truth naming:** new source-of-truth docs use a descriptive type + UTC timestamp + subject (for example `AUDIT_2026-10-07T2034Z_TERMUX_CONTAMINATION.md`). Avoid untimestamped authority labels such as CURRENT, ACTIVE, LATEST, LOOK HERE, MASTER, or AUTHORITATIVE. Compatibility filenames may remain only as small pointers to timestamped truth.
+20. **Repository-map first:** before broad forensics, consult the timestamped repository/documentation index. Do not rediscover canonical paths, browser lifecycle facts, or repo ownership when the index already proves them.
+
+
+## PCE10 mandatory turn discipline
+
+21. **Read controls every engineering turn:** before planning or issuing the next Windows Relay operation, re-read `consumer/control_harness.py`, `windows-relay/TASKS.md`, and `docs/windows-relay-mission-and-roadmap.md`. Do not rely on memory alone.
+22. **Five-turn audit:** at least every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents/user rescues, repeated or disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift. Record actionable findings.
+23. **Harness holes are work items:** if the control harness is stale, contradictory, unenforced, or missing a necessary guard, repair the harness and its tests before risky mutation continues.
+24. **Windows-only repository boundary:** Windows Relay source, tests, docs, incidents, roadmaps, and runtime-control changes belong in `monag144/GPT-Windows-Relay`. The Termux repository must not be used as a Windows development destination.
+25. **Relay reminder contract:** every serialized Windows relay result must explicitly remind the next agent to read the harness/TODO/roadmap, verify the Windows repository, use the sandwich technique, honor the five-turn audit cadence, and repair discovered harness holes.
