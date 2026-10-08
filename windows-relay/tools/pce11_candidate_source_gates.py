@@ -146,7 +146,7 @@ def main():
         "backup_verified":True,"candidate_sha_verified":True,
         "all_source_checks_pass":all(x["status"]=="PASS" for x in results),
         "results":concise},separators=(",",":")))
-    return 0
+    return 0 if all(x["status"]=="PASS" for x in results) else 2
 if __name__=="__main__":
     try:sys.exit(main())
     except (RuntimeError,ValueError,OSError,subprocess.TimeoutExpired) as err:
