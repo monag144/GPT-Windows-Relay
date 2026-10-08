@@ -1,4 +1,4 @@
-GPT ONE-CLICK GO — CONSUMER 1.1.0
+GPT ONE-CLICK GO — CONSUMER 1.1.0 — Entry Point 2026-10-08T0650Z
 
 WHAT THE USER DOES
 1. Unzip the package or clone/fork the repository.

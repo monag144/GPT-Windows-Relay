@@ -1,4 +1,4 @@
-# Windows Relay Sandwich Procedure
+# Windows Relay Sandwich Procedure — Compatibility Entry Point — 2026-10-08T0650Z
 
 This is the canonical operating procedure for emitting Windows relay actions from ChatGPT. It exists because otherwise-valid action packets can become inaccessible when ChatGPT rendering collapses them into text such as `Worked for X`.
 

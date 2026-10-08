@@ -1,6 +1,10 @@
-# GPT Windows Relay — MVP
+# GPT Windows Relay — Developer Entry Point — 2026-10-08T0650Z
 
-> **Before debugging:** read `../docs/windows-relay-established-facts.md` and search the engineering log before starting new forensics. The established-facts file is the canonical short-form record of proven paths, architecture decisions, known root causes, Firefox/runtime facts, and operational lessons.\n>\n> Product direction and priority order live in `../docs/windows-relay-mission-and-roadmap.md`.
+**PCE10 forensic entry point:** `../docs/index/INDEX_2026-10-08T0650Z_PCE10_SOURCE_MAP.md`. Source acceptance and live browser acceptance are separate.
+
+> **Before debugging:** read `../docs/windows-relay-established-facts.md` and search the engineering log before starting new forensics. The established-facts file is the canonical short-form record of proven paths, architecture decisions, known root causes, Firefox/runtime facts, and operational lessons.
+>
+> Product direction and priority order live in `../docs/windows-relay-mission-and-roadmap.md`.
 
 
 Windows counterpart to the phone GPT-Termux relay.

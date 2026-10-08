@@ -1,4 +1,4 @@
-# Relay Operational Rules
+# Windows Relay Operational Rules — Compatibility Entry Point — 2026-10-08T0650Z
 
 Snapshot: `2026-10-07T2034Z`
 

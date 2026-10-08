@@ -1,4 +1,4 @@
-# Job Application Engine v2
+# Job Application Engine v2 — Historical Engineering Record — 2026-10-08T0650Z
 
 Status: initial implementation started after successful Spokane County JR100708 submission on 2026-10-03.
 

@@ -1,4 +1,4 @@
-# GPT Windows Relay — Current TODO
+# GPT Windows Relay — Engineering Task Entry Point — 2026-10-08T0650Z
 
 Snapshot: `2026-10-08T0020Z`
 

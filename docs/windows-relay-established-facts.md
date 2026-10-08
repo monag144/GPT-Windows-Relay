@@ -1,4 +1,4 @@
-# GPT Windows Relay — Established Facts / Read This First
+# Windows Relay Established Facts — Compatibility Knowledge Base — 2026-10-08T0650Z
 
 Snapshot: `2026-10-07T2034Z`
 
@@ -15,7 +15,9 @@ Historical chronology is frozen in:
 ## Canonical project locations
 
 - GitHub repository: `monag144/GPT-Windows-Relay`
-- Active branch: `main`
+- Production/default branch: `main` (not the current engineering head)
+- Active engineering branch: `pce10/reconcile-control-and-rotation` (249 commits ahead of `main` at source snapshot `5dac27c`)
+- **Do not infer active runtime version from either branch:** PCE10.037 has not proved loaded Firefox code or the current tab identity.
 - Canonical local clone: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`
 - Active live relay tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
 - Temporary Firefox manifest: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay\extension\manifest.json`

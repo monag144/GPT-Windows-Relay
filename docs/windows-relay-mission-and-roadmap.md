@@ -1,4 +1,4 @@
-# GPT Windows Relay — Mission / Roadmap Entry Point
+# Windows Relay Mission and Roadmap — Compatibility Entry Point — 2026-10-08T0650Z
 
 Snapshot: `2026-10-08T0020Z`
 

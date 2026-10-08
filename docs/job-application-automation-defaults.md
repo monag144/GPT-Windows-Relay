@@ -1,4 +1,4 @@
-# Job Application Automation Defaults
+# Job Application Automation Defaults — Historical Compatibility Record — 2026-10-08T0650Z
 
 Full applicant data is stored locally at `%LOCALAPPDATA%\GPTWindowsRelay\job_profiles\jack_monaghan.json`. Git stores reusable automation policy, not the full PII profile.
 

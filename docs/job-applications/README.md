@@ -1,4 +1,4 @@
-# Job Application Mission Registry
+# Job Application Mission Registry — Compatibility Entry Point — 2026-10-08T0650Z
 
 This directory stores non-PII target-specific application dossiers and reusable execution findings. Full applicant PII remains in the canonical local profile.
 
