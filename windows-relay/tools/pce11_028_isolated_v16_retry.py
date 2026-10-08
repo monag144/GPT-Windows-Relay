@@ -143,7 +143,7 @@ def main():
     sys.path.insert(0,str(repo/"consumer"))
     from control_harness import engineering_preflight
     proof=engineering_preflight(repo,28,series=11)
-    if not proof.get("ok"):raise RuntimeError("PCE11.024 five-control preflight blocked")
+    if not proof.get("ok"):raise RuntimeError("PCE11.028 five-control preflight blocked")
     previous_acceptance(live)
     prior=prior_failure_reconciled(live)
     native=previous_native(live)
@@ -208,8 +208,10 @@ def main():
         raise RuntimeError("sidecar succeeded but production PID / cleanup evidence invalid")
     if result.get("baseline_main",{}).get("pid")!=main["pid"]:
         raise RuntimeError("production PID changed between preflight and launch")
-    if not result.get("status_ok") or result.get("private_missions_count")!=0:
-        raise RuntimeError("isolated status health did not prove private zero-mission state")
+    if (result.get("status_ok") is not True or result.get("private_missions_count")!=0
+        or result.get("status_pid_matches_child") is not True
+        or result.get("status_missions_zero") is not True):
+        raise RuntimeError("isolated status did not prove exact child PID and zero private missions")
     if not result.get("job_contained") or not result.get("production_main_identity_preserved"):
         raise RuntimeError("main or private Job isolation contract failed")
     report=live/"bin"/("V16_HEALTH_GATE_028_"+datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")+".json")
@@ -243,7 +245,7 @@ def main():
         "observed_pid":receipt["observed_status_pid"],
         "observed_missions":receipt["observed_pending_missions"],
         "pid_match":receipt["status_pid_matches_child"],"missions_zero":receipt["status_missions_zero"],
-        "private_missions_zero":True,"job_cleanup":receipt["job_cleanup_verified"],
+        "private_missions_zero":receipt["private_missions_zero"],"job_cleanup":receipt["job_cleanup_verified"],
         "main_pid_preserved":receipt["production_identity_preserved"],
         "port8768_free_after":receipt["port8768_free_after"],
         "production_replaced":False,"browser_touched":False,
