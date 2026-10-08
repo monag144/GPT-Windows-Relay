@@ -25,7 +25,9 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [x] PCE11.006: passive topology verified main PID 18632 on 8766; 8767 absent, all STOP/OFF/KILL sentinel flags false. Role classifier matched 2 HUD, 2 relay-server, 1 supervisor, 1 watchdog and 1 consumer-candidate; these are *unverified matches*, not proved independently running instances. Evidence in `Client/Relay/bin/PASSIVE_TOPOLOGY_2026-10-08T092500Z.json`.
 - [x] PCE11.007: source report parsed; HUD 13408 and its child 4464 are both pythonw HUD matches. Other live records were truncated by Relay output; full topology JSON SHA 735cea44ba87… retained. Does not authorize cleanup.
 - [x] PCE11.008: diagnostic FAILED (invalid escaped PowerShell path regex, then empty-output JSONDecodeError). No live mutation. Incident `docs/incidents/INCIDENT_2026-10-08T0928Z_PCE11_008_POWERSHELL_REGEX_DIAGNOSTIC_FAILURE.md`.
-- [ ] PCE11.009: correct read-only PowerShell query using exact/literal lowercased substring checks and encoded command. Reconcile previous PID/PPID matches to current process creation times and current port owner. Do not kill or restart.
+- [x] PCE11.009 corrected source test/probe passed. Port 8766 stays PID 18632; 8767 absent. HUD pythonw 13408→4464 and server python 4844→18632 remain live with unchanged parent associations; only 18632 is listener. Consumer-candidate PID 19104 disappeared. Saved `Client/Relay/bin/PROCESS_IDENTITY_2026-10-08T093134Z.json`; do NOT infer two independent GUI windows or duplicate effects.
+- [x] Mandatory .005–.009 audit committed: `docs/audits/AUDIT_2026-10-08T0933Z_PCE11_OPERATIONS_005_009.md`. Incident .008 failure included. Live activation remains BLOCKED.
+- [ ] Before numbered PCE11.010, do exact-commit independent governance source sync to make .005–.009 audit visible to pre-dispatch guard. Then .010 can safely query authenticated GET /status and count HUD-owned visible HWNDs; never invoke STOP or mutate Firefox.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
