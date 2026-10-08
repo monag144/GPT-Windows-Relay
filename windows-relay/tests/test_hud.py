@@ -47,6 +47,21 @@ class HudTests(unittest.TestCase):
   self.assertEqual(hud.headline(True,life,{'state':'ACTIVE'}),'RENDER COLLAPSED')
   self.assertEqual(hud.browser_state(events,now)['event'],'relay_engineering_action_render_collapsed')
 
+ def test_discovered_packet_is_stalled_after_bounded_age(self):
+  now=datetime(2026,10,8,3,10,0,tzinfo=timezone.utc)
+  discovery=lambda elapsed:{'time':(now-timedelta(seconds=elapsed)).isoformat(),
+      'event':'relay_packet_discovered','detail':{'packet_id':'PCE10.018','browser_id':'firefox'}}
+  fresh=hud.lifecycle([discovery(12)],{},now)
+  self.assertEqual(fresh['phase'],'DISCOVERED')
+  stale=hud.lifecycle([discovery(3774)],{},now)
+  self.assertEqual(stale['phase'],'STALLED')
+  self.assertEqual(stale['packet_id'],'PCE10.018')
+  self.assertIn('not executed',stale['reason'])
+  self.assertEqual(hud.headline(True,stale,{'state':'IDLE'}),'STALLED')
+  self.assertEqual(hud.DISCOVERY_STALL_SECONDS,45)
+  active={'active_action':{'id':'PCE10.018','started_at':(now-timedelta(seconds=50)).isoformat()}}
+  self.assertEqual(hud.lifecycle([discovery(3774)],active,now)['phase'],'RUNNING')
+
  def test_lifecycle_explains_scanner_stall(self):
   now=datetime(2026,1,1,tzinfo=timezone.utc)
   events=[{'time':(now-timedelta(seconds=3)).isoformat(),'event':'relay_scanner_stalled','detail':{'packet_id':'op-399','browser_id':'firefox'}}]
