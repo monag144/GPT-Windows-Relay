@@ -170,7 +170,17 @@ function resultPacketIdFromUserUnit(unit){
   if(!unit?.matches?.(USER_SELECTOR))return null;
   const composer=findComposer();
   if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  return resultPacketIdFromExactEnvelope(unit.textContent);
+  // Keep the original user-turn contract's direct full-envelope validation.
+  // A packet ID in prose is never a receipt, even when role metadata matches.
+  const text=(unit.textContent||'').trim();
+  const match=text.match(/^\[GPT_WINDOWS_RESULT\]\s+([\s\S]+?)\s+\[\/GPT_WINDOWS_RESULT\]$/);
+  if(!match)return null;
+  try{
+    const result=JSON.parse(match[1]);
+    return result?.version===1 && result?.platform==='windows' &&
+      result?.action==='EXEC' && typeof result?.id==='string' && result.id
+      ? result.id : null;
+  }catch{return null;}
 }
 // GPT_WINDOWS_STRUCTURAL_USER_BUBBLE_RECEIPT_V1
 // 2026-10-08 live diagnostic: seven user results lacked role attributes but
