@@ -42,15 +42,15 @@ function CheckControls(){
 $aut=[Windows.Automation.AutomationElement]
 $ct=[Windows.Automation.ControlType]
 $ts=[Windows.Automation.TreeScope]
-$wc=New-Object Windows.Automation.PropertyCondition($aut::ControlTypeProperty,$ct::Window)
-$tc=New-Object Windows.Automation.PropertyCondition($aut::ControlTypeProperty,$ct::TabItem)
+$wc=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Window)
+$tc=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::TabItem)
 function SelectedSource {
- $windows=[Windows.Automation.AutomationElement]::RootElement.FindAll($ts::Children,$wc)
+ $windows=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$wc)
  $found=@()
  foreach($w in $windows){
   try{
    if($w.Current.IsOffscreen -or $w.Current.ClassName -ne 'MozillaWindowClass'){continue}
-   $tabs=$w.FindAll($ts::Descendants,$tc)
+   $tabs=$w.FindAll([Windows.Automation.TreeScope]::Descendants,$tc)
    foreach($tab in $tabs){
     try{
      if(-not $tab.Current.IsEnabled){continue}
@@ -68,16 +68,16 @@ function SelectedSource {
  return $found[0]
 }
 function UrlBar($window){
- $cond=New-Object Windows.Automation.PropertyCondition($aut::AutomationIdProperty,'urlbar-input')
- $bars=$window.FindAll($ts::Descendants,$cond)
+ $cond=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::AutomationIdProperty,'urlbar-input')
+ $bars=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
  if($bars.Count -ne 1){throw ('ROTATION_URLBAR_COUNT_'+$bars.Count)}
  $vp=$null
  if(-not $bars[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp)){throw 'ROTATION_URLBAR_NO_VALUE'}
  return [string]$vp.Current.Value
 }
 function DocumentBody($window){
- $dc=New-Object Windows.Automation.PropertyCondition($aut::ControlTypeProperty,$ct::Document)
- $docs=$window.FindAll($ts::Descendants,$dc);$visible=@()
+ $dc=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Document)
+ $docs=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$dc);$visible=@()
  foreach($d in $docs){try{if($d.Current.IsEnabled -and -not $d.Current.IsOffscreen){$visible+=,$d}}catch{}}
  if($visible.Count -ne 1){return ''}
  $p=$null
@@ -85,12 +85,12 @@ function DocumentBody($window){
  return [string]$p.DocumentRange.GetText(-1)
 }
 function NewChatButton($window){
- $buttons=$window.FindAll($ts::Descendants,[Windows.Automation.Condition]::TrueCondition)
+ $buttons=$window.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.Condition]::TrueCondition)
  $hits=@()
  foreach($b in $buttons){
   try{
    if($b.Current.IsOffscreen -or -not $b.Current.IsEnabled){continue}
-   if($b.Current.ControlType -ne $ct::Button -and $b.Current.ControlType -ne $ct::Hyperlink){continue}
+   if($b.Current.ControlType -ne [Windows.Automation.ControlType]::Button -and $b.Current.ControlType -ne [Windows.Automation.ControlType]::Hyperlink){continue}
    $name=([string]$b.Current.Name).Trim()
    if($name -notmatch '^(?i:New chat)$'){continue}
    $ip=$null
@@ -101,7 +101,7 @@ function NewChatButton($window){
  return $hits[0]
 }
 function Composer($window){
- $edits=$window.FindAll($ts::Descendants,(New-Object Windows.Automation.PropertyCondition($aut::ControlTypeProperty,$ct::Edit)))
+ $edits=$window.FindAll([Windows.Automation.TreeScope]::Descendants,(New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)))
  $matching=@()
  foreach($e in $edits){
   try{
@@ -173,8 +173,8 @@ try{
  $comp.value.SetValue($text)
  Start-Sleep -Milliseconds 200
  if([string]$comp.value.Current.Value -ne $text){throw 'HANDOFF_TEXT_READBACK_FAILED'}
- $buttonCond=New-Object Windows.Automation.PropertyCondition($aut::ControlTypeProperty,$ct::Button)
- $buttons=$window.FindAll($ts::Descendants,$buttonCond)
+ $buttonCond=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Button)
+ $buttons=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$buttonCond)
  $send=@()
  foreach($b in $buttons){try{if($b.Current.IsEnabled -and -not $b.Current.IsOffscreen -and ([string]$b.Current.Name) -match '^Send(?: prompt| message)?$'){$send+=,$b}}catch{}}
  if($send.Count -ne 1){
@@ -191,7 +191,7 @@ try{
    try{if($null -ne $oldClipboard){[System.Windows.Forms.Clipboard]::SetDataObject($oldClipboard,$true)}else{[System.Windows.Forms.Clipboard]::Clear()}}catch{}
   }
   if([string]$comp.value.Current.Value -ne $text){throw 'HANDOFF_PASTE_READBACK_FAILED'}
-  $buttons=$window.FindAll($ts::Descendants,$buttonCond);$send=@()
+  $buttons=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$buttonCond);$send=@()
   foreach($b in $buttons){try{if($b.Current.IsEnabled -and -not $b.Current.IsOffscreen -and ([string]$b.Current.Name) -match '^Send(?: prompt| message)?$'){$send+=,$b}}catch{}}
  }
  if($send.Count -ne 1){throw ('HANDOFF_SEND_BUTTON_COUNT_'+$send.Count)}
