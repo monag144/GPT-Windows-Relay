@@ -12,7 +12,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 
 BRANCH="pce11/one-click-go-recovery-and-doc-hygiene"
-BASE_SHA="4140181bb354462c1ff8026491cfff7ae92ca686"
+BASE_SHA="1483167b0c0e376bec883f048d4f315169aac090"
 V16_SHA="694d47ab89596d5c3801f749caa352b951a2be52"
 V16_BLOB="414b74121b1a5a5f2a049ebc84097223e7b5e69f"
 PORT=8768
@@ -109,7 +109,14 @@ def candidate(repo,live):
     if git(folder,"rev-parse","HEAD")!=V16_SHA:raise RuntimeError("historical v16 SHA mismatch")
     if git(folder,"status","--porcelain"):raise RuntimeError("historical v16 staging dirty")
     raw=script.read_bytes()
-    if git_blob(raw)!=V16_BLOB:raise RuntimeError("v16 entrypoint blob mismatch")
+    # HEAD object is authoritative; Windows checkout may have CRLF converted bytes.
+    # Also require the on-disk file to normalize to the SAME blob with Git attributes.
+    committed_blob=git(folder,"rev-parse","HEAD:windows-relay/windows_relay.py")
+    normalized_blob=git(folder,"hash-object","--path=windows-relay/windows_relay.py",
+                        "windows-relay/windows_relay.py")
+    if committed_blob!=V16_BLOB or normalized_blob!=V16_BLOB:
+        raise RuntimeError("v16 tracked Git object or normalized working source mismatched pinned object")
+    raw_blob_matches=(git_blob(raw)==V16_BLOB)
     tree=ast.parse(raw.decode("utf-8-sig"))
     literals={n.value for n in ast.walk(tree) if isinstance(n,ast.Constant) and isinstance(n.value,str)}
     if not {"--config","--state-dir","server","127.0.0.1"}.issubset(literals):
@@ -118,7 +125,9 @@ def candidate(repo,live):
     if "State(a.state_dir" not in text or "config(a.config)" not in text:
         raise RuntimeError("v16 does not use isolated config/state parameters")
     return {"folder":str(folder),"source":str(script),"source_sha256":sha(script),
-            "git_head":V16_SHA,"blob":V16_BLOB}
+            "git_head":V16_SHA,"blob":V16_BLOB,
+            "tracked_git_blob":committed_blob,"normalized_worktree_blob":normalized_blob,
+            "raw_worktree_matches_blob":raw_blob_matches}
 
 def validate_launch(argv,st,conf):
     if len(argv)!=8 or argv[1]!="-B" or argv[3:5]!=["--config",str(conf)] or argv[5:7]!=["--state-dir",str(st)] or argv[7]!="server":
@@ -196,7 +205,12 @@ def main():
     p.add_argument("--live",type=Path,required=True)
     p.add_argument("--expected-head",required=True)
     p.add_argument("--mode",choices=("preflight","canary"),required=True)
+    p.add_argument("--ordinal",type=int,choices=(13,14),default=14)
     a=p.parse_args()
+    # Abort ANY attempt to run the original Popen-then-job-attach canary.
+    # Its launch race could leave an uncontrolled child on failed assignment.
+    if a.mode=="canary":
+        raise RuntimeError("canary disabled until suspended-start containment is tested")
     self_test()
     repo=a.repo.resolve();live=a.live.resolve()
     if not repo.is_dir() or not live.is_dir() or repo==live:raise RuntimeError("canonical repo/live missing")
@@ -213,7 +227,7 @@ def main():
     if git(repo,"rev-parse","HEAD")!=a.expected_head:raise RuntimeError("unverified local source revision")
     sys.path.insert(0,str(repo/"consumer"))
     from control_harness import engineering_preflight
-    ordinal=13 if a.mode=="preflight" else 14
+    ordinal=a.ordinal if a.mode=="preflight" else 16
     proof=engineering_preflight(repo,ordinal,series=11)
     if not proof["ok"]:raise RuntimeError("canonical governance blocked")
     if a.mode=="preflight":
@@ -228,6 +242,7 @@ def main():
            "five_control_sha256":{k:v["sha256"] for k,v in proof["reads"].items()},
            "staged_source":stage,"job_api_available":win_job_available(),
            "self_test_passed":True,"targeted_unit_tests_passed":True,"port_8768_free":True,
+           "canary_launch_disabled":True,
            "private_config_state_supported":True,
            "source_supervisor_missing_is_not_blocker_to_independent_harness":True,
            "process_launched":False,"canary_authorized":False},separators=(",",":")))
