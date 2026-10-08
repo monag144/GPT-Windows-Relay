@@ -148,6 +148,9 @@ def build_control_harness_contract(mission_id: str) -> dict:
             ],
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
             "sandwich_required": True,
+            "durable_final_packet_rule": "The complete visible header, bare fenced GPT_WINDOWS_ACTION packet, and visible footer MUST be emitted within one durable FINAL assistant response. Never emit an action packet in commentary/progress, then finish with an empty final response.",
+            "collapsed_engineering_rule": "A Worked for X rendering artifact during a PCE engineering handoff must be observable even without consumerRecoveryContext. Fail closed; do not infer, auto-replay, or re-execute an invisible command.",
+            "prior_rendering_incident": "docs/relay-rendering-incident-2026-10-03.md Incident 6",
             "audit_every_engineering_turns": 5,
             "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
             "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
