@@ -82,7 +82,7 @@ class ControlHarnessTests(unittest.TestCase):
 
     def test_pce011_queue_and_50_100_checkpoints(self):
         self.assertEqual(ch.CONTROL_HARNESS_VERSION,5)
-        self.assertIn("ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md",ch.MANDATORY_ENGINEERING_READS)
+        self.assertIn("docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md",ch.MANDATORY_ENGINEERING_READS)
         self.assertEqual(ch.due_engineering_checkpoints(1)["next_id"],"PCE11.001")
         self.assertEqual(ch.due_engineering_checkpoints(5)["audit_window"],[0,4])
         self.assertTrue(ch.due_engineering_checkpoints(20)["review_due"])
