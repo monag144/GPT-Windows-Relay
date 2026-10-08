@@ -154,23 +154,44 @@ class ContainedProcess:
     def close(self):
         if self.disposed:return
         self.disposed=True
-        if self.info is not None:
-            # On failed assignment child is still suspended and NOT yet in the Job.
-            if not self.contained:
-                self.api.TerminateProcess(self.info.hProcess,1)
-                self.events.append("unassigned_child_terminated")
-        if self.job:
-            self.api.TerminateJobObject(self.job,1)
-            self.events.append("private_job_terminated")
-        if self.info is not None:
-            self.api.WaitForSingleObject(self.info.hProcess,3000)
-            self.api.CloseHandle(self.info.hThread)
-            self.api.CloseHandle(self.info.hProcess)
-            self.events.append("child_handles_closed")
-        if self.job:
-            self.api.CloseHandle(self.job)
-            self.events.append("job_handle_closed")
-            self.job=None
+        errors=[]
+        info=self.info
+        job=self.job
+        try:
+            if info is not None and not self.contained:
+                # Failed assignment leaves a suspended child outside the Job.
+                if not self.api.TerminateProcess(info.hProcess,1):
+                    errors.append("unassigned child termination failed")
+                else:
+                    self.events.append("unassigned_child_terminated")
+            if job:
+                if not self.api.TerminateJobObject(job,1):
+                    errors.append("private job termination API failed")
+                else:
+                    self.events.append("private_job_terminated")
+            if info is not None:
+                wait=self.api.WaitForSingleObject(info.hProcess,3000)
+                if wait!=WAIT_OBJECT_0:
+                    errors.append("private child exit not observed")
+        finally:
+            # Always close the private Job handle: kill-on-close is an
+            # independent last-resort containment guarantee, even when an
+            # earlier native termination call reports an error.
+            if info is not None:
+                closed_thread=bool(self.api.CloseHandle(info.hThread))
+                closed_process=bool(self.api.CloseHandle(info.hProcess))
+                if closed_thread and closed_process:
+                    self.events.append("child_handles_closed")
+                else:
+                    errors.append("private child handle close failed")
+                self.info=None
+            if job:
+                if not self.api.CloseHandle(job):
+                    errors.append("private job close failed")
+                else:
+                    self.events.append("job_handle_closed")
+                self.job=None
+        if errors:raise OSError("; ".join(errors))
 
     def __enter__(self):return self
     def __exit__(self,*exc):self.close();return False
