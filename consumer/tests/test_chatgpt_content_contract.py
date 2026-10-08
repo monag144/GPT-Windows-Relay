@@ -111,8 +111,14 @@ class ChatGPTContentContractTests(unittest.TestCase):
         resume_end=src.index("function applyOperatorControlState(",resume_start)
         resume=src[resume_start:resume_end]
         self.assertIn("bindToolApprovalPromptDetector();",resume)
-        bootstrap="hydrateRecoveryPacketWatch();\nconnectBackgroundPort();\noperatorControlPollTimer=setInterval(pollOperatorControlState,2000);"
-        self.assertIn(bootstrap,src)
+        # Startup order matters; explanatory comments between these steps
+        # must not make the runtime contract appear broken.
+        hydrate=src.index("hydrateRecoveryPacketWatch();")
+        connect=src.index("connectBackgroundPort();",hydrate)
+        polling=src.index("operatorControlPollTimer=setInterval(pollOperatorControlState,2000);",connect)
+        self.assertLess(hydrate,connect)
+        self.assertLess(connect,polling)
+        self.assertIn("setTimeout(pollOperatorControlState,25);",src)
         self.assertIn("for(let depth=0;depth<8 && node;depth++,node=node.parentElement)",src)
         self.assertIn("approval_detector_bound:!!approvalPromptObserver",src)
         self.assertIn("approval-v3-uierror-v1",src)
