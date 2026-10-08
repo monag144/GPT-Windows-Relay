@@ -187,6 +187,35 @@ class State:
         v=self.data['processed'].get(aid); return v if isinstance(v,dict) else None
     def outbound_lookup(self,aid):
         v=self.data.get('outbound_deliveries',{}).get(aid); return copy.deepcopy(v) if isinstance(v,dict) else None
+    def packet_execution_status(self,aid):
+        """Return packet-specific durable state without reconstructing or replaying it.
+
+        The browser supervisor uses this before reloading a stuck scanner.  A
+        missing record is the only state that proves the backend has not
+        reserved or completed this exact packet.  Everything else is retained
+        as execution/delivery evidence and blocks browser-side recovery.
+        """
+        with self.lock:
+            processed=self.data.get('processed',{}).get(aid)
+            delivery=self.data.get('outbound_deliveries',{}).get(aid)
+            if not isinstance(processed,dict):
+                return {'id':aid,'state':'NO_EXECUTION','replay_allowed':False}
+            status=str(processed.get('status') or 'UNKNOWN')
+            identity={
+                'id':aid,
+                'payload_hash':processed.get('payload_hash'),
+                'status':status,
+                'saved_result_path':processed.get('saved_result_path'),
+            }
+            if isinstance(delivery,dict):
+                identity['delivery_phase']=delivery.get('phase')
+                identity['wire_result_path']=delivery.get('wire_result_path')
+            return {
+                'id':aid,
+                'state':'EXECUTING' if status=='INFLIGHT' else 'EXECUTION_CONFIRMED',
+                'replay_allowed':False,
+                'identity':identity,
+            }
     def list_claimable_outbound_ids(self):
         # Read-only discovery for the dormant Windows outbound worker.
         # Persisted JSON key order is not a delivery ordering contract, so
@@ -738,6 +767,11 @@ class Handler(BaseHTTPRequestHandler):
         if request_path=='/status':
             stop=self.server.state.operator_stop_status()
             return self.sendj(200,{'ok':True,'version':1,'platform':'windows','armed':self.server.state.armed,'outbound_owner':self.server.state.outbound_owner,'pid':os.getpid(),'pending_missions':self.server.state.pending_mission_count(),**stop})
+        if request_path=='/packet-status':
+            aid=parse_qs(parts.query).get('id',[None])[0]
+            if not isinstance(aid,str) or not ID_RE.fullmatch(aid):
+                return self.sendj(400,{'ok':False,'error':'invalid_action_id'})
+            return self.sendj(200,{'ok':True,**self.server.state.packet_execution_status(aid)})
         if request_path in ('/browser-heartbeat','/browser-status'):
             query=parse_qs(parts.query); browser_id=query.get('browser_id',[None])[0]
             try:

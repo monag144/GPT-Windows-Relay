@@ -147,23 +147,23 @@ function hydrateAttemptedHistory(){
   }catch{}
 }
 
-/* GPT_WINDOWS_RESULT_TURN_WRAPPER_FALLBACK_V1
-   Result de-duplication may inspect current conversation-turn wrappers, but
-   action execution remains strictly assistant-only. Explicit assistant turns
-   and anything containing/inside the composer are rejected here. */
-const RESULT_TURN_SELECTOR=USER_SELECTOR+',article[data-testid^="conversation-turn-"],section[data-testid^="conversation-turn-"],div[data-testid^="conversation-turn-"],div[class~=bg-user-message]';
+/* GPT_WINDOWS_RESULT_ACK_STRICT_V1
+   A displayed packet id is not a delivery receipt.  Only a complete relay
+   result envelope occupying a positively identified user turn can acknowledge
+   delivery.  In particular, assistant prose, code examples, quoted results,
+   and broad conversation wrappers are not receipts. */
+const RESULT_TURN_SELECTOR=USER_SELECTOR;
 function resultPacketIdFromUserUnit(unit){
-  const text=unit?.textContent||'';
-  if(!text.includes('[GPT_WINDOWS_RESULT]'))return null;
+  if(!unit?.matches?.(USER_SELECTOR))return null;
+  const text=(unit.textContent||'').trim();
   const composer=findComposer();
   if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  const explicitUser=unit.matches?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]') ||
-    !!unit.querySelector?.('[data-message-role="user"],[data-message-author-role="user"],article[data-turn="user"],[data-conversation-role="user"],[data-markdown-text-style="user-message"]');
-  const explicitAssistant=unit.matches?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]') ||
-    !!unit.querySelector?.('[data-message-role="assistant"],[data-message-author-role="assistant"],article[data-turn="assistant"],[data-conversation-role="assistant"],[data-markdown-text-style="assistant-message"]');
-  if(explicitAssistant && !explicitUser)return null;
-  const m=text.match(/"id"\s*:\s*"([^"]+)"/);
-  return m?.[1]||null;
+  const match=text.match(/^\[GPT_WINDOWS_RESULT\]\s*\n([\s\S]+?)\n\[\/GPT_WINDOWS_RESULT\]$/);
+  if(!match)return null;
+  try{
+    const result=JSON.parse(match[1]);
+    return typeof result?.id==='string' && result.id ? result.id : null;
+  }catch{return null;}
 }
 
 function hydrateAttemptedFromConversation(){
@@ -1688,6 +1688,10 @@ function connectBackgroundPort(){
 
     port.onMessage.addListener(m=>{
       if(m?.type==='operator_control_state'){applyOperatorControlState(m);return;}
+      if(m?.type==='relay_scanner_recover'){
+        recoverScannerForPacket(m);
+        return;
+      }
       if(m?.type==='relay_chat_rotation_start'){beginEngineeringRotation(m);return;}
       if(m?.type==='consumer_mission'){
         if(operatorPaused)return;
@@ -1698,7 +1702,8 @@ function connectBackgroundPort(){
         beginRelayHandoffScroll();
         return;
       }
-      if(m?.type!=='relay_action_result' || typeof m.request_id!=='string')return;
+      if(m?.type!=='relay_action_result' && m?.type!=='relay_packet_status_result')return;
+      if(typeof m.request_id!=='string')return;
       const pending=backgroundPending.get(m.request_id);
       if(!pending)return;
       backgroundPending.delete(m.request_id);
@@ -1770,6 +1775,24 @@ function backgroundAction(packet){
   });
 }
 
+function backgroundPacketStatus(packetId){
+  return new Promise((resolve,reject)=>{
+    const port=connectBackgroundPort();
+    if(!port){reject(new Error('background_port_unavailable'));return;}
+    const requestId='packet-status-'+Date.now().toString(36)+'-'+(++backgroundRequestSeq).toString(36);
+    const timer=setTimeout(()=>{
+      backgroundPending.delete(requestId);
+      reject(new Error('background_packet_status_timeout'));
+    },5000);
+    backgroundPending.set(requestId,{resolve,reject,timer});
+    try{port.postMessage({type:'relay_packet_status',request_id:requestId,packet_id:packetId});}
+    catch(e){backgroundPending.delete(requestId);clearTimeout(timer);reject(e);}
+  }).then(reply=>{
+    if(!reply?.ok)throw new Error(reply?.error||'background_packet_status_failed');
+    return reply.data;
+  });
+}
+
 function queueDeferredAction(p,reason,ownerId=null){
   if(!p?.id || attempted.has(p.id) || inflight.has(p.id))return;
   if(userTurnContainsPacketId(p.id)){
@@ -1836,12 +1859,27 @@ async function run(p){
   if(operatorPaused)return;
   if(attempted.has(p.id)||inflight.has(p.id))return;
   if(userTurnContainsPacketId(p.id)){
-    rememberAttempted(p.id);
-    emitRelayEvent('relay_result_replay_suppressed',{
+    // Visible text is only a candidate receipt.  Before suppressing an
+    // action, obtain packet-specific durable identity from the backend.
+    // An absent durable record means this is quoted/stale UI text, not proof
+    // that the command ran, and execution remains eligible.
+    let durable=null;
+    try{durable=await backgroundPacketStatus(p.id);}catch{}
+    if(durable?.state==='EXECUTION_CONFIRMED' || durable?.state==='EXECUTING'){
+      rememberAttempted(p.id);
+      emitRelayEvent('relay_result_replay_suppressed',{
+        packet_id:p.id,
+        reason:'durable_execution_and_exact_user_result',
+        durable_state:durable.state,
+        durable_identity:durable.identity||null
+      });
+      return;
+    }
+    emitRelayEvent('relay_result_visibility_untrusted',{
       packet_id:p.id,
-      reason:'existing_user_result_turn'
+      durable_state:durable?.state||'UNKNOWN',
+      action:'execute_exact_packet'
     });
-    return;
   }
 
   // GPT_WINDOWS_NEWER_INSTRUCTION_SUPERSEDES_STALE_V1
@@ -1988,6 +2026,35 @@ function recoverDiscoveredPacket(p,reason){
   if(!p?.id || attempted.has(p.id) || inflight.has(p.id))return;
   emitRelayEvent('relay_packet_settle_reacquire',{packet_id:p.id,reason});
   setTimeout(()=>recoverLatestAssistant(),0);
+}
+
+function recoverScannerForPacket(request){
+  const packetId=typeof request?.packet_id==='string'?request.packet_id:'';
+  const expectedConversation=typeof request?.conversation_key==='string'?request.conversation_key:'';
+  if(!packetId || operatorPaused || expectedConversation!==relayConversationKey())return;
+  let target=null;
+  for(const unit of assistantUnits().reverse()){
+    const parsed=extractUnit(unit);
+    if(parsed?.id===packetId){target={unit,parsed};break;}
+  }
+  if(!target || attempted.has(packetId) || inflight.has(packetId)){
+    emitRelayEvent('relay_scanner_recovery_noop',{
+      packet_id:packetId,
+      reason:target?'already_terminal_or_inflight':'packet_not_bound_to_current_conversation'
+    });
+    return;
+  }
+  const prior=pending.get(packetId);
+  if(prior?.timer)clearTimeout(prior.timer);
+  pending.delete(packetId);
+  bindConversationRoot();
+  bindAssistantUnit(target.unit);
+  emitRelayEvent('relay_scanner_recovery_reinspect',{
+    packet_id:packetId,
+    source:String(request?.reason||'extension_supervisor'),
+    conversation_key:expectedConversation
+  });
+  inspectUnit(target.unit);
 }
 
 function inspectUnit(unit){
@@ -2606,7 +2673,10 @@ hydrateAttemptedHistory();
 hydrateSubmittedResults();
 hydrateRecoveryPacketWatch();
 connectBackgroundPort();
-operatorControlPollTimer=setInterval(pollOperatorControlState,250);
+// The worker coalesces concurrent callers and pushes the resulting state to
+// every connected tab.  This fallback keeps STOP latency bounded without
+// issuing four independent /status requests per second from every scanner.
+operatorControlPollTimer=setInterval(pollOperatorControlState,2000);
 setTimeout(pollOperatorControlState,25);
 setTimeout(()=>resumeEngineeringRotation().catch(e=>emitRelayEvent('chat_rotation_failed',{error:String(e?.message||e).slice(0,240),phase:rotationLoad()?.phase||null})),800);
 emitRelayEvent('content_script_started',{

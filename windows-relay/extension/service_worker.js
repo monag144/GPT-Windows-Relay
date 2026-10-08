@@ -13,6 +13,38 @@ let operatorStopAckReceived=new Set();
 let operatorStopAckEmittedGeneration=0;
 let preferredConsumerMissionTabId=null;
 let lastBrowserHeartbeatAt=0;
+let controlStateCache=null;
+let controlStateCacheAt=0;
+let controlStateInFlight=null;
+
+function controlStateMessage(st,online=true){
+  return {type:'operator_control_state',online,armed:!!st?.armed,
+    stop_generation:Number(st?.stop_generation)||0,
+    outbound_owner:st?.outbound_owner==='windows'?'windows':'browser'};
+}
+function broadcastControlState(message){
+  for(const port of relayContentPorts){try{port.postMessage(message);}catch{}}
+}
+async function readControlState(force=false){
+  const now=Date.now();
+  if(!force && controlStateCache && now-controlStateCacheAt<1500)return controlStateCache;
+  if(controlStateInFlight)return controlStateInFlight;
+  controlStateInFlight=(async()=>{
+    try{
+      const st=await call('/status',{},1000);
+      controlStateCache=st;controlStateCacheAt=Date.now();
+      const generation=Number(st?.stop_generation)||0;
+      if(st?.armed===false)beginOperatorStopGeneration(generation);
+      else if(st?.armed===true && operatorStopAckGeneration)clearOperatorStopGeneration();
+      broadcastControlState(controlStateMessage(st));
+      return st;
+    }catch(e){
+      broadcastControlState({type:'operator_control_state',online:false});
+      throw e;
+    }finally{controlStateInFlight=null;}
+  })();
+  return controlStateInFlight;
+}
 
 const CHAT_ROTATION_KEY='gptRelayChatRotationV1';
 const CHAT_ROTATION_EVERY=100;
@@ -66,6 +98,121 @@ function extensionStorageSet(value){
     try{chrome.storage.local.set(value,()=>resolve());}
     catch{resolve();}
   });
+}
+
+/* GPT_WINDOWS_TAB_SCOPED_DISCOVERY_SUPERVISOR_V1
+   The content script remains responsible for parsing and execution.  This
+   supervisor owns only packet-specific recovery: it never reconstructs an
+   action from event text and checks durable backend state before reloading the
+   exact ChatGPT tab that reported a stale discovery. */
+const SCANNER_RECOVERY_KEY='gptRelayScannerRecoveryV1';
+const SCANNER_STALE_MS=45000;
+const SCANNER_RELOAD_GRACE_MS=3000;
+let scannerRecoveryChain=Promise.resolve();
+function scannerAlarmName(key){return 'gpt-relay-scanner-recovery-'+key;}
+function scannerKey(tabId,packetId){return String(tabId)+':'+String(packetId);}
+function mutateScannerRecoveries(mutator){
+  const task=scannerRecoveryChain.then(async()=>{
+    const raw=await extensionStorageGet(SCANNER_RECOVERY_KEY);
+    const records=raw?.[SCANNER_RECOVERY_KEY]&&typeof raw[SCANNER_RECOVERY_KEY]==='object'
+      ? {...raw[SCANNER_RECOVERY_KEY]} : {};
+    const result=await mutator(records);
+    await extensionStorageSet({[SCANNER_RECOVERY_KEY]:records});
+    return result;
+  });
+  scannerRecoveryChain=task.catch(()=>{});
+  return task;
+}
+function postScannerRecovery(tabId,message){
+  for(const port of relayContentPorts){
+    if(port?.sender?.tab?.id!==tabId)continue;
+    try{port.postMessage(message);}catch{}
+  }
+}
+async function recordDiscovery(port,detail){
+  const tabId=port?.sender?.tab?.id;
+  const packetId=typeof detail?.packet_id==='string'?detail.packet_id:null;
+  const conversationKey=normalizeConversationKey(port?.sender?.tab?.url);
+  if(!Number.isInteger(tabId)||!packetId||!conversationKey)return;
+  let stopGeneration=0;
+  try{stopGeneration=Number((await readControlState())?.stop_generation)||0;}catch{}
+  const key=scannerKey(tabId,packetId);
+  await mutateScannerRecoveries(records=>{
+    records[key]={packet_id:packetId,tab_id:tabId,conversation_key:conversationKey,
+      discovered_at:Date.now(),stop_generation:stopGeneration,phase:'DISCOVERED',recovery_attempts:0};
+  });
+  try{chrome.alarms.create(scannerAlarmName(key),{when:Date.now()+SCANNER_STALE_MS});}catch{}
+  setTimeout(()=>{
+    postScannerRecovery(tabId,{type:'relay_scanner_recover',packet_id:packetId,
+      conversation_key:conversationKey,reason:'discovery_settle_lease_supervisor'});
+  },5000);
+}
+function terminalScannerEvent(event){
+  return new Set(['relay_action_execution_requested','action_received','action_result',
+    'relay_result_delivery_complete','relay_result_replay_suppressed']).has(event);
+}
+async function clearDiscoveryForEvent(port,event,detail){
+  if(!terminalScannerEvent(event))return;
+  const tabId=port?.sender?.tab?.id;
+  const packetId=typeof detail?.packet_id==='string'?detail.packet_id:null;
+  if(!Number.isInteger(tabId)||!packetId)return;
+  const key=scannerKey(tabId,packetId);
+  await mutateScannerRecoveries(records=>{delete records[key];});
+  try{chrome.alarms.clear(scannerAlarmName(key));}catch{}
+}
+async function recoverStalledScanner(key){
+  let record=null;
+  await mutateScannerRecoveries(records=>{record=records[key]||null;});
+  if(!record)return;
+  let control;
+  try{control=await readControlState(true);}catch{return;}
+  if(control?.armed!==true)return;
+  const ownerRaw=await extensionStorageGet(RELAY_OWNER_KEY);
+  const owner=ownerRaw?.[RELAY_OWNER_KEY];
+  if(!owner || owner.conversation_key!==record.conversation_key || owner.tab_id!==record.tab_id)return;
+  let tab;
+  try{tab=await chrome.tabs.get(record.tab_id);}catch{return;}
+  if(normalizeConversationKey(tab?.url)!==record.conversation_key)return;
+  let durable;
+  try{durable=await call('/packet-status?id='+encodeURIComponent(record.packet_id),{},3000);}catch{return;}
+  if(durable?.state!=='NO_EXECUTION'){
+    await mutateScannerRecoveries(records=>{delete records[key];});
+    return;
+  }
+  await mutateScannerRecoveries(records=>{
+    const current=records[key];if(current){current.phase='RECOVERING';current.recovery_attempts=Number(current.recovery_attempts||0)+1;current.last_recovery_at=Date.now();}
+  });
+  browserEvent('relay_scanner_stalled',{packet_id:record.packet_id,tab_id:record.tab_id,
+    conversation_key:record.conversation_key,age_ms:Date.now()-record.discovered_at,
+    durable_state:durable.state,replay_allowed:false}).catch(()=>{});
+  postScannerRecovery(record.tab_id,{type:'relay_scanner_recover',packet_id:record.packet_id,
+    conversation_key:record.conversation_key,reason:'discovery_stalled_45s'});
+  setTimeout(async()=>{
+    let latest=null;
+    await mutateScannerRecoveries(records=>{latest=records[key]||null;});
+    if(!latest)return;
+    let freshControl,freshDurable,freshTab;
+    try{
+      freshControl=await readControlState(true);
+      freshDurable=await call('/packet-status?id='+encodeURIComponent(latest.packet_id),{},3000);
+      freshTab=await chrome.tabs.get(latest.tab_id);
+    }catch{return;}
+    if(freshControl?.armed!==true || freshDurable?.state!=='NO_EXECUTION' ||
+      normalizeConversationKey(freshTab?.url)!==latest.conversation_key)return;
+    try{
+      await chrome.tabs.reload(latest.tab_id);
+      browserEvent('relay_scanner_tab_reload_requested',{packet_id:latest.packet_id,tab_id:latest.tab_id,
+        conversation_key:latest.conversation_key,replay_allowed:false}).catch(()=>{});
+    }catch{}
+  },SCANNER_RELOAD_GRACE_MS);
+}
+function installScannerRecoveryAlarm(){
+  try{chrome.alarms.onAlarm.addListener(alarm=>{
+    const prefix='gpt-relay-scanner-recovery-';
+    if(typeof alarm?.name==='string' && alarm.name.startsWith(prefix)){
+      recoverStalledScanner(alarm.name.slice(prefix.length)).catch(()=>{});
+    }
+  });}catch{}
 }
 
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
@@ -411,17 +558,7 @@ chrome.runtime.onConnect.addListener(port=>{
   });
   port.onMessage.addListener(m=>{
     if(m?.type==='operator_control_poll'){
-      (async()=>{
-        try{
-          const st=await call('/status',{},1000);
-          const generation=Number(st?.stop_generation)||0;
-          if(st?.armed===false)beginOperatorStopGeneration(generation);
-          else if(st?.armed===true && operatorStopAckGeneration)clearOperatorStopGeneration();
-          port.postMessage({type:'operator_control_state',online:true,armed:!!st?.armed,stop_generation:generation,outbound_owner:st?.outbound_owner==='windows'?'windows':'browser'});
-        }catch{
-          try{port.postMessage({type:'operator_control_state',online:false});}catch{}
-        }
-      })();
+      readControlState().catch(()=>{});
       return;
     }
     if(m?.type==='operator_quiesced_ack'){
@@ -433,7 +570,23 @@ chrome.runtime.onConnect.addListener(port=>{
       return;
     }
     if(m?.type==='relay_event' && typeof m.event==='string'){
-      browserEvent(m.event,m.detail??null).catch(()=>{});
+      const tabId=port?.sender?.tab?.id;
+      const conversationKey=normalizeConversationKey(port?.sender?.tab?.url);
+      const detail=(m.detail && typeof m.detail==='object' && !Array.isArray(m.detail))
+        ? {...m.detail,tab_id:tabId,conversation_key:conversationKey}
+        : {value:m.detail??null,tab_id:tabId,conversation_key:conversationKey};
+      browserEvent(m.event,detail).catch(()=>{});
+      if(m.event==='relay_packet_discovered')recordDiscovery(port,detail).catch(()=>{});
+      else clearDiscoveryForEvent(port,m.event,detail).catch(()=>{});
+      return;
+    }
+    if(m?.type==='relay_packet_status' && typeof m.request_id==='string' && typeof m.packet_id==='string'){
+      (async()=>{
+        let reply;
+        try{reply={ok:true,data:await call('/packet-status?id='+encodeURIComponent(m.packet_id),{},3000)};}
+        catch(e){reply={ok:false,error:e.code||e.message||String(e)};}
+        try{port.postMessage({type:'relay_packet_status_result',request_id:m.request_id,reply});}catch{}
+      })();
       return;
     }
     if(m?.type==='relay_attachment_cleanup'){cleanupManagedAttachments(Array.isArray(m.names)?m.names:[]).catch(()=>{});return;}
@@ -521,6 +674,7 @@ chrome.runtime.onConnect.addListener(port=>{
 // Optional heartbeat setup is deliberately after the core onConnect registration.
 // A missing or incompatible alarms API must never prevent relay-port startup.
 installBrowserHeartbeatLifecycle();
+installScannerRecoveryAlarm();
 
 chrome.runtime.onMessage.addListener((m,_s,reply)=>{(async()=>{try{
  if(m.type==='status') return reply({ok:true,data:await call('/status')});

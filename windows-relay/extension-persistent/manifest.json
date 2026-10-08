@@ -5,7 +5,9 @@
   "description": "Bridges explicit ChatGPT Windows action packets to the local Windows relay.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
     "http://127.0.0.1:8766/*",
