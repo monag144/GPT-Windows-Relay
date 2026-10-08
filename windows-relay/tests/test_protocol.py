@@ -151,7 +151,7 @@ class Tests(unittest.TestCase):
 
     def test_pce011_soft_email_and_chat_rotation_reminders(self):
         def stdout(id):
-            return json.loads(wr.result({"id":id,"status":"OK","stdout":""}).split(wr.RO+"\\n",1)[1].rsplit("\\n"+wr.RC,1)[0])["stdout"]
+            return json.loads(wr.result({"id":id,"status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])["stdout"]
         # Boundary reminders appear in the predecessor result, not after the milestone.
         self.assertIn("PCE011.050 SOFT CHECKPOINT",stdout("PCE11.049"))
         self.assertIn("PCE011.100 ROTATION GATE",stdout("PCE11.099"))
