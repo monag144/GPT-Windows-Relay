@@ -12,7 +12,7 @@ VERSION=1
 OPEN='[GPT_WINDOWS_ACTION]'; CLOSE='[/GPT_WINDOWS_ACTION]'
 RO='[GPT_WINDOWS_RESULT]'; RC='[/GPT_WINDOWS_RESULT]'
 SANDWICH_REMINDER='Reply to this with the sandwich technique'
-TURN_DISCIPLINE_REMINDER='MANDATORY NEXT TURN: READ consumer/control_harness.py; READ windows-relay/TASKS.md; READ docs/windows-relay-mission-and-roadmap.md; verify all Windows Relay mutation targets monag144/GPT-Windows-Relay; USE the sandwich technique for every relay action; if you find a harness hole, repair and test the harness before risky mutation.'
+TURN_DISCIPLINE_REMINDER='MANDATORY NEXT TURN: READ consumer/control_harness.py; READ windows-relay/TASKS.md; READ docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md; READ docs/windows-relay-mission-and-roadmap.md; verify all Windows Relay mutation targets monag144/GPT-Windows-Relay; USE the sandwich technique for every relay action; if you find a harness hole, repair and test the harness before risky mutation.'
 FIVE_TURN_AUDIT_REMINDER='FIVE-TURN AUDIT DUE NOW: audit the preceding five engineering turns/operations for harness compliance, incidents/user rescues, repeated or disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift before continuing.'
 OPERATION_DISCIPLINE_REMINDER='Before the next operation: read the canonical source-of-truth index, control harness, TODO list, roadmap, established facts, and relevant incident/handoff records; prove net-new progress; log failures/manual rescues; preserve rollback before mutation; enforce the active PCE series budget (000 through 100 inclusive) and rotate before 101; do not repeat a disproven approach.'
 ID_RE=re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
