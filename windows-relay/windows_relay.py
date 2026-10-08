@@ -546,9 +546,9 @@ def present_result(a:Action,r:dict[str,Any],saved_path:str)->dict[str,Any]:
 
 def engineering_operation_ordinal(action_id:Any)->int|None:
     text=str(action_id or '')
-    m=re.match(r'^PCE\\d+\\.(\\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
+    m=re.match(r'^PCE\d+\.(\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
     if not m:
-        m=re.match(r'^PCE\\d+(?:[-.]BOOT)?[-.]?OP(\\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
+        m=re.match(r'^PCE\d+(?:[-.]BOOT)?[-.]?OP(\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
     if not m:
         return None
     value=int(m.group(1))
