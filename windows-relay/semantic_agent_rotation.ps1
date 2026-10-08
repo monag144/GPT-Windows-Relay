@@ -134,7 +134,7 @@ try{
  $state.source_url=$url;$state.source_tab=[string]$tab.Current.Name
  $state.firefox_pid=[int]$window.Current.ProcessId
  Save 'WAITING_FOR_SOURCE_RESULT'
- $deadline=[DateTime]::UtcNow.AddSeconds(105)
+ $deadline=[DateTime]::UtcNow.AddSeconds(180)
  $confirmed=$false
  do{
   Start-Sleep -Milliseconds 500
