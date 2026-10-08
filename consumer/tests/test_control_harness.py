@@ -80,9 +80,24 @@ class ControlHarnessTests(unittest.TestCase):
         with self.assertRaises(ch.ControlHarnessError):
             ch.github_first_workflow_gate(evidence,"guess_stage")
 
+    def test_pce011_queue_and_50_100_checkpoints(self):
+        self.assertEqual(ch.CONTROL_HARNESS_VERSION,5)
+        self.assertIn("ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md",ch.MANDATORY_ENGINEERING_READS)
+        self.assertEqual(ch.due_engineering_checkpoints(1)["next_id"],"PCE11.001")
+        self.assertEqual(ch.due_engineering_checkpoints(5)["audit_window"],[0,4])
+        self.assertTrue(ch.due_engineering_checkpoints(20)["review_due"])
+        self.assertEqual(ch.due_engineering_checkpoints(20)["review_window"],[0,19])
+        self.assertTrue(ch.due_engineering_checkpoints(50)["soft_stop_due"])
+        self.assertTrue(ch.due_engineering_checkpoints(50)["email_review_due"])
+        self.assertTrue(ch.due_engineering_checkpoints(100)["rotation_due"])
+        c=ch.build_control_harness_contract("pce011")
+        self.assertIn("mail delivery",c["turn_discipline"]["halfway_rule"])
+        self.assertIn("New chat",c["turn_discipline"]["rotation_rule"])
+        self.assertIn("Codex CLI",c["turn_discipline"]["codex_policy"])
+
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
-        self.assertEqual(c["version"],4)
+        self.assertEqual(c["version"],5)
         self.assertEqual(c["turn_discipline"]["read_every_turn"],list(ch.MANDATORY_ENGINEERING_READS))
         self.assertIn("docs/relay-sandwich-procedure.md",c["turn_discipline"]["read_every_turn"])
         self.assertEqual(c["turn_discipline"]["preflight_method"],"engineering_preflight")
@@ -92,9 +107,9 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertIn("45 seconds",watchdog["detection_rule"])
         self.assertIn("No blind replay",watchdog["recovery_rule"])
         self.assertIn("live browser canary",watchdog["acceptance_rule"])
-        self.assertIn("Before PCE10.025",c["turn_discipline"]["audit_boundary_rule"])
-        self.assertIn("PCE10.040",c["turn_discipline"]["review_rule"])
-        self.assertIn("continue autonomously",c["turn_discipline"]["autonomy_rule"])
+        self.assertIn("PCE011",c["turn_discipline"]["audit_boundary_rule"])
+        self.assertIn("PCE011.020",c["turn_discipline"]["review_rule"])
+        self.assertIn("SAFE operation",c["turn_discipline"]["autonomy_rule"])
         self.assertEqual(c["turn_discipline"]["canonical_windows_repository"],"monag144/GPT-Windows-Relay")
         self.assertTrue(c["turn_discipline"]["sandwich_required"])
         self.assertIn("failed multi-file connector action",c["source_tree_hygiene"]["partial_write_rule"])
