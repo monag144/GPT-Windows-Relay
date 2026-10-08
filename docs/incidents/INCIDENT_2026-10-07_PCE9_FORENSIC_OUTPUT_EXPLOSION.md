@@ -1,12 +1,7 @@
-﻿# Incident: forensic output explosion
+# Legacy compatibility pointer — 2026-10-08T0745Z
 
-OP005 exited successfully but violated its bounded-output objective.
+The maintained content was migrated without deletion. This path is retained for historical links.
 
-## Cause
-The runtime recursive scan traversed historical saved-result JSON. Those files embed prior stdout fields, including very large historical outputs, so a single regex match could emit megabytes.
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_PCE9_FORENSIC_OUTPUT_EXPLOSION.md)
 
-## Permanent harness rule
-Do not recursively grep relay result archives or live-backup captures when extracting evidence. Prefer tracked source via `git grep`. Bound match count and truncate every emitted line. Read a specific saved result only by structured scalar fields unless its stdout size is already known safe.
-
-## Product impact
-None. No production runtime code was changed.
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

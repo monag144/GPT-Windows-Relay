@@ -1,10 +1,7 @@
-﻿# Incident / correction: HUD test path + OP002 packet hypothesis
+# Legacy compatibility pointer — 2026-10-08T0745Z
 
-## HUD test harness
-Directly executing `windows-relay/tests/test_hud.py` places the tests directory on Python import search path, causing `import hud` to fail. This is a harness invocation defect.
+The maintained content was migrated without deletion. This path is retained for historical links.
 
-## Packet-rejection hypothesis correction
-`validPacketBody()` checks version, platform, action, and id. It does not whitelist/reject extra fields. Therefore the presence of `owner_claim` or `timeout` in OP002 is not, by itself, evidence for its rejection. Do not modify packet schema based on that hypothesis.
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_PCE9_HUD_TEST_PATH_AND_PACKET_HYPOTHESIS_CORRECTION.md)
 
-## Rule
-Falsified hypotheses must be logged and abandoned. Future rejection work must use actual bridge/runtime rejection evidence.
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

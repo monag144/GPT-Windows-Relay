@@ -1,2 +1,7 @@
-# Incident: PCE8 repeated cutover flow and avoidable test-root errors
-Repeated use of the same full-cutover scaffold delayed discovery of the main/consumer launcher collision. Later operations also repeated test working-directory mistakes. Corrective action: mandatory per-operation roadmap/facts/incidents/log review, net-new progress proof, rollback boundary, development-log update, and priority-budget check.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_PCE8_FLOW_REPETITION_AND_TEST_ROOT_ERRORS.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

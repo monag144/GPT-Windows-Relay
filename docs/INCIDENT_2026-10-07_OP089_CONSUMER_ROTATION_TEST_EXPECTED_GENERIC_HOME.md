@@ -1,2 +1,7 @@
-# Incident: OP089 consumer rotation acceptance lagged architecture
-OP089 passed 401 Windows tests. The consumer suite failed because `test_service_worker_rotates_firefox_chat_every_100_operations` still defined successful rotation by the presence of generic `https://chatgpt.com/` navigation. The new rotation architecture intentionally removes that unsafe behavior and emits a durable `relay_chat_rotation_start` carrying exact target title/session. OP090 updates the acceptance contract to the safer semantics; production source is not changed for this incident.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP089_CONSUMER_ROTATION_TEST_EXPECTED_GENERIC_HOME.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

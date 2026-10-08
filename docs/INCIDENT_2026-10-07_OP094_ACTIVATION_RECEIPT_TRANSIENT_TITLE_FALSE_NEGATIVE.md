@@ -1,3 +1,7 @@
-# Incident: OP094 activation receipt used a transient Firefox title as a hard gate
+# Legacy compatibility pointer — 2026-10-08T0745Z
 
-OP094 successfully invoked temporary-addon Reload and refreshed the PCE8 tab, but sampled the tab only three seconds later and required its title already to contain `PC Engineering 8`. The sample still read `ChatGPT`, so the receipt set `ok=false`. OP095 subsequently executed through the refreshed browser relay, proving the title sample was not sufficient evidence that activation failed. Future activation proof must use content/integration telemetry and exact URL/conversation identity rather than a short-delay title alone.
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP094_ACTIVATION_RECEIPT_TRANSIENT_TITLE_FALSE_NEGATIVE.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

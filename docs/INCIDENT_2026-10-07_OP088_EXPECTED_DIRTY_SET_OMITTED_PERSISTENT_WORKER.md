@@ -1,2 +1,7 @@
-# Incident: OP088 expected-dirty-set omitted persistent worker
-OP088 stopped before mutation because its exact dirty-set assertion omitted `extension-persistent/service_worker.js`, even though failed OP087 had touched that path during reconciliation. OP089 preserves the complete dirty tree, records the persistent-worker diff, restores the file from the exact HEAD Git blob, and verifies the persistent local-token pairing contract before continuing rotation work.
+# Legacy compatibility pointer — 2026-10-08T0745Z
+
+The maintained content was migrated without deletion. This path is retained for historical links.
+
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_OP088_EXPECTED_DIRTY_SET_OMITTED_PERSISTENT_WORKER.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->
