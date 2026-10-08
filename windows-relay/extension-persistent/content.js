@@ -53,6 +53,7 @@ const MAX_DEFERRED_ACTIONS=16;
 /* GPT_WINDOWS_GENERATION_START_ACK_V1 */
 /* GPT_WINDOWS_DEFERRED_ACTION_QUEUE_V1 */
 const attempted=new Set(), attemptedOrder=[], inflight=new Set(), pending=new Map();
+const attemptedRecheckInFlight=new Set();
 const submittedResults=new Map(), submittedWatchTimers=new Map();
 const resultMatcherDiagnosticsReported=new Set();
 const deferredActions=new Map();
@@ -889,7 +890,7 @@ function emitResultTurnMatchDiagnostic(packetId,nodes,force=false){
 function userTurnContainsPacketId(packetId){
   const nodes=document.querySelectorAll(RESULT_TURN_SELECTOR);
   for(let i=nodes.length-1;i>=0 && i>=nodes.length-32;i--){
-    if(resultPacketIdFromUserUnit(nodes[i])===packetId || elementText(nodes[i]).includes(packetId))return true;
+    if(resultPacketIdFromUserUnit(nodes[i])===packetId)return true;
   }
   emitResultTurnMatchDiagnostic(packetId,nodes,false);
   return false;
@@ -1794,11 +1795,9 @@ function backgroundPacketStatus(packetId){
 }
 
 function queueDeferredAction(p,reason,ownerId=null){
-  if(!p?.id || attempted.has(p.id) || inflight.has(p.id))return;
-  if(userTurnContainsPacketId(p.id)){
-    rememberAttempted(p.id);
-    return;
-  }
+  // Deferral must never decide that a packet already executed from UI text.
+  // The backend-backed run() path is the only execution eligibility gate.
+  if(!p?.id || inflight.has(p.id))return;
   if(!deferredActions.has(p.id) && deferredActions.size>=MAX_DEFERRED_ACTIONS){
     const oldest=deferredActions.keys().next().value;
     if(oldest){
@@ -1842,10 +1841,9 @@ function drainDeferredActions(){
   }
   for(const [id,p] of deferredActions){
     deferredActions.delete(id);
-    if(attempted.has(id) || inflight.has(id) || userTurnContainsPacketId(id)){
-      if(userTurnContainsPacketId(id))rememberAttempted(id);
-      continue;
-    }
+    if(inflight.has(id))continue;
+    // Even an attempted packet must reach run(), where durable backend state
+    // distinguishes completed execution from a poisoned session-history ID.
     emitRelayEvent('relay_action_dequeued',{
       packet_id:id,
       queue_size:deferredActions.size
@@ -1868,11 +1866,22 @@ async function run(p){
   if(operatorPaused)return;
   if(inflight.has(p.id))return;
   if(attempted.has(p.id)){
-    // Attempt history is advisory only: a prior false UI match must not turn
-    // into a durable non-execution. The backend is the source of truth.
+    // Attempt history is advisory, but an unavailable status is UNKNOWN, not
+    // permission to re-execute a potentially side-effectful operation.
     let durable=null;
-    try{durable=await backgroundPacketStatus(p.id);}catch{}
-    if(durable?.state==='EXECUTION_CONFIRMED' || durable?.state==='EXECUTING')return;
+    try{durable=await backgroundPacketStatus(p.id);}
+    catch(e){
+      emitRelayEvent('relay_attempt_recovery_blocked',{
+        packet_id:p.id,reason:'packet_status_unavailable',error:String(e?.message||e).slice(0,180)
+      });
+      return;
+    }
+    if(durable?.state!=='NO_EXECUTION'){
+      emitRelayEvent('relay_attempt_recovery_blocked',{
+        packet_id:p.id,reason:'not_confirmed_unexecuted',durable_state:durable?.state||'UNKNOWN'
+      });
+      return;
+    }
     if(forgetAttempted(p.id)){
       emitRelayEvent('relay_attempt_history_rearmed',{
         packet_id:p.id,
@@ -1886,7 +1895,13 @@ async function run(p){
     // An absent durable record means this is quoted/stale UI text, not proof
     // that the command ran, and execution remains eligible.
     let durable=null;
-    try{durable=await backgroundPacketStatus(p.id);}catch{}
+    try{durable=await backgroundPacketStatus(p.id);}
+    catch(e){
+      emitRelayEvent('relay_result_visibility_untrusted',{
+        packet_id:p.id,durable_state:'UNKNOWN',action:'hold_no_replay',error:String(e?.message||e).slice(0,180)
+      });
+      return;
+    }
     if(durable?.state==='EXECUTION_CONFIRMED' || durable?.state==='EXECUTING'){
       rememberAttempted(p.id);
       emitRelayEvent('relay_result_replay_suppressed',{
@@ -1897,10 +1912,14 @@ async function run(p){
       });
       return;
     }
+    if(durable?.state!=='NO_EXECUTION'){
+      emitRelayEvent('relay_result_visibility_untrusted',{
+        packet_id:p.id,durable_state:durable?.state||'UNKNOWN',action:'hold_no_replay'
+      });
+      return;
+    }
     emitRelayEvent('relay_result_visibility_untrusted',{
-      packet_id:p.id,
-      durable_state:durable?.state||'UNKNOWN',
-      action:'execute_exact_packet'
+      packet_id:p.id,durable_state:'NO_EXECUTION',action:'execute_exact_packet'
     });
   }
 
@@ -2059,7 +2078,7 @@ function recoverScannerForPacket(request){
     const parsed=extractUnit(unit);
     if(parsed?.id===packetId){target={unit,parsed};break;}
   }
-  if(!target || attempted.has(packetId) || inflight.has(packetId)){
+  if(!target || inflight.has(packetId)){
     emitRelayEvent('relay_scanner_recovery_noop',{
       packet_id:packetId,
       reason:target?'already_terminal_or_inflight':'packet_not_bound_to_current_conversation'
@@ -2071,12 +2090,44 @@ function recoverScannerForPacket(request){
   pending.delete(packetId);
   bindConversationRoot();
   bindAssistantUnit(target.unit);
+  if(attempted.has(packetId)){
+    reconcileAttemptedDiscovery(target.parsed,target.unit);
+    return;
+  }
   emitRelayEvent('relay_scanner_recovery_reinspect',{
     packet_id:packetId,
     source:String(request?.reason||'extension_supervisor'),
     conversation_key:expectedConversation
   });
   inspectUnit(target.unit);
+}
+
+function reconcileAttemptedDiscovery(p,unit){
+  if(!p?.id || attemptedRecheckInFlight.has(p.id) || operatorPaused)return;
+  attemptedRecheckInFlight.add(p.id);
+  backgroundPacketStatus(p.id).then(durable=>{
+    if(durable?.state!=='NO_EXECUTION'){
+      if(durable?.state!=='EXECUTION_CONFIRMED' && durable?.state!=='EXECUTING'){
+        emitRelayEvent('relay_attempt_recovery_blocked',{
+          packet_id:p.id,reason:'not_confirmed_unexecuted',durable_state:durable?.state||'UNKNOWN'
+        });
+      }
+      return;
+    }
+    if(operatorPaused || !unit?.isConnected || !isAssistantUnit(unit))return;
+    const current=extractUnit(unit);
+    if(!current || current.id!==p.id || hash(current.packet)!==hash(p.packet))return;
+    if(forgetAttempted(p.id)){
+      emitRelayEvent('relay_attempt_history_rearmed',{
+        packet_id:p.id,durable_state:'NO_EXECUTION',source:'discovery_recheck'
+      });
+    }
+    // Resubmit only for settling; the actual execution remains guarded by
+    // the backend exact-once reservation and the operator STOP state.
+    setTimeout(()=>inspectUnit(unit),0);
+  }).catch(e=>emitRelayEvent('relay_attempt_recovery_blocked',{
+    packet_id:p.id,reason:'packet_status_unavailable',error:String(e?.message||e).slice(0,180)
+  })).finally(()=>attemptedRecheckInFlight.delete(p.id));
 }
 
 function inspectUnit(unit){
@@ -2102,7 +2153,11 @@ function inspectUnit(unit){
   scheduleConsumerAssistantClassification(unit);
   if(!p)return;
   noteTrackedRelayAction(unit,p);
-  if(attempted.has(p.id) || inflight.has(p.id))return;
+  if(inflight.has(p.id))return;
+  if(attempted.has(p.id)){
+    reconcileAttemptedDiscovery(p,unit);
+    return;
+  }
 
   const sig=hash(p.packet);
   const prior=pending.get(p.id);
