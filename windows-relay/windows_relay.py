@@ -13,11 +13,11 @@ VERSION=1
 OPEN='[GPT_WINDOWS_ACTION]'; CLOSE='[/GPT_WINDOWS_ACTION]'
 RO='[GPT_WINDOWS_RESULT]'; RC='[/GPT_WINDOWS_RESULT]'
 SANDWICH_REMINDER='Reply to this with the sandwich technique'
-TURN_DISCIPLINE_REMINDER='MANDATORY NEXT TURN: READ current canonical consumer/control_harness.py; READ windows-relay/TASKS.md; READ docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md; READ docs/windows-relay-mission-and-roadmap.md; READ docs/relay-sandwich-procedure.md; record SHA256 proof, run engineering_preflight for next ordinal, verify all Windows Relay mutation targets monag144/GPT-Windows-Relay; USE one durable FINAL bare-fence sandwich for every relay action; if harness hole, repair and test before risky mutation.'
-FIVE_TURN_AUDIT_REMINDER='FIVE-TURN AUDIT DUE NOW: audit the preceding five engineering turns/operations for harness compliance, incidents/user rescues, repeated or disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift before continuing.'
-TWENTY_TURN_REVIEW_REMINDER='TWENTY-OPERATION REVIEW DUE BEFORE THE NEXT OPERATION: reconcile the preceding twenty attempted slots and all four five-operation audits; record a source-backed review under docs/reviews and run governance preflight before continuing. The next review after PCE10.020 is PCE10.040.'
-CONTINUE_AUTONOMOUSLY_REMINDER='KEEP GOING AUTONOMOUSLY after a delivered result: read five controls and checkpoints, choose the next safe operation, do not ask for routine continue. STOP/operator pause or uncertain side effect overrides autonomy; never blindly replay.'
-OPERATION_DISCIPLINE_REMINDER='Before the next operation: read the canonical source-of-truth index, control harness, TODO list, roadmap, established facts, and relevant incident/handoff records; prove net-new progress; log failures/manual rescues; preserve rollback before mutation; enforce the active PCE series budget (000 through 100 inclusive) and rotate before 101; do not repeat a disproven approach.'
+TURN_DISCIPLINE_REMINDER="MANDATORY NEXT PCE011 OPERATION: READ THE ENTIRE consumer/control_harness.py AND ENTIRE windows-relay/TASKS.md; READ docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md, docs/windows-relay-established-facts.md AND docs/relay-sandwich-procedure.md. Record each source SHA256 and call engineering_preflight(root,next_ordinal,series=11). Honor GitHub-first canonical Windows branch; do not use Termux for new Windows edits. Exact saved result is not proof of visible assistant-turn completion. Send next durable bare-fence sandwich in a single final response."
+FIVE_TURN_AUDIT_REMINDER="PCE011 FIVE-OPERATION AUDIT DUE BEFORE NEXT OPERATION: audit prior five attempted IDs including failures and missing packets, source/test/live SHA, Codex attempts, user rescues, STOP, rollback and One-Click GO milestones. PCE10.015-.019 historical audit is already archived."
+TWENTY_TURN_REVIEW_REMINDER="PCE011 TWENTY-OPERATION REVIEW DUE BEFORE NEXT OPERATION: reconcile four 5-operation audits, revise the dated overnight Relay/r28 task queue, preserve rollback and classify all blockers."
+CONTINUE_AUTONOMOUSLY_REMINDER="After exact result and safe checkpoint proof, progress to next operation only when an ACTIVE controller exists. Do not require routine human continue; do not replay an uncertain or unacknowledged action. Operator STOP and ambiguous identity override keep-going. At .050 request factual findings email with send receipt; at .100 rotate semantically to verified fresh PC Engineering 12 chat, never .101."
+OPERATION_DISCIPLINE_REMINDER="PCE011 governance: full harness+TODO read; 5/20 audits; .050 soft email report; .100 verified fresh chat; preserve current live and backup/bin before v16/r28 staging; legacy PCE8 v16 and One-Click GO r28 are candidates NOT overnight winners; source edits GitHub-first, Windows clone fast-forward only; optional Codex after >5 distinct failed attempts; preserve STOP, exact-once and rollback."
 ID_RE=re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 BROWSER_ID_RE=re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 PACKET_RE=re.compile(re.escape(OPEN)+r'\s*(\{.*?\})\s*'+re.escape(CLOSE),re.DOTALL)
@@ -599,7 +599,11 @@ def _turn_discipline_lines(action_id:Any=None)->list[str]:
     if next_ordinal is not None and next_ordinal>0 and next_ordinal%20==0:
         lines.append(TWENTY_TURN_REVIEW_REMINDER)
     else:
-        lines.append('TWENTY-TURN REVIEW CADENCE: review every twenty attempted operations; PCE10.040 is the next review after .020.')
+        lines.append('PCE011 TWENTY-OPERATION REVIEW CADENCE: .020/.040/.060/.080/.100.')
+    if next_ordinal == 50:
+        lines.append('PCE011.050 SOFT CHECKPOINT: compile evidence and email user via an available authorized connected sender; no email delivery claim without send receipt.')
+    if next_ordinal == 100:
+        lines.append('PCE011.100 ROTATION GATE: commit handoff; semantic New chat; verify name/URL and owner epoch before switching; never emit .101.')
     lines.append(CONTINUE_AUTONOMOUSLY_REMINDER)
     return lines
 
