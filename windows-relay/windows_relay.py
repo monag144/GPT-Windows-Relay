@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse, base64, binascii, copy, hashlib, json, os, re, secrets, shutil, subprocess, sys, tempfile, threading, time, xml.etree.ElementTree as ET
+import importlib.util
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -609,6 +610,38 @@ def replay_saved_result(a:Action,prior:dict[str,Any])->str|None:
     presented['replayed']=True
     return result(presented)
 
+def engineering_governance_check(a:Action, repo_root:Path|None=None)->dict|None:
+    """Hard pre-dispatch control gate; user STOP/exact-once remain independent.
+
+    The Windows runtime locates its canonical source clone, not arbitrary
+    historical Termux files. A missing or stale checkpoint denies new PCE
+    execution without reserving an action id.
+    """
+    ordinal=engineering_operation_ordinal(a.id)
+    if ordinal is None:
+        return None
+    root=Path(repo_root) if repo_root else Path.home()/"Downloads"/"Dev"/"GPT"/"GPT-Windows-Relay"
+    root=root.resolve()
+    harness=root/"consumer"/"control_harness.py"
+    if not harness.is_file():
+        raise RelayError("GOVERNANCE_CANONICAL_HARNESS_UNAVAILABLE")
+    try:
+        spec=importlib.util.spec_from_file_location("_windows_relay_governance",harness)
+        if spec is None or spec.loader is None:
+            raise RelayError("GOVERNANCE_HARNESS_IMPORT_UNAVAILABLE")
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        match=re.match(r"^PCE(\d+)",a.id,re.I)
+        series=int(match.group(1)) if match else 10
+        evidence=module.engineering_preflight(root,ordinal,series)
+        if evidence.get("ok") is not True or len(evidence.get("reads",{}))!=5:
+            raise RelayError("GOVERNANCE_READ_PROOF_INCOMPLETE")
+        return evidence
+    except RelayError:
+        raise
+    except Exception as exc:
+        raise RelayError("GOVERNANCE_CHECKPOINT_BLOCKED: "+str(exc)[:350]) from exc
+
 def process(packet:str,state:State):
     a=extract(packet); prior=state.lookup(a.id)
     if prior:
@@ -621,6 +654,13 @@ def process(packet:str,state:State):
         if replayed is not None:
             return replayed
         return result({'version':1,'platform':'windows','id':a.id,'session':a.session,'action':'EXEC','status':prior.get('status','DUPLICATE_IGNORED'),'exit_code':prior.get('exit_code'),'finished_at':prior.get('finished_at',now()),'stdout':'','stderr':'The command was previously processed, but its saved result is unavailable; it was not executed again.','prior':prior})
+    try:
+        governance=engineering_governance_check(a)
+    except RelayError as exc:
+        return result({'version':1,'platform':'windows','id':a.id,'session':a.session,
+                       'action':'EXEC','status':'GOVERNANCE_BLOCKED',
+                       'exit_code':None,'finished_at':now(),'stdout':'',
+                       'stderr':str(exc)+'; no action reserved or executed'})
     state.reserve(a)
     r=execute(a)
     saved_path=save_full_result(state,r)
