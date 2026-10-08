@@ -36,6 +36,17 @@ class HudTests(unittest.TestCase):
   self.assertEqual(x['phase'],'RUNNING'); self.assertEqual(x['packet_id'],'op-400'); self.assertEqual(x['age'],7)
   detail,active=hud.action_detail(state); self.assertTrue(active); self.assertEqual(detail['command'],'Write-Output hello')
 
+ def test_engineering_collapsed_render_is_visible_without_consumer_mission(self):
+  now=datetime(2026,10,8,2,0,0,tzinfo=timezone.utc)
+  events=[{'time':(now-timedelta(seconds=2)).isoformat(),
+           'event':'relay_engineering_action_render_collapsed',
+           'detail':{'previous_result_id':'PCE10.017','safe_replay':False}}]
+  life=hud.lifecycle(events,{},now)
+  self.assertEqual(life['phase'],'RENDER COLLAPSED')
+  self.assertIn('replay blocked',life['reason'])
+  self.assertEqual(hud.headline(True,life,{'state':'ACTIVE'}),'RENDER COLLAPSED')
+  self.assertEqual(hud.browser_state(events,now)['event'],'relay_engineering_action_render_collapsed')
+
  def test_lifecycle_explains_scanner_stall(self):
   now=datetime(2026,1,1,tzinfo=timezone.utc)
   events=[{'time':(now-timedelta(seconds=3)).isoformat(),'event':'relay_scanner_stalled','detail':{'packet_id':'op-399','browser_id':'firefox'}}]
