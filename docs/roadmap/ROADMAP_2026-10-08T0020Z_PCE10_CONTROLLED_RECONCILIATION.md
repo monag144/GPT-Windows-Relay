@@ -20,7 +20,7 @@ Before every engineering turn:
 - [x] Termux r29 source/test migration proof: all 87 `windows-relay/` paths represented in Windows repo.
 - [x] Missing A6/R29/PCE8/PCE9/job-application evidence migrated.
 - [x] Windows-specific assets removed from all active Termux branch tips that contained them; 0/13 active branches expose `windows-relay/README.md`.
-- [~] Source acceptance: PCE10.009 passed exact/full source and JS gates. PCE10.010 failed before tests/live staging because manifest verification compared committed Git blob IDs with checkout bytes. This is repaired: migration evidence is verified against `HEAD:<path>` blob identity. PCE10.011 must prove all 42 manifest entries at HEAD, classify `git diff --check` so only exact manifest blobs are exempt, rerun exact/full suites, then stage the rollback-backed Firefox stale-settle canary.
+- [~] Source acceptance is green through the PCE10.011 pre-browser gates. PCE10.011 then failed at unscoped `list-tabs`; the adapter intentionally requires one visible Firefox window for that action. Harness now requires exact `resolve-conversation-tab` first when the conversation URL is known, using the returned PID/tab for all subsequent Firefox actions. PCE10.012 performs that bounded browser-state re-proof and only then may stage the rollback-backed stale-settle canary.
 - [ ] Promote the reminder change to the live relay with rollback and restart proof.
 - [ ] Verify a fresh relay result contains the mandatory checklist.
 - [ ] Complete reconciled control-plane full-suite acceptance.
