@@ -39,6 +39,10 @@ PCE10.005-.009 audit: `docs/audits/AUDIT_2026-10-08T0108Z_PCE10_OPERATIONS_005_0
 
 PCE10.010-.014 audit: `docs/audits/AUDIT_2026-10-08T0128Z_PCE10_OPERATIONS_010_014.md`.
 
+PCE10.015-.019 audit: `docs/audits/AUDIT_2026-10-08T0316Z_PCE10_OPERATIONS_015_019.md`.
+
+PCE10.019 source-to-live SHA comparison proved all three Firefox content scripts and the HUD remain outdated in live runtime. PCE10.020 must establish the correct reload/rollback path; no further speculative UIA scanner. 
+
 Promotion verdict: **BLOCKED** until the scoped diff gate and Firefox live canary are green.
 
 ## Reliability invariants
