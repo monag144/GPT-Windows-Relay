@@ -164,6 +164,28 @@ class Tests(unittest.TestCase):
         not_due=json.loads(wr.result({"id":"PCE10.040","status":"OK","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertNotIn(wr.TWENTY_TURN_REVIEW_REMINDER,not_due["stdout"])
 
+    def test_governance_preflight_is_required_before_new_pce_execution(self):
+        with tempfile.TemporaryDirectory() as d:
+            state=wr.State(Path(d)/"state.json")
+            packet=pkt(id="PCE10.025")
+            with mock.patch.object(wr,"engineering_governance_check",
+                                   side_effect=wr.RelayError("audit checkpoint missing")), \
+                 mock.patch.object(wr,"execute") as execute:
+                out=wr.process(packet,state)
+            self.assertIn("GOVERNANCE_BLOCKED",out)
+            self.assertIn("audit checkpoint missing",out)
+            self.assertIsNone(state.lookup("PCE10.025"))
+            execute.assert_not_called()
+
+    def test_governance_preflight_reads_canonical_five_sources_for_pce21(self):
+        canonical=Path(__file__).resolve().parents[2]
+        action=wr.extract(pkt(id="PCE10.021"))
+        evidence=wr.engineering_governance_check(action,repo_root=canonical)
+        self.assertTrue(evidence["ok"])
+        self.assertEqual(len(evidence["reads"]),5)
+        self.assertIn("docs/relay-sandwich-procedure.md",evidence["reads"])
+        self.assertFalse(evidence["mutation_authorized"])
+
     def test_engineering_operation_ordinal_supports_dot_and_legacy_forms(self):
         self.assertEqual(wr.engineering_operation_ordinal("PCE10.005"),5)
         self.assertEqual(wr.engineering_operation_ordinal("PCE10-BOOT-OP010"),10)
