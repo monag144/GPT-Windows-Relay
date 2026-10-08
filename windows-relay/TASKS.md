@@ -36,8 +36,8 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] Audit .020–.024 published at `docs/audits/AUDIT_2026-10-08T1031Z_PCE11_OPERATIONS_020_024.md`, documenting full source acceptance and failed runtime canary. Requires independent GOVSYNC before .025.
 - [x] PCE11.025 read-only failure forensic PASS: v16 sidecar PID 4480 launched in private Job, was terminated and no longer listed, port 8768 free; production port 8766 still PID 18632, ARMED browser-owned and two pending missions. `CLEANUP_AND_MAIN_VERIFIED`. Actual rejected /status PID vs mission count unknown (combined assertion). Evidence `Client/Relay/bin/PCE11_025_V16_FAILURE_FORENSICS_2026-10-08T103325Z.json`. No new process started.
 - [x] PCE11.026 postmortem: private state 0 missions/0 processed/no active action, auth config removed; original /status contract 5/5. HTTP response values remain missing. Evidence `Client/Relay/bin/PCE11_026_PRIVATE_STATE_DIAG_2026-10-08T103556Z.json`.
-- [ ] PCE11.027: persist separate observed PID and missions before validation, test both failure paths, rerun full source/JS/archive gates; no live server.
-- [ ] PCE11.028 only if .027 passes: fresh unique isolated health retry, not replay .024. Audit .025–.029 before .030.
+- [x] PCE11.027 PASS at `fe4035c22af1c04fa63869eb4ba900ca6595c6b8`: nine v16 telemetry, 12 containment, 481 Windows, 119 consumer tests; four JS, archive and staged v16 source verified. No process launched. Evidence `Client/Relay/bin/SOURCE_TELEMETRY_ACCEPTANCE_2026-10-08T103943Z/acceptance.json`.
+- [ ] PCE11.028: single NEW v16 8768 private Job canary; require .027 source acceptance, .023 native cleanup, .025 old-canary cleanup, .026 state forensics, fresh full tests and protected main PID. Persist actual HTTP PID/missions separately even if rejected; own-job teardown, never touch Firefox/HUD/STOP. Audit .025–.029 before .030.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## Full original queue preserved
