@@ -7,7 +7,7 @@ BRANCH="pce11/one-click-go-recovery-and-doc-hygiene"
 PREVIOUS="c4eeca6b3ad1c20bbd9abbca4b255822efcb2e3f"
 AUDIT="docs/audits/AUDIT_2026-10-08T0916Z_PCE11_OPERATIONS_000_004.md"
 AUDIT_BLOB="6557e9aa1143857a3206faa527fa065d265e4222"
-ALLOWED={AUDIT,"windows-relay/TASKS.md",
+ALLOWED={AUDIT,"docs/incidents/INCIDENT_2026-10-08T0918Z_PCE11_005_PRE_DISPATCH_AUDIT_SYNC_DEADLOCK.md","windows-relay/TASKS.md",
          "windows-relay/tools/pce11_runtime_inventory.py",
          "windows-relay/tools/pce11_audit_sync.py"}
 MANDATORY=("consumer/control_harness.py","windows-relay/TASKS.md",
