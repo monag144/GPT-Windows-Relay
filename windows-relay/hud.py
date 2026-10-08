@@ -74,6 +74,7 @@ def browser_state(events,now=None):
 PHASES={
     "relay_recovery_packet_seen":("DISCOVERED","valid packet visible; forced recovery inspection"),
     "relay_packet_discovered":("DISCOVERED","packet parsed; settling before execution"),
+    "relay_result_replay_suppressed":("REPLAY SUPPRESSED","execution skipped after a result-visibility check"),
     "relay_packet_settle_stale_rearmed":("RECOVERING","stale settle lease expired; packet re-armed"),
     "relay_action_execution_requested":("STARTING","packet handed to extension background"),
     "action_received":("STARTING","extension posted action to Windows relay"),
@@ -177,7 +178,7 @@ def headline(online,life,browser):
     if life["phase"]=="STALLED":return "STALLED"
     if life["phase"]=="RECOVERING":return "RECOVERING"
     if life["phase"]=="RUNNING":return "RUNNING"
-    if life["phase"] in {"WAITING","WAITING FOR GPT TURN END","DELIVERING","RESULT READY","STARTING","DISCOVERED","APPROVAL REQUIRED","RECOVERY ADVICE","RECOVERY INVALID","RENDER COLLAPSED"}:return life["phase"]
+    if life["phase"] in {"WAITING","WAITING FOR GPT TURN END","DELIVERING","RESULT READY","STARTING","DISCOVERED","REPLAY SUPPRESSED","APPROVAL REQUIRED","RECOVERY ADVICE","RECOVERY INVALID","RENDER COLLAPSED"}:return life["phase"]
     if browser["state"]=="DISCONNECTED":return "STALLED"
     return "READY"
 
@@ -334,7 +335,7 @@ def run_ui():
             root.geometry(f"{W}x{COMPACT_H}+{root.winfo_x()}+{root.winfo_y()}")
     toggle.configure(command=toggle_details)
 
-    colors={"OFFLINE":BAD,"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
+    colors={"OFFLINE":BAD,"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"REPLAY SUPPRESSED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
     def refresh():
         snap=snapshot()
         title.configure(text=snap["title"],fg=colors.get(snap.get("title_phase",snap["title"]),GOOD))

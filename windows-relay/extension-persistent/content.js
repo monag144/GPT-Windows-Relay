@@ -1855,9 +1855,31 @@ function drainDeferredActions(){
   }
 }
 
+function forgetAttempted(id){
+  if(!attempted.delete(id))return false;
+  for(let i=attemptedOrder.length-1;i>=0;i--){
+    if(attemptedOrder[i]===id)attemptedOrder.splice(i,1);
+  }
+  persistAttemptedHistory();
+  return true;
+}
+
 async function run(p){
   if(operatorPaused)return;
-  if(attempted.has(p.id)||inflight.has(p.id))return;
+  if(inflight.has(p.id))return;
+  if(attempted.has(p.id)){
+    // Attempt history is advisory only: a prior false UI match must not turn
+    // into a durable non-execution. The backend is the source of truth.
+    let durable=null;
+    try{durable=await backgroundPacketStatus(p.id);}catch{}
+    if(durable?.state==='EXECUTION_CONFIRMED' || durable?.state==='EXECUTING')return;
+    if(forgetAttempted(p.id)){
+      emitRelayEvent('relay_attempt_history_rearmed',{
+        packet_id:p.id,
+        durable_state:durable?.state||'UNKNOWN'
+      });
+    }
+  }
   if(userTurnContainsPacketId(p.id)){
     // Visible text is only a candidate receipt.  Before suppressing an
     // action, obtain packet-specific durable identity from the backend.
