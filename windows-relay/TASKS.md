@@ -10,6 +10,9 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 
 ## P0 now
 
+- [~] **Governance hardening:** canonical `consumer/control_harness.py` now exposes `engineering_preflight()` to read all five controls (including sandwich procedure) and verify every 5/20 checkpoint before the next operation. A retrospective .000-.019 twenty-operation review is committed at `docs/reviews/REVIEW_2026-10-08T0410Z_PCE10_OPERATIONS_000_019.md`. Next audit before **PCE10.025** (slots .020-.024); next twenty review before **PCE10.040** (slots .020-.039). Relay serializer reminders now fire on .024 and .039 responses BEFORE the boundary, not after. Source/tests pending PCE10.021 acceptance.
+- [~] **Keep-going reliability:** Next task is to establish reliable automatic advancement after a delivered result without blind replay, with STOP and uncertainty barriers. First prove the staged Firefox content can load through the managed extension and produce a fresh canary; the current live add-on has not been reloaded.
+
 - [x] Control Harness v3 and per-turn discipline.
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
