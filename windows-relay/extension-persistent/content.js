@@ -159,11 +159,16 @@ function resultPacketIdFromUserUnit(unit){
   const text=(unit.textContent||'').trim();
   const composer=findComposer();
   if(composer && (unit===composer || unit.contains?.(composer) || composer.contains?.(unit)))return null;
-  const match=text.match(/^\[GPT_WINDOWS_RESULT\]\s*\n([\s\S]+?)\n\[\/GPT_WINDOWS_RESULT\]$/);
+  // GPT_WINDOWS_RESULT_SINGLE_LINE_OR_MULTILINE_RECEIPT_V1
+  // A full user-turn envelope may render inline OR across lines. Neither an
+  // assistant example nor a bare packet ID is a delivery acknowledgement.
+  const match=text.match(/^\[GPT_WINDOWS_RESULT\]\s+([\s\S]+?)\s+\[\/GPT_WINDOWS_RESULT\]$/);
   if(!match)return null;
   try{
     const result=JSON.parse(match[1]);
-    return typeof result?.id==='string' && result.id ? result.id : null;
+    return result?.version===1 && result?.platform==='windows' &&
+      result?.action==='EXEC' && typeof result?.id==='string' && result.id
+      ? result.id : null;
   }catch{return null;}
 }
 
