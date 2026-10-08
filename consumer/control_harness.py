@@ -187,6 +187,10 @@ def build_control_harness_contract(mission_id: str) -> dict:
                 "settle_ms": 500,
                 "stale_pending_lease_ms": 5000,
                 "rule": "A discovered packet may not remain indefinitely in an unchanged pending-settle record. If the settle lease expires, the pending record must be cleared, observed, and re-armed."
+            },
+            "firefox_identity_bootstrap": {
+                "known_conversation_rule": "When an exact ChatGPT conversation URL is known, call resolve-conversation-tab first, require exactly one canonical URL match, and use its returned Firefox PID/tab identity for subsequent list/reload/refresh actions.",
+                "list_tabs_rule": "Do not use unscoped list-tabs as the bootstrap primitive when multiple visible Firefox windows may exist; unscoped list-tabs is only valid when single-window Firefox state is itself the named acceptance condition."
             }
         },
         "continuous_improvement": {
