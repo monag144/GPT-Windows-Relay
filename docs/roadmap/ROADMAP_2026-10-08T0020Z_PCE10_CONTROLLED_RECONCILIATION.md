@@ -15,6 +15,8 @@ Before every engineering turn:
 
 ## Immediate P0 sequence
 
+- [~] **Open cross-operation incident (2026-10-08T0502Z):** `docs/incidents/INCIDENT_2026-10-08T0502Z_PCE10_DISCOVERY_STALL_FALSE_RESULT_ACK_CODEX_REPAIR_OPEN.md`. Codex reports `7c38e90 Fix false result suppression and stalled scanner recovery` (strict standalone result, authenticated packet-status, backend state gating, tab-bound 45s recovery, permissions). Local commit and source claimed; remote GitHub visibility and independent verification absent at this snapshot; **no tests or live Firefox activation**. Do not close until end-to-end canary and safe recovery evidence; preserve PCE10.020 rollback. Details and pending evidence are in the incident's open follow-up log.
+
 - [~] **Director-directed 5/20 governance repair:** per-turn canonical reads now include `docs/relay-sandwich-procedure.md` (five total). `engineering_preflight()` verifies artifact evidence and fails closed if a required five-operation audit or twenty-operation review is missing. Audit **before PCE10.025** (.020-.024), review **before PCE10.040** (.020-.039). Completed retrospective .000-.019 review is `docs/reviews/REVIEW_2026-10-08T0410Z_PCE10_OPERATIONS_000_019.md`. Serializer warnings moved to the response **preceding** checkpoint boundaries. Acceptance pending local suites.
 - [~] **Zero-babysitting follow-through:** after verified result delivery, advance to the next safe operation automatically; a stalled discovery, collapsed packet, or uncertain side effect must be diagnosed from durable evidence, not blindly repeated. Activation/canary of the staged Firefox source precedes claims of runtime self-healing.
 
