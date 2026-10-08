@@ -191,7 +191,9 @@ class V16HealthCanaryTests(unittest.TestCase):
             self.assertEqual(result["observed_status_pid"],"123456")
             self.assertIs(result["status_pid_matches_child"],False)
             self.assertIs(result["status_missions_zero"],True)
-            self.assertIn("status PID mismatch",result["failure"])
+            self.assertIn("isolated sidecar status PID malformed",result["failure"])
+            self.assertIsNone(result["listener_pid_matches_status"])
+            self.assertFalse(result["host_identity_verified"])
             self.assertTrue(result["cleanup_verified"])
 
     def test_verified_direct_child_venv_host_is_accepted(self):
