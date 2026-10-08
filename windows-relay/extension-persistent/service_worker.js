@@ -159,23 +159,58 @@ function mutateScannerRecoveries(mutator){
 }
 function postScannerRecovery(tabId,message){for(const port of relayContentPorts){if(port?.sender?.tab?.id===tabId){try{port.postMessage(message);}catch{}}}}
 async function recordDiscovery(port,detail){
-  const tabId=port?.sender?.tab?.id,packetId=typeof detail?.packet_id==='string'?detail.packet_id:null,conversationKey=normalizeConversationKey(port?.sender?.tab?.url);
+  const tabId=port?.sender?.tab?.id;
+  const packetId=typeof detail?.packet_id==='string'?detail.packet_id:null;
+  const conversationKey=normalizeConversationKey(port?.sender?.tab?.url);
   if(!Number.isInteger(tabId)||!packetId||!conversationKey)return;
-  let stopGeneration=0;try{stopGeneration=Number((await readControlState())?.stop_generation)||0;}catch{}
+  let stopGeneration=0;
+  try{stopGeneration=Number((await readControlState(true))?.stop_generation)||0;}
+  catch{return;} // Unknown operator intent cannot arm an automatic recovery.
   const key=scannerKey(tabId,packetId);
-  await mutateScannerRecoveries(records=>{records[key]={packet_id:packetId,tab_id:tabId,conversation_key:conversationKey,discovered_at:Date.now(),stop_generation:stopGeneration,phase:'DISCOVERED',recovery_attempts:0};});
-  try{chrome.alarms.create(scannerAlarmName(key),{when:Date.now()+SCANNER_STALE_MS});}catch{}
-  setTimeout(()=>postScannerRecovery(tabId,{type:'relay_scanner_recover',packet_id:packetId,conversation_key:conversationKey,reason:'discovery_settle_lease_supervisor'}),5000);
+  let firstSeen=Date.now();
+  await mutateScannerRecoveries(records=>{
+    const old=records[key];
+    const same=old?.packet_id===packetId &&
+      old?.conversation_key===conversationKey &&
+      old?.stop_generation===stopGeneration;
+    firstSeen=same && Number.isFinite(old?.discovered_at)?old.discovered_at:Date.now();
+    records[key]={packet_id:packetId,tab_id:tabId,conversation_key:conversationKey,
+      discovered_at:firstSeen,stop_generation:stopGeneration,
+      phase:same?old.phase:'DISCOVERED',
+      recovery_attempts:same?old.recovery_attempts:0};
+  });
+  // Repeated DOM observations must never postpone the original 45s deadline.
+  try{chrome.alarms.create(scannerAlarmName(key),{
+    when:Math.max(Date.now()+1000,firstSeen+SCANNER_STALE_MS)
+  });}catch{}
+  setTimeout(()=>postScannerRecovery(tabId,{type:'relay_scanner_recover',
+    packet_id:packetId,conversation_key:conversationKey,
+    reason:'discovery_settle_lease_supervisor'}),5000);
 }
-function terminalScannerEvent(event){return new Set(['relay_action_execution_requested','action_received','action_result','relay_result_delivery_complete','relay_result_replay_suppressed']).has(event);}
+function terminalScannerEvent(event){
+  // UI replay suppression and 'action handed off' are NOT backend completion.
+  return new Set(['relay_action_execution_requested','action_received',
+    'action_result','relay_result_delivery_complete',
+    'relay_result_delivery_delegated_windows']).has(event);
+}
 async function clearDiscoveryForEvent(port,event,detail){
-  if(!terminalScannerEvent(event))return;const tabId=port?.sender?.tab?.id,packetId=typeof detail?.packet_id==='string'?detail.packet_id:null;
-  if(!Number.isInteger(tabId)||!packetId)return;const key=scannerKey(tabId,packetId);
-  await mutateScannerRecoveries(records=>{delete records[key];});try{chrome.alarms.clear(scannerAlarmName(key));}catch{}
+  if(!terminalScannerEvent(event))return;
+  const tabId=port?.sender?.tab?.id;
+  const packetId=typeof detail?.packet_id==='string'?detail.packet_id:null;
+  if(!Number.isInteger(tabId)||!packetId)return;
+  // Never clear the watchdog from the browser's own perception of success.
+  // Only a packet-specific durable reservation/result can terminate recovery.
+  let durable;
+  try{durable=await call('/packet-status?id='+encodeURIComponent(packetId),{},3000);}
+  catch{return;}
+  if(durable?.state!=='EXECUTING' && durable?.state!=='EXECUTION_CONFIRMED')return;
+  const key=scannerKey(tabId,packetId);
+  await mutateScannerRecoveries(records=>{delete records[key];});
+  try{chrome.alarms.clear(scannerAlarmName(key));}catch{}
 }
 async function recoverStalledScanner(key){
   let record=null;await mutateScannerRecoveries(records=>{record=records[key]||null;});if(!record)return;
-  let control;try{control=await readControlState(true);}catch{return;}if(control?.armed!==true)return;
+  let control;try{control=await readControlState(true);}catch{return;}if(control?.armed!==true || Number(control.stop_generation)!==Number(record.stop_generation))return;
   const ownerRaw=await extensionStorageGet(RELAY_OWNER_KEY),owner=ownerRaw?.[RELAY_OWNER_KEY];
   if(!owner||owner.conversation_key!==record.conversation_key||owner.tab_id!==record.tab_id)return;
   let tab,durable;try{tab=await chrome.tabs.get(record.tab_id);durable=await call('/packet-status?id='+encodeURIComponent(record.packet_id),{},3000);}catch{return;}
