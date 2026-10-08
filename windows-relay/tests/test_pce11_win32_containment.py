@@ -93,6 +93,37 @@ class ContainmentContractTests(unittest.TestCase):
             mod.ContainedProcess(a).start(args,cwd)
         a.CreateProcessW.assert_not_called()
 
+    def test_failed_job_termination_never_reports_success(self):
+        api=self.fake_api()
+        api.TerminateJobObject.return_value=0
+        args,cwd=self.arguments()
+        p=mod.ContainedProcess(api).start(args,cwd)
+        with self.assertRaisesRegex(OSError,"private job termination API failed"):
+            p.close()
+        self.assertTrue(p.disposed)
+        self.assertNotIn("private_job_terminated",p.events)
+        self.assertIn("job_handle_closed",p.events)
+        self.assertEqual(api.CloseHandle.call_count,3)
+
+    def test_unobserved_child_exit_is_a_hard_cleanup_failure(self):
+        api=self.fake_api()
+        api.WaitForSingleObject.return_value=mod.WAIT_TIMEOUT
+        args,cwd=self.arguments()
+        p=mod.ContainedProcess(api).start(args,cwd)
+        with self.assertRaisesRegex(OSError,"private child exit not observed"):
+            p.close()
+        self.assertTrue(p.disposed)
+        api.TerminateJobObject.assert_called_once()
+
+    def test_unassigned_child_termination_failure_is_reported(self):
+        api=self.fake_api("assign")
+        api.TerminateProcess.return_value=0
+        args,cwd=self.arguments()
+        with self.assertRaisesRegex(OSError,"unassigned child termination failed"):
+            mod.ContainedProcess(api).start(args,cwd)
+        api.ResumeThread.assert_not_called()
+        api.TerminateJobObject.assert_called_once()
+
     def test_invalid_arguments_rejected_without_launch(self):
         a=self.fake_api()
         p=mod.ContainedProcess(a)
