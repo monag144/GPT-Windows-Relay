@@ -76,6 +76,24 @@ class PCE11PageErrorRecoveryTests(unittest.TestCase):
         self.assertIn("replay_allowed:false",s)
         self.assertIn("Do NOT repeat any command",s)
 
+    def test_new_chat_acquires_fresh_conversation_url_without_replaying(self):
+        s=self.source
+        self.assertIn("const sourcePath=new URL(st.source_url).pathname;",s)
+        self.assertIn("if(newPath===sourcePath",s)
+        self.assertIn("!/^\/c\/[^/?#]+$/.test(newPath)",s)
+        self.assertIn("['new_chat_requested','handoff_submitting'].includes(st.phase)",s)
+        self.assertIn("if(recentUserTurnContainsToken(PAGE_ERROR_HANDOFF_TOKEN))",s)
+        self.assertIn("if(st.phase==='handoff_submitting'){",s)
+        self.assertIn("handoff_submission_unconfirmed_no_resend",s)
+        self.assertIn("new_chat_composer_not_empty",s)
+        self.assertIn("st.phase='verified';st.verified_at=Date.now()",s)
+
+    def test_expired_recovery_record_holds_and_never_arms_second_refresh(self):
+        s=self.source
+        self.assertIn("return {...st,phase:'expired_hold'}",s)
+        self.assertIn("if(st)return; // never loop another refresh",s)
+        self.assertNotIn("sessionStorage.removeItem(PAGE_ERROR_RECOVERY_KEY);return null;",s)
+
     def test_existing_rotation_and_relay_packet_recovery_remain_present(self):
         s=self.source
         self.assertIn("function beginEngineeringRotation(m)",s)
