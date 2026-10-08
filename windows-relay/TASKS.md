@@ -28,16 +28,16 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] PCE11.018 forensic test run: 476 Windows Relay unittests, 1 failure only. `test_protocol.Tests.test_every_serialized_result_stdout_enforces_turn_discipline_and_sandwich` expects `monag144/GPT-Windows-Relay` in serialized stdout; canonical `OPERATION_DISCIPLINE_REMINDER` omitted the repository identifier. Full evidence `Client/Relay/bin/SOURCE_SUITE_FORENSICS_2026-10-08T100608Z/summary.json`; stderr SHA256 `db34a10dfe0cb1afe29b0cc4abde343e6820a63a6ced9a69271b45f810049928`. No sidecar launch.
 - [x] PCE11.019: protocol 50/50 PASS; full Windows 476 tests with 1 documentation hygiene failure; consumer/JS and archive tests unrun. Canonical TASKS over 10KB was archived verbatim and compacted.
 - [x] GitHub published `.015–.019` audit at `docs/audits/AUDIT_2026-10-08T1012Z_PCE11_OPERATIONS_015_019.md` and 20-operation review at `docs/reviews/REVIEW_2026-10-08T1013Z_PCE11_OPERATIONS_000_019.md`.
-- [ ] Before PCE11.020, independent restricted GOVSYNC must install BOTH documents locally. Verify Harness due audit and review; then source-only tests. No live cutover.
 - [x] PCE11.020 source-only: audited GOVSYNC passed; protocol 50/50 and Windows full 476/476 PASS; consumer 117 tests FAIL (PCE10 fixture defaults and migration Git blob mismatch suspected). JS/archive/v16 gates not reached. Incident `docs/incidents/INCIDENT_2026-10-08T1016Z_PCE11_020_CONSUMER_GOVERNANCE_AND_MANIFEST_FAILURES.md`. Evidence `Client/Relay/bin/SOURCE_ACCEPTANCE_2026-10-08T101602Z/acceptance.json`; no canary.
-- [ ] PCE11.021: inspect persisted .020 consumer test output, exact failed assertions and full 42-entry manifest-to-Git comparison, report masked paths/IDs and complete durable log. GitHub-first sync and governance preflight before reading; no suite replay or live mutation.
 - [x] PCE11.021 persisted consumer forensics: 117 tests, 4 FAIL + 1 ERROR; PCE10 fixtures invoked PCE11 default; all 42 original Termux migration Git blobs validated at pinned source commit, 15 current Windows destination blobs differ. No tests replayed. Evidence `Client/Relay/bin/CONSUMER_FORENSICS_2026-10-08T101845Z.json`.
 - [x] PCE11.022 full source acceptance **PASSED** at commit `b154c0776b15862b34d3fa7689013c20b690dc7a`: protocol 50, Windows full 476, governance 8, migration 2, consumer full 119, JS syntax 4; original archive and historical v16 source verified; no sidecar or production cutover. Evidence `Client/Relay/bin/SOURCE_ACCEPTANCE_2026-10-08T102230Z/acceptance.json`.
 - [x] PCE11.023 native Win32 private-Job smoke PASS: process PID 1052 started suspended and terminated via its Job; 12 containment, 479 Windows, 119 consumer tests passed; main PID preserved and 8768 free. Evidence `Client/Relay/bin/PRIVATE_JOB_SMOKE_2026-10-08T102641Z.json`. No v16 sidecar or production mutation.
 - [x] PCE11.024 first v16 private-Job 8768 canary FAILED exit 2, at 10:29:37Z. Forensic report `%LOCALAPPDATA%/GPTWindowsRelay/pce11-isolated/PCE11_ISOLATED_V16_CANARY_20261008T102936Z_2a7894efa7d3/health-report.json`. Root cause, child exit, job cleanup and port 8768 status UNKNOWN until read. Incident `docs/incidents/INCIDENT_2026-10-08T1029Z_PCE11_024_V16_CANARY_RUNTIME_FAILURE.md`. No retry/cutover/guessed-PID cleanup.
 - [x] Audit .020–.024 published at `docs/audits/AUDIT_2026-10-08T1031Z_PCE11_OPERATIONS_020_024.md`, documenting full source acceptance and failed runtime canary. Requires independent GOVSYNC before .025.
 - [x] PCE11.025 read-only failure forensic PASS: v16 sidecar PID 4480 launched in private Job, was terminated and no longer listed, port 8768 free; production port 8766 still PID 18632, ARMED browser-owned and two pending missions. `CLEANUP_AND_MAIN_VERIFIED`. Actual rejected /status PID vs mission count unknown (combined assertion). Evidence `Client/Relay/bin/PCE11_025_V16_FAILURE_FORENSICS_2026-10-08T103325Z.json`. No new process started.
-- [ ] PCE11.026: read ONLY .024 sandbox private state snapshot and immutable v16 /status source contract; never read private token or infer missing HTTP fields from later state. Produce sanitized report, zero server/process/browser/STOP/queue actions. New canary remains blocked pending precise telemetry.
+- [x] PCE11.026 postmortem: private state 0 missions/0 processed/no active action, auth config removed; original /status contract 5/5. HTTP response values remain missing. Evidence `Client/Relay/bin/PCE11_026_PRIVATE_STATE_DIAG_2026-10-08T103556Z.json`.
+- [ ] PCE11.027: persist separate observed PID and missions before validation, test both failure paths, rerun full source/JS/archive gates; no live server.
+- [ ] PCE11.028 only if .027 passes: fresh unique isolated health retry, not replay .024. Audit .025–.029 before .030.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## Full original queue preserved
@@ -49,9 +49,5 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - Soft reporting/email checkpoint .050; mandatory safe rotation .100.
 - Human STOP, uncertain side effects, ambiguous tab identity, failed rollback or dirty checkout always prohibit unsafe unattended mutation; reporting and read-only diagnosis may continue.
 
-## HISTORICAL TASK DETAIL
-Earlier full backlog was preserved at Git blob `9dd9080ed2e9b1a489c3f9258f3a5c829dce3763` and verbatim archives:
-- [Part 1](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_01.md)
-- [Part 2](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_02.md)
-
-Do not confuse a user-reported running Relay with current source SHA or an accepted browser runtime.
+## Historical task archives
+Original full TASKS retained [here](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md), plus [part 1](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_01.md) and [part 2](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_02.md). A running Relay is not proof of source SHA or browser runtime identity.
