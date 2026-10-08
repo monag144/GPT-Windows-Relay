@@ -169,7 +169,12 @@ def build_control_harness_contract(mission_id: str) -> dict:
         "runtime_gates": {
             "source_contract_method":"validate_windows_runtime_contract",
             "transition_method":"evaluate_runtime_transition",
-            "rule":"A live transition is blocked unless 8766 main, isolated 8767 consumer, exactly one HUD, browser runtime evidence, and helper finalization are observed."
+            "rule":"A live transition is blocked unless 8766 main, isolated 8767 consumer, exactly one HUD, browser runtime evidence, and helper finalization are observed.",
+            "browser_discovery_settle": {
+                "settle_ms": 500,
+                "stale_pending_lease_ms": 5000,
+                "rule": "A discovered packet may not remain indefinitely in an unchanged pending-settle record. If the settle lease expires, the pending record must be cleared, observed, and re-armed."
+            }
         },
         "continuous_improvement": {
             "method": "evaluate_improvement",
