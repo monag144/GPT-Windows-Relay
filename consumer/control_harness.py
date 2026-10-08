@@ -143,6 +143,7 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "read_every_turn": [
                 "consumer/control_harness.py",
                 "windows-relay/TASKS.md",
+                "docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",
                 "docs/windows-relay-mission-and-roadmap.md"
             ],
             "canonical_windows_repository": "monag144/GPT-Windows-Relay",
