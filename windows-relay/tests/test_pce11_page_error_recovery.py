@@ -91,6 +91,8 @@ class PCE11PageErrorRecoveryTests(unittest.TestCase):
     def test_expired_recovery_record_holds_and_never_arms_second_refresh(self):
         s=self.source
         self.assertIn("return {...st,phase:'expired_hold'}",s)
+        self.assertIn("return {phase:'corrupt_hold'}",s)
+        self.assertIn("if(raw===null)return null;",s)
         self.assertIn("if(st)return; // never loop another refresh",s)
         self.assertNotIn("sessionStorage.removeItem(PAGE_ERROR_RECOVERY_KEY);return null;",s)
 
