@@ -1,8 +1,7 @@
-# Incident: repeated PowerShell alias collision
+# Legacy compatibility pointer — 2026-10-08T0745Z
 
-OP020 defined helper function R. PowerShell resolved R to Invoke-History, causing COMMAND_FAILED before product modification.
+The maintained content was migrated without deletion. This path is retained for historical links.
 
-This repeats the PCE8 H/Get-History failure class.
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_PCE9_REPEAT_POWERSHELL_ALIAS_COLLISION.md)
 
-## Permanent rule
-Do not use one-letter helper function names in relay engineering scripts. Prefer explicit names such as EmitSourceRange and verify command resolution when helpers matter.
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->

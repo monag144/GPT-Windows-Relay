@@ -1,6 +1,7 @@
-# Incident: relay command exceeded Windows process limit
+# Legacy compatibility pointer — 2026-10-08T0745Z
 
-OP018 failed before execution with WinError 206. No runtime change occurred.
+The maintained content was migrated without deletion. This path is retained for historical links.
 
-## Rule
-Use compact relay packets and stage complex work. Do not embed large helper programs in one Windows action.
+[Open timestamped document](./INCIDENT_2026-10-08T0745Z_2026-10-07_PCE9_RELAY_COMMAND_LENGTH_206.md)
+
+<!-- PCE11_TIMESTAMP_COMPAT_POINTER -->
