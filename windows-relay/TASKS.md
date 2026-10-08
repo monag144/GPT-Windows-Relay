@@ -14,7 +14,8 @@ Current roadmap: `../docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECO
 - [x] Five-turn audit cadence encoded in harness and relay-result source; PCE10.000-.004 audit completed and promotion blocked pending green source acceptance.
 - [x] Windows Relay source/test/evidence migration out of Termux.
 - [x] Active Termux branch tips cleaned of classified Windows Relay assets.
-- [~] Source behavior and migration/scoped-diff gates are green. PCE10.013 isolated `FIREFOX_CONVERSATION_MATCH_COUNT_0`; PCE10.014 then completed a read-only visible URL/PID diagnostic, but the compact result truncated its final verdict. The PCE10.010-.014 audit is complete at `docs/audits/AUDIT_2026-10-08T0128Z_PCE10_OPERATIONS_010_014.md`. PCE10.015 must extract the saved PCE10.014 verdict and positively establish the current visible ChatGPT conversation URL/PID before any identity repair or live canary.
+- [~] **P0 render-collapse user rescue:** PCE10.015 command collapsed after a commentary/final split. PCE10.016/017 final-channel probes succeeded; PCE10.015 has no saved result and must not be replayed. Source-side engineering collapse detection (without consumer mission), HUD RENDER COLLAPSED state, mirror sync, and regression tests are committed but not yet live. PCE10.018 must run full source acceptance first. Incident: `docs/incidents/INCIDENT_2026-10-08T0200Z_PCE10_015_USER_RESCUE_COLLAPSED_COMMENTARY_COMMAND.md`.
+- [~] **Firefox canary still blocked:** PCE10.014 visible URL probe found no visible ChatGPT conversation URL. This negative UIA result does not establish that the browser is closed. Do not hard-code the old conversation URL; secure positive managed-target evidence before any live extension reload/cutover.
 - [ ] Deploy the relay reminder change with rollback; restart and positively prove it in a fresh result.
 - [ ] Complete control-plane reconciliation acceptance and guarded live cutover.
 - [ ] Merge accepted reconciliation into Windows `main`.
