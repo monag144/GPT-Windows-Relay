@@ -40,11 +40,11 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] PCE11.028 runtime FAILED: launch PID 1640, HTTP PID 11180, missions 0; private Job cleanup OK. `docs/incidents/INCIDENT_2026-10-08T1043Z_PCE11_028_V16_PID_IDENTITY_MISMATCH.md`.
 - [x] PCE11.029 PASS read-only: venv launcher python.exe 255,200 bytes vs base Python313 python.exe 105,696; historic 1640->11180 ancestry UNPROVEN. Main 18632 ARMED, 2 missions; 8768 free. `Client/Relay/bin/PCE11_029_PID_IDENTITY_DIAG_2026-10-08T104655Z.json`.
 - [x] Audit .025–.029 published `docs/audits/AUDIT_2026-10-08T1049Z_PCE11_OPERATIONS_025_029.md`. Independent GOVSYNC required before .030.
-- [x] PCE11.030 native venv lineage PASS: launcher 1360 → host 12844, parent=1360, both in exact Job, host exit confirmed, production and 8768 preserved. `ops/PCE11_030_LINEAGE_20261008T105116Z/lineage-report.json`.
-- [x] PCE11.031 source acceptance FAILED: 11 host security guards passed, 12 v16 tests with 1 failure (outdated string-PID expected error); no full suites/JS/archive run and no canary. Evidence `Client/Relay/bin/SOURCE_HOST_IDENTITY_ACCEPTANCE_2026-10-08T105718Z/acceptance.json`. Incident `docs/incidents/INCIDENT_2026-10-08T1057Z_PCE11_031_MALFORMED_PID_TEST_EXPECTATION.md`.
-- [x] PCE11.032 BLOCKED pre-suite: compared source SHA .031 against native proof .030. No v16 launch. Incident `docs/incidents/INCIDENT_2026-10-08T1100Z_PCE11_032_WRONG_NATIVE_PROOF_SOURCE_SHA.md`.
-- [ ] PCE11.033: correct immutable .030 native proof SHA, then full source-only targeted v16/host/Job, Windows+consumer, JS4, ZIP and historical source gates. No live canary.
-- [ ] PCE11.034: only after accepted .033, new one-shot private v16 with verified listener/host ancestry, exact Job and exit. No production cutover.
+- [x] PCE11.030 real venv host ancestry PASS: launcher 1360 → host 12844 direct child, both in exact Job, host exited on Job close, main 18632 preserved. `ops/PCE11_030_LINEAGE_20261008T105116Z/lineage-report.json`.
+- [x] PCE11.031 source FAIL: 1 outdated malformed-PID assertion; no canary. `docs/incidents/INCIDENT_2026-10-08T1057Z_PCE11_031_MALFORMED_PID_TEST_EXPECTATION.md`.
+- [x] PCE11.032 pre-suite BLOCKED: wrong .030 evidence source SHA. `docs/incidents/INCIDENT_2026-10-08T1100Z_PCE11_032_WRONG_NATIVE_PROOF_SOURCE_SHA.md`.
+- [x] PCE11.033 full HOST source acceptance PASS at `e4e89c4075ddc49e6bb6bae8db8bed2e48cad280`: 12 v16, 9 host, 12 Job, 493 Windows, 119 consumer; JS4, ZIP/source guards. `Client/Relay/bin/SOURCE_HOST_IDENTITY_ACCEPTANCE_033_2026-10-08T110349Z/acceptance.json`. No runtime launch.
+- [ ] PCE11.034: one NEW bounded v16 on private 8768; require .033 acceptance, .030 real host-in-Job proof, .023/.025 cleanup, fresh tests, archival backup, exact listener PID+parent+Job+host exit, main 18632 identity. No production cutover; diagnostic fail-closed.
 
 ## Full original queue preserved
 [Complete 2026-10-08T1011Z snapshot](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md).
