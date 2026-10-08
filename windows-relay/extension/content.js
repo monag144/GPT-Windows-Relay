@@ -2591,15 +2591,17 @@ let pageErrorRecoveryBusy=false;
 let pageErrorLastBlockedAt=0;
 function pageErrorRecoveryRead(){
   try{
-    const st=JSON.parse(sessionStorage.getItem(PAGE_ERROR_RECOVERY_KEY)||'null');
-    if(!st || typeof st!=='object')return null;
+    const raw=sessionStorage.getItem(PAGE_ERROR_RECOVERY_KEY);
+    if(raw===null)return null; // No existing recovery attempt in this tab.
+    const st=JSON.parse(raw);
+    if(!st || typeof st!=='object')return {phase:'corrupt_hold'};
     // Timeout is NOT permission to start over and refresh the page twice.
     // Retain the persisted obligation; an expired state requires operator reconciliation.
     if(!Number.isFinite(st.started_at)||Date.now()-st.started_at>PAGE_ERROR_MAX_AGE_MS){
       return {...st,phase:'expired_hold'};
     }
     return st;
-  }catch{return null;}
+  }catch{return {phase:'corrupt_hold'};} // Storage/JSON failure is UNKNOWN, not refresh permission.
 }
 function pageErrorRecoverySave(st){
   const payload=JSON.stringify(st);
