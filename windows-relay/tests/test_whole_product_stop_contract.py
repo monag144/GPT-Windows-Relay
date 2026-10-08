@@ -79,7 +79,9 @@ class WholeProductStopContract(unittest.TestCase):
 
     def test_service_worker_bridges_backend_state(self):
         self.assertIn("m?.type==='operator_control_poll'",self.sw)
-        self.assertIn("type:'operator_control_state',online:true,armed:!!st?.armed",self.sw)
+        self.assertIn("function controlStateMessage(st,online=true)",self.sw)
+        self.assertIn("type:'operator_control_state',online,armed:!!st?.armed",self.sw)
+        self.assertIn("broadcastControlState(controlStateMessage(",self.sw)
         self.assertIn("type:'operator_control_state',online:false",self.sw)
 
     def test_stop_waits_for_exact_generation_before_listener_kill(self):
@@ -123,7 +125,10 @@ class WholeProductStopContract(unittest.TestCase):
             self.assertIn('expected_ports:operatorStopAckExpected.size',sw)
             self.assertIn('acked_ports:operatorStopAckReceived.size',sw)
             self.assertNotIn('operatorStopAckExpected.delete(',sw)
-            self.assertIn("stop_generation:generation",sw)
+            # Quiescence reports the frozen numeric generation after verifying
+            # all ports, not the previous un-normalized variable name.
+            self.assertIn("stop_generation:g,",sw)
+            self.assertIn("g===operatorStopAckGeneration",sw)
 
     def test_backend_rejects_stale_stop_generation_ack(self):
         with tempfile.TemporaryDirectory() as d:
