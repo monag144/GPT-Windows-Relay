@@ -1435,6 +1435,46 @@ function scheduleExternalCollapseCheck(){
   },CONSUMER_CLASSIFY_DELAY_MS);
 }
 
+/* GPT_WINDOWS_ENGINEERING_COLLAPSE_OBSERVER_V1
+   Consumer mission tracking does not cover PCE engineering conversations.
+   Detect a rendered status collapse independently, but NEVER replay an
+   invisible/unverified command or inject a recovery prompt. */
+let engineeringCollapseTimer=null;
+let lastEngineeringCollapseSignature='';
+function latestEngineeringResultContext(){
+  const nodes=document.querySelectorAll(USER_SELECTOR);
+  if(!nodes.length)return null;
+  const last=nodes[nodes.length-1];
+  const text=last?.textContent||'';
+  if(!text.includes('[GPT_WINDOWS_RESULT]'))return null;
+  const m=text.match(/"id"\s*:\s*"(PCE\d+\.\d{3})"/i);
+  return m?{previous_result_id:m[1]}:null;
+}
+function scheduleEngineeringCollapseCheck(){
+  if(operatorPaused||engineeringCollapseTimer!==null)return;
+  if(!latestEngineeringResultContext())return;
+  engineeringCollapseTimer=setTimeout(()=>{
+    engineeringCollapseTimer=null;
+    if(operatorPaused||chatBusyReason())return;
+    const ctx=latestEngineeringResultContext();
+    if(!ctx)return;
+    const artifact=visibleExternalCollapseArtifact();
+    if(!artifact)return;
+    const newest=recentAssistantUnits(1)[0];
+    if(newest&&extractUnit(newest))return;
+    const signature=ctx.previous_result_id+'|'+artifact.text;
+    if(signature===lastEngineeringCollapseSignature)return;
+    lastEngineeringCollapseSignature=signature;
+    emitRelayEvent('relay_engineering_action_render_collapsed',{
+      previous_result_id:ctx.previous_result_id,
+      classification:'COLLAPSED_STATUS_ARTIFACT',
+      text:artifact.text.slice(0,80),
+      original_packet_visible:false,
+      safe_replay:false
+    });
+  },CONSUMER_CLASSIFY_DELAY_MS);
+}
+
 function scheduleConsumerAssistantClassification(unit){
   const ctx=consumerRecoveryContext();
   if(!ctx||!assistantFollowsTrackedMission(unit,ctx))return;
@@ -2229,6 +2269,7 @@ function assistantUnitFromNode(node){
 
 function bindFromMutations(mutations){
   scheduleExternalCollapseCheck();
+  scheduleEngineeringCollapseCheck();
   let candidate=null;
   for(const m of mutations){
     if(watchedUnit && (m.target===watchedUnit || watchedUnit.contains(m.target)))continue;
@@ -2332,6 +2373,7 @@ function bindAssistantUnit(latest){
 function recoverLatestAssistant(){
   if(operatorPaused)return;
   bindConversationRoot();
+  scheduleEngineeringCollapseCheck();
   hydrateAttemptedFromConversation();
   reconcileSubmittedResults();
   if(relayDraftFromComposer()){
