@@ -73,7 +73,7 @@ def main():
     tests=[]
     for pattern in UNIT_TEST_PATTERNS:
         args=[sys.executable,"-B","-m","unittest","discover","-s","tests","-p",pattern,"-v"]
-        result=run(args,60) if False else subprocess.run(args,cwd=str(root/"windows-relay"),
+        result=subprocess.run(args,cwd=str(root/"windows-relay"),
                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,
                    encoding="utf-8",errors="replace",timeout=65)
         passed=result.returncode==0 and "OK" in result.stderr
