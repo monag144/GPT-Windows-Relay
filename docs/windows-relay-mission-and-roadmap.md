@@ -14,6 +14,10 @@ Current TODO: `windows-relay/TASKS.md`.
 
 Control harness: `consumer/control_harness.py`.
 
+Mandatory fifth operating document: `docs/relay-sandwich-procedure.md` (read every turn).
+
+Governance: audit preceding five attempted operations **before** PCE ordinals divisible by five; review preceding twenty **before** ordinals divisible by twenty. Next audit before PCE10.025; next review before PCE10.040.
+
 The pre-PCE10 long-form roadmap is frozen at `docs/history/ROADMAP_2026-10-08T0020Z_LEGACY_WINDOWS_RELAY_MISSION_AND_ROADMAP.md`.
 
 Do not append new chronology here. Put new roadmap state in timestamped subject files under `docs/roadmap/`.
