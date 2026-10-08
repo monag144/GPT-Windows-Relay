@@ -11,6 +11,20 @@ $hudPy=Join-Path $root '.venv\Scripts\pythonw.exe'
 $hud=Join-Path $root 'hud.py'
 # GPT_RELAY_WATCHDOG_HUD_RECONCILIATION_V1
 # GPT_RELAY_WATCHDOG_OPERATOR_INTENT_V2
+# GPT_RELAY_WATCHDOG_BROWSER_DISCOVERY_OBSERVER_V1
+$watchdogPy=Join-Path $root '.venv\Scripts\python.exe'
+$discoveryObserver=Join-Path $root 'discovery_stall_observer.py'
+$relayStateDir=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelay'
+$discoveryLatch=Join-Path $logDir 'discovery-alert-latch.json'
+function ObserveBrowserDiscovery {
+  if(-not (Test-Path -LiteralPath $watchdogPy) -or -not (Test-Path -LiteralPath $discoveryObserver)){return}
+  try{
+    $alerts=@(& $watchdogPy -B $discoveryObserver --base $relayStateDir --latch $discoveryLatch 2>$null)
+    if($LASTEXITCODE -ne 0){Log ('DISCOVERY_OBSERVER_FAILURE rc='+$LASTEXITCODE);return}
+    foreach($alert in $alerts){if($alert -match '^DISCOVERY_STALLED packet_id=PCE'){Log $alert}}
+  }catch{Log 'DISCOVERY_OBSERVER_EXCEPTION'}
+}
+
 function Log([string]$m){Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' '+$m)}
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}
 function GenuineSupervisors {
@@ -41,6 +55,7 @@ try {
     if(Test-Path -LiteralPath $off){Log 'WATCHDOG_OFF_LATCH_EXIT';break}
     EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1
     if(Test-Path -LiteralPath $pause){Start-Sleep -Seconds 10;continue}
+    ObserveBrowserDiscovery # Always observe, even with healthy port 8766.
     if(Listener){Start-Sleep -Seconds 10;continue}
     $sup=GenuineSupervisors
     if($sup.Count -eq 0){
