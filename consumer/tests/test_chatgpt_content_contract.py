@@ -37,6 +37,27 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("CONSUMER_MISSION_ACK_KEY", src)
         self.assertIn("consumer_mission_user_turn_not_confirmed", src)
 
+    def test_engineering_collapse_is_observed_without_consumer_mission_or_replay(self):
+        root = ROOT / "windows-relay"
+        sources = [(root / rel).read_bytes() for rel in
+                   ["content.js", "extension/content.js", "extension-persistent/content.js"]]
+        self.assertEqual(sources[0], sources[1])
+        self.assertEqual(sources[0], sources[2])
+        src = sources[0].decode("utf-8-sig")
+        marker = "/* GPT_WINDOWS_ENGINEERING_COLLAPSE_OBSERVER_V1"
+        self.assertIn(marker, src)
+        block = src.split(marker, 1)[1].split("function scheduleConsumerAssistantClassification", 1)[0]
+        self.assertIn("function scheduleEngineeringCollapseCheck()", block)
+        self.assertIn("latestEngineeringResultContext()", block)
+        self.assertIn("relay_engineering_action_render_collapsed", block)
+        self.assertIn("original_packet_visible:false", block)
+        self.assertIn("safe_replay:false", block)
+        self.assertNotIn("consumerRecoveryContext(", block)
+        self.assertNotIn("triggerConsumerRelayRecovery(", block)
+        self.assertNotIn("send(", block)
+        self.assertIn("scheduleEngineeringCollapseCheck();", src.split("function bindFromMutations", 1)[1])
+        self.assertIn("scheduleEngineeringCollapseCheck();", src.split("function recoverLatestAssistant", 1)[1])
+
     def test_consumer_relay_collapse_recovery_contract(self):
         src = (ROOT / "windows-relay" / "content.js").read_text(encoding="utf-8-sig")
         self.assertIn("GPT_ONE_CLICK_RELAY_OUTPUT_CLASSIFIER_V1", src)
