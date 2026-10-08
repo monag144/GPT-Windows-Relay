@@ -23,7 +23,9 @@ Read `consumer/control_harness.py` completely, this queue completely, `docs/road
 - [x] GitHub audit covering PCE11.000–.004 saved at `docs/audits/AUDIT_2026-10-08T0916Z_PCE11_OPERATIONS_000_004.md` (COMPLETE as an audit; live gates BLOCKED).
 - [x] PCE11.005B read-only inventory completed after exact audited GOVSYNC: original 2,532-file backup verified, candidates clean, no changed live-vs-archive source hashes, 8766 loopback listener PID 18632, no 8767 listener. Live extension and browser identity unverified; live cutover blocked. Saved `Client/Relay/bin/RUNTIME_INVENTORY_2026-10-08T092221Z.json`.
 - [x] PCE11.006: passive topology verified main PID 18632 on 8766; 8767 absent, all STOP/OFF/KILL sentinel flags false. Role classifier matched 2 HUD, 2 relay-server, 1 supervisor, 1 watchdog and 1 consumer-candidate; these are *unverified matches*, not proved independently running instances. Evidence in `Client/Relay/bin/PASSIVE_TOPOLOGY_2026-10-08T092500Z.json`.
-- [ ] PCE11.007: inspect saved role PID/PPID/image and parent mapping, specifically whether role matches indicate actual duplicate HUD/server versus wrapper/launch commandline false positives. No process changes, STOP, Firefox interaction or cutover.
+- [x] PCE11.007: source report parsed; HUD 13408 and its child 4464 are both pythonw HUD matches. Other live records were truncated by Relay output; full topology JSON SHA 735cea44ba87… retained. Does not authorize cleanup.
+- [x] PCE11.008: diagnostic FAILED (invalid escaped PowerShell path regex, then empty-output JSONDecodeError). No live mutation. Incident `docs/incidents/INCIDENT_2026-10-08T0928Z_PCE11_008_POWERSHELL_REGEX_DIAGNOSTIC_FAILURE.md`.
+- [ ] PCE11.009: correct read-only PowerShell query using exact/literal lowercased substring checks and encoded command. Reconcile previous PID/PPID matches to current process creation times and current port owner. Do not kill or restart.
 - [ ] After verified inventory, design independently supervised, rollback-backed v16 canary before any consumer promotion.
 
 ## CHECKPOINTS
