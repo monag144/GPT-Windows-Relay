@@ -287,6 +287,13 @@ def build_control_harness_contract(mission_id: str) -> dict:
                 "deployment_rule": "Source presence is not live acceptance. Verify the exact live content-script revision, staged backups, extension reload, browser event progression, and fresh end-to-end canary before declaring recovery fixed.",
                 "user_rescue_rule": "If the relay is blocked before action execution and managed browser control cannot be positively scoped, ask for one ordinary page refresh to bootstrap recovery; then inspect durable action state before any repeat."
             },
+            "independent_stall_supervision": {
+                "source_limit": "The Windows listener/HUD watchdog cannot recover a healthy-port browser discovery stall; page-local content timers are not independent recovery.",
+                "detection_rule": "An independent observer must read the durable latest packet-specific browser discovery event and backend execution state and flag an unresolved DISCOVERED packet at or before 45 seconds even while port 8766 is listening.",
+                "recovery_rule": "Use only positively bound Firefox tab/conversation identity, current operator ARMED state, and exact backend processed/result status. No blind replay, global Firefox quit, unsourced UIA scanner, or reload during STOP.",
+                "acceptance_rule": "Prove detection and safe no-replay recovery with a live browser canary. Source tests or a listener heartbeat alone do not close this incident.",
+                "incident": "docs/incidents/INCIDENT_2026-10-08T0420Z_PCE10_021_784S_DISCOVERY_WATCHDOG_BLINDSPOT.md"
+            },
             "firefox_identity_bootstrap": {
                 "known_conversation_rule": "When an exact ChatGPT conversation URL is known, call resolve-conversation-tab first, require exactly one canonical URL match, and use its returned Firefox PID/tab identity for subsequent list/reload/refresh actions.",
                 "list_tabs_rule": "Do not use unscoped list-tabs as the bootstrap primitive when multiple visible Firefox windows may exist; unscoped list-tabs is only valid when single-window Firefox state is itself the named acceptance condition."
