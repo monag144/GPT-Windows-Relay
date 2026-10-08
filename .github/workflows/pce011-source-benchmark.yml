@@ -1,0 +1,53 @@
+name: PCE011 source benchmark gates
+on:
+  push:
+    branches:
+      - pce11/one-click-go-recovery-and-doc-hygiene
+  workflow_dispatch:
+jobs:
+  windows-source-gates:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Benchmark scorer regression
+        shell: pwsh
+        run: python -m unittest discover -s benchmarks/tests -p "test_*.py" -v
+      - name: Windows Relay full Python regression
+        shell: pwsh
+        working-directory: windows-relay
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Consumer One-Click GO Python regression
+        shell: pwsh
+        working-directory: consumer
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: JavaScript parser checks
+        shell: pwsh
+        run: |
+          $files=@(
+            'windows-relay/content.js',
+            'windows-relay/extension/content.js',
+            'windows-relay/extension/service_worker.js',
+            'windows-relay/extension-persistent/content.js',
+            'windows-relay/extension-persistent/service_worker.js'
+          )
+          foreach($f in $files){node --check $f; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}}
+      - name: Firefox PowerShell syntax (no live mutation)
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path (Get-Location) 'windows-relay/firefox_tab_adapter.ps1'),
+            [ref]$tokens,[ref]$errors
+          ) | Out-Null
+          if($errors.Count){$errors|ForEach-Object{Write-Error $_.Message};exit 1}
+      - name: Identify immutable checkpoint
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "PCE011_SOURCE_SHA=$(git rev-parse HEAD)"
+          Write-Host "PCE011_CI_IS_NOT_OVERNIGHT_ACCEPTANCE=true"
