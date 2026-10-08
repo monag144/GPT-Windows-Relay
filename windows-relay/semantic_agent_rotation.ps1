@@ -115,14 +115,19 @@ function Composer($window){
  return @{element=$matching[0];value=$vp}
 }
 try{
+ # POSITIVE WORKER-START RECEIPT: record execution before control/UI reads.
+ Save 'WORKER_ENTRY'
  if(-not(Test-Path -LiteralPath $HandoffFile -PathType Leaf)){throw 'HANDOFF_FILE_MISSING'}
  $text=[IO.File]::ReadAllText([IO.Path]::GetFullPath($HandoffFile),[Text.Encoding]::UTF8)
  if($text.Length -lt 200 -or $text.Length -gt 12000 -or
     -not $text.Contains('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]') -or
     -not $text.Contains('PCE12.000') -or -not $text.Contains('engineering_preflight')){throw 'HANDOFF_SCHEMA_REJECTED'}
+ Save 'HANDOFF_VALIDATED'
  $baseline=CheckControls
+ Save 'CONTROL_GATE_PASSED'
  $initialPending=$baseline.pending_missions
  $source=SelectedSource
+ Save 'SOURCE_TAB_RECOGNIZED'
  $window=$source.window;$tab=$source.tab;$selected=$source.selection
  $url=UrlBar $window
  if($url -notmatch '^https://chatgpt\.com/c/[^/?#]+/?$'){throw 'SOURCE_CONVERSATION_IDENTITY_INVALID'}
