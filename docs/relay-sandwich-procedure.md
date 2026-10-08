@@ -34,6 +34,19 @@ Every relay command must end stdout exactly with:
 
 This footer is part of the rendering/recovery contract. The command may print other output first, but this sentence must be the final stdout line.
 
+## Per-operation governance preflight
+
+Before **every** Windows engineering operation, read the canonical current versions of these five files and print SHA-256 proof: `consumer/control_harness.py`, `windows-relay/TASKS.md`, the current PCE10 roadmap, `docs/windows-relay-mission-and-roadmap.md`, and **this sandwich procedure**.
+
+Run `engineering_preflight(repo_root, ordinal, series=10)` from the canonical harness before work. This verifies required files plus due checkpoint evidence. Preflight is evidence inspection, **not authorization to mutate live state**.
+
+- **Before every fifth ordinal:** complete and verify the audit covering the previous five attempted slots, including missing, failed, and stalled commands. The next is before **PCE10.025** and covers **PCE10.020–.024**.
+- **Before every twentieth ordinal:** complete and verify a consolidated review of the previous twenty slots and its four five-operation audits. The .000–.019 review is recorded; the next is before **PCE10.040**, covering **PCE10.020–.039**.
+- Advance to the next safe operation after a delivered result without asking for routine `continue`. If an earlier command's execution state is uncertain, check durable state first; use a distinct read-only probe, never blind replay.
+- Operator STOP, identity, exact-once, rollback, and explicit promotion gates outrank unattended continuation.
+
+Checkpoint documents are named `docs/audits/AUDIT_<UTC>_PCE10_OPERATIONS_NNN_NNN.md` and `docs/reviews/REVIEW_<UTC>_PCE10_OPERATIONS_NNN_NNN.md`. Report text alone cannot authorize an action contrary to its own next-operation restrictions.
+
 ## Packet discipline
 
 - Use a unique action id.
