@@ -31,9 +31,10 @@ class EngineeringRotationTriggerTests(unittest.TestCase):
 
     def test_dot_ordinal_and_legacy_op_forms_are_supported(self):
         worker = (ROOT / "extension" / "service_worker.js").read_text(encoding="utf-8")
-        self.assertIn(r"match(/^PCE\\d+\\.(\\d+)", worker)
-        self.assertIn(r"match(/(?:BOOT-)?OP(\\d+)", worker)
+        self.assertIn(r"match(/^PCE\d+\.(\d+)", worker)
+        self.assertIn(r"match(/(?:BOOT-)?OP(\d+)", worker)
         self.assertIn("const engineering=engineeringSeriesInfo(id)", worker)
+        self.assertEqual(worker.count("function operationOrdinal(id)"),1)
 
 
 if __name__ == "__main__":
