@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PCE11.016 source-only gate; PCE11.017 independently contained v16 GET /status canary.
+"""PCE11.017 source-only gate; PCE11.018 independently contained v16 GET /status canary.
 
 Never touches 8766 process, Firefox, HUD, consumer state, or queues. This tool is
 separate from old disabled v16 supervisor canary and uses only a private job.
@@ -10,7 +10,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 
 BRANCH="pce11/one-click-go-recovery-and-doc-hygiene"
-BASE_SHA="2b02b506d8850882d806f8461c25b0a7f03140fd"
+BASE_SHA="7f894e2e90e5f35156558957ed3b148d49be50e6"
 PROD_PORT=8766
 SIDECAR_PORT=8768
 MAIN_APP="GPTWindowsRelay"
@@ -244,12 +244,12 @@ def main():
     remote=git(repo,"ls-remote","origin","refs/heads/"+BRANCH).split()
     if not remote or remote[0]!=a.expected_head:raise RuntimeError("remote SHA changed")
     if a.mode=="preflight":
-        if git(repo,"rev-parse","HEAD")!=BASE_SHA:raise RuntimeError("unexpected source base before .016")
+        if git(repo,"rev-parse","HEAD")!=BASE_SHA:raise RuntimeError("unexpected source base before .017")
         git(repo,"pull","--ff-only","origin",BRANCH,timeout=75)
     if git(repo,"rev-parse","HEAD")!=a.expected_head:raise RuntimeError("unverified pulled source")
     sys.path.insert(0,str(repo/"consumer"))
     from control_harness import engineering_preflight
-    ordinal=16 if a.mode=="preflight" else 17
+    ordinal=17 if a.mode=="preflight" else 18
     proof=engineering_preflight(repo,ordinal,series=11)
     if not proof["ok"]:raise RuntimeError("PCE11 governance failure")
     archive=check_archive(live)
@@ -260,11 +260,11 @@ def main():
         report={"schema":"pce011-v16-canary-preflight-v1","source":a.expected_head,
                 "governance":proof,"historic_source":stage,"archive":archive,
                 "tests":test,"port8768_free":True,"process_launched":False,
-                "canary_not_run":True,"next_requires_independent_017_gate":True}
+                "canary_not_run":True,"next_requires_independent_018_gate":True}
         dest=live/"bin"/("V16_CANARY_PREFLIGHT_"+datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")+".json")
         if dest.exists():raise FileExistsError("preflight report collision")
         dest.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
-        print("PCE11_016_CANARY_PREFLIGHT="+json.dumps({
+        print("PCE11_017_CANARY_PREFLIGHT="+json.dumps({
           "id":proof["id"],"source_sha":a.expected_head,
           "reads_sha256":{k:v["sha256"] for k,v in proof["reads"].items()},
           "report":str(dest),"archive_verified":True,
@@ -274,12 +274,12 @@ def main():
           },separators=(",",":")))
         return 0
     reports=sorted((live/"bin").glob("V16_CANARY_PREFLIGHT_*.json"),reverse=True)
-    if not reports:raise RuntimeError(".016 preflight evidence absent")
+    if not reports:raise RuntimeError(".017 preflight evidence absent")
     prior=json.loads(reports[0].read_text(encoding="utf-8"))
     if prior.get("schema")!="pce011-v16-canary-preflight-v1" or prior.get("source")!=a.expected_head:
-        raise RuntimeError("previous .016 source acceptance missing")
+        raise RuntimeError("previous .017 source acceptance missing")
     result=run_health_canary(live,stage,legacy,containment)
-    print("PCE11_017_V16_HEALTH="+json.dumps({
+    print("PCE11_018_V16_HEALTH="+json.dumps({
       "id":proof["id"],"source":a.expected_head,"pid":result["child_pid"],
       "status_ok":result["status_ok"],"private_missions_zero":result["private_missions_count"]==0,
       "contained":result["job_contained"],"cleanup_verified":result["cleanup_verified"],
