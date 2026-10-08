@@ -39,7 +39,7 @@ class EngineeringGovernanceTests(unittest.TestCase):
         return p
 
     def test_every_operation_reads_five_sources_including_procedure(self):
-        result = ch.engineering_preflight(self.root, 21)
+        result = ch.engineering_preflight(self.root, 21, series=10)
         self.assertTrue(result["ok"])
         self.assertEqual(len(result["reads"]), 5)
         self.assertIn("docs/relay-sandwich-procedure.md", result["reads"])
@@ -50,14 +50,14 @@ class EngineeringGovernanceTests(unittest.TestCase):
     def test_missing_procedure_blocks_every_operation(self):
         (self.root / "docs" / "relay-sandwich-procedure.md").unlink()
         with self.assertRaisesRegex(ch.ControlHarnessError, "mandatory control missing"):
-            ch.engineering_preflight(self.root, 21)
+            ch.engineering_preflight(self.root, 21, series=10)
 
     def test_audit_due_before_025_and_not_after(self):
         self.assertEqual(ch.due_engineering_checkpoints(25)["audit_window"], [20, 24])
         with self.assertRaisesRegex(ch.ControlHarnessError, "audit checkpoint missing"):
-            ch.engineering_preflight(self.root, 25)
+            ch.engineering_preflight(self.root, 25, series=10)
         self.checkpoint("AUDIT", 20, 24)
-        result = ch.engineering_preflight(self.root, 25)
+        result = ch.engineering_preflight(self.root, 25, series=10)
         self.assertEqual(result["checkpoints"]["audit"]["window"], [20, 24])
         self.assertFalse(result["schedule"]["review_due"])
 
@@ -65,24 +65,24 @@ class EngineeringGovernanceTests(unittest.TestCase):
         self.assertEqual(ch.due_engineering_checkpoints(20)["review_window"], [0, 19])
         self.checkpoint("AUDIT", 15, 19)
         with self.assertRaisesRegex(ch.ControlHarnessError, "review checkpoint missing"):
-            ch.engineering_preflight(self.root, 20)
+            ch.engineering_preflight(self.root, 20, series=10)
         self.checkpoint("REVIEW", 0, 19)
-        result = ch.engineering_preflight(self.root, 20)
+        result = ch.engineering_preflight(self.root, 20, series=10)
         self.assertEqual(set(result["checkpoints"]), {"audit", "review"})
         self.assertEqual(ch.due_engineering_checkpoints(40)["review_window"], [20, 39])
         with self.assertRaisesRegex(ch.ControlHarnessError, "audit checkpoint missing"):
-            ch.engineering_preflight(self.root, 40)
+            ch.engineering_preflight(self.root, 40, series=10)
         self.checkpoint("AUDIT", 35, 39)
         with self.assertRaisesRegex(ch.ControlHarnessError, "review checkpoint missing"):
-            ch.engineering_preflight(self.root, 40)
+            ch.engineering_preflight(self.root, 40, series=10)
         self.checkpoint("REVIEW", 20, 39)
-        self.assertTrue(ch.engineering_preflight(self.root, 40)["ok"])
+        self.assertTrue(ch.engineering_preflight(self.root, 40, series=10)["ok"])
 
     def test_unsubstantiated_checkpoint_is_rejected(self):
         p = self.checkpoint("AUDIT", 20, 24)
         p.write_text("# report\n", encoding="utf-8")
         with self.assertRaisesRegex(ch.ControlHarnessError, "unsubstantiated"):
-            ch.engineering_preflight(self.root, 25)
+            ch.engineering_preflight(self.root, 25, series=10)
 
     def test_missing_operation_slot_is_rejected(self):
         p = self.checkpoint("AUDIT", 20, 24)
@@ -92,7 +92,16 @@ class EngineeringGovernanceTests(unittest.TestCase):
             encoding="utf-8"
         )
         with self.assertRaisesRegex(ch.ControlHarnessError, "missing slot .023"):
+            ch.engineering_preflight(self.root, 25, series=10)
+
+    def test_default_series_remains_11_and_legacy_fixture_requires_explicit_10(self):
+        self.assertEqual(ch.due_engineering_checkpoints(21)["next_id"], "PCE11.021")
+        self.checkpoint("AUDIT", 20, 24)
+        with self.assertRaisesRegex(ch.ControlHarnessError, "PCE11.025"):
             ch.engineering_preflight(self.root, 25)
+        verified = ch.engineering_preflight(self.root, 25, series=10)
+        self.assertEqual(verified["id"], "PCE10.025")
+        self.assertEqual(verified["checkpoints"]["audit"]["window"], [20, 24])
 
     def test_100_is_valid_but_101_is_forbidden(self):
         self.assertEqual(ch.due_engineering_checkpoints(100)["review_window"], [80, 99])
