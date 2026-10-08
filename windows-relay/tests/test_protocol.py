@@ -138,8 +138,8 @@ class Tests(unittest.TestCase):
         self.assertIn(wr.TURN_DISCIPLINE_REMINDER,body["stdout"])
         self.assertIn("consumer/control_harness.py",body["stdout"])
         self.assertIn("windows-relay/TASKS.md",body["stdout"])
-        self.assertIn("docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md",body["stdout"])
-        self.assertIn("docs/windows-relay-mission-and-roadmap.md",body["stdout"])
+        self.assertIn("docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md",body["stdout"])
+        self.assertIn("docs/windows-relay-established-facts.md",body["stdout"])
         self.assertIn("docs/relay-sandwich-procedure.md",body["stdout"])
         self.assertIn("monag144/GPT-Windows-Relay",body["stdout"])
         self.assertIn("sandwich technique",body["stdout"])
@@ -148,6 +148,15 @@ class Tests(unittest.TestCase):
         self.assertTrue(empty["stdout"].endswith(wr.SANDWICH_REMINDER))
         already=json.loads(wr.result({"id":"PCE10.004","status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertTrue(already["stdout"].endswith(wr.SANDWICH_REMINDER))
+
+    def test_pce011_soft_email_and_chat_rotation_reminders(self):
+        def stdout(id):
+            return json.loads(wr.result({"id":id,"status":"OK","stdout":""}).split(wr.RO+"\\n",1)[1].rsplit("\\n"+wr.RC,1)[0])["stdout"]
+        # Boundary reminders appear in the predecessor result, not after the milestone.
+        self.assertIn("PCE011.050 SOFT CHECKPOINT",stdout("PCE11.049"))
+        self.assertIn("PCE011.100 ROTATION GATE",stdout("PCE11.099"))
+        self.assertNotIn("PCE011.100 ROTATION GATE",stdout("PCE11.050"))
+        self.assertIn("ENTIRE consumer/control_harness.py",stdout("PCE11.001"))
 
     def test_five_turn_audit_warning_precedes_next_operation_boundary(self):
         # Response .024 must require audit BEFORE dispatching .025.
