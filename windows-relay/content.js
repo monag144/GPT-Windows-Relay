@@ -1455,12 +1455,14 @@ function scheduleEngineeringCollapseCheck(){
   if(!latestEngineeringResultContext())return;
   engineeringCollapseTimer=setTimeout(()=>{
     engineeringCollapseTimer=null;
-    if(operatorPaused||chatBusyReason())return;
+    if(operatorPaused||activeGenerationStopControl())return;
     const ctx=latestEngineeringResultContext();
     if(!ctx)return;
-    const artifact=visibleExternalCollapseArtifact();
-    if(!artifact)return;
     const newest=recentAssistantUnits(1)[0];
+    const rendered=(newest?.textContent||'').trim().replace(/\s+/g,' ');
+    const artifact=visibleExternalCollapseArtifact() ||
+      (/^Worked for\s+\d+(?:\.\d+)?(?:ms|s|m|h)$/i.test(rendered)?{text:rendered}:null);
+    if(!artifact)return;
     if(newest&&extractUnit(newest))return;
     const signature=ctx.previous_result_id+'|'+artifact.text;
     if(signature===lastEngineeringCollapseSignature)return;
