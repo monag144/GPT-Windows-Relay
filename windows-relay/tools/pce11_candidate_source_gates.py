@@ -87,10 +87,13 @@ def main():
     old_reports=sorted((live/"bin").glob("SOURCE_GATES_*/source-gates.json"),reverse=True)
     if old_reports:
         prior=json.loads(old_reports[0].read_text(encoding="utf-8"))
-        print("PCE11_PRIOR_SOURCE_GATES="+json.dumps({"report":str(old_reports[0]),"source_sha":prior.get("source_sha"),
-            "jobs":[{"label":x.get("label"),"status":x.get("status"),"test_count":x.get("test_count"),
-                     "failure_excerpt":str(x.get("failure_excerpt",""))[:210]} for x in prior.get("results",[])]},
-            separators=(",",":")))
+        prior_jobs=prior.get("results",[])
+        prior_fail=[x for x in prior_jobs if x.get("status")!="PASS"]
+        print("PCE11_PRIOR_SOURCE_GATES="+json.dumps({"report":str(old_reports[0]),
+             "jobs":len(prior_jobs),"passing":len(prior_jobs)-len(prior_fail),
+             "failures":[{"name":x.get("label"),"status":x.get("status"),
+                          "why":str(x.get("failure_excerpt",x.get("reason","")))[:105]}
+                         for x in prior_fail][:5]},separators=(",",":")))
     paths={}
     for label,exact in REFERENCES.items():
         d=live/"builds"/(label+"_"+exact[:12])
@@ -148,12 +151,14 @@ def main():
             "results":results,"live_untouched":True}
     report=evidence/"source-gates.json"
     report.write_text(json.dumps(record,indent=2,default=str)+"\n",encoding="utf-8")
-    concise=[{k:item.get(k) for k in ("label","status","test_count","seconds","failure_excerpt")
-             if k in item} for item in results]
+    failed=[x for x in results if x["status"]!="PASS"]
     print("PCE11_SOURCE_GATES="+json.dumps({"report":str(report),"source_sha":opts.expected_head,
-        "backup_verified":True,"candidate_sha_verified":True,
-        "all_source_checks_pass":all(x["status"]=="PASS" for x in results),
-        "results":concise},separators=(",",":")))
+         "backup_verified":True,"candidate_sha_verified":True,"job_count":len(results),
+         "passed_jobs":len(results)-len(failed),"test_count":sum(x.get("test_count") or 0 for x in results),
+         "all_source_checks_pass":not failed,
+         "nonpass":[{"name":x.get("label"),"status":x.get("status"),
+                     "why":str(x.get("failure_excerpt",x.get("reason","")))[:130]}
+                    for x in failed][:5]},separators=(",",":")))
     return 0 if all(x["status"]=="PASS" for x in results) else 2
 if __name__=="__main__":
     try:sys.exit(main())
