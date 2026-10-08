@@ -36,13 +36,14 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - [x] Audit .020–.024 published at `docs/audits/AUDIT_2026-10-08T1031Z_PCE11_OPERATIONS_020_024.md`, documenting full source acceptance and failed runtime canary. Requires independent GOVSYNC before .025.
 - [x] PCE11.025 PASS: sidecar 4480 cleaned, port 8768 free; main PID 18632 ARMED, two missions unchanged. `Client/Relay/bin/PCE11_025_V16_FAILURE_FORENSICS_2026-10-08T103325Z.json`.
 - [x] PCE11.026: private state 0 missions/actions, no auth config; historical `/status` source 5/5. `Client/Relay/bin/PCE11_026_PRIVATE_STATE_DIAG_2026-10-08T103556Z.json`.
-- [x] PCE11.027 PASS at `fe4035c22af1c04fa63869eb4ba900ca6595c6b8`: nine v16 telemetry, 12 containment, 481 Windows, 119 consumer tests; four JS, archive and staged v16 source verified. No process launched. Evidence `Client/Relay/bin/SOURCE_TELEMETRY_ACCEPTANCE_2026-10-08T103943Z/acceptance.json`.
-- [x] PCE11.028 FAILED: child PID 1640, authenticated `/status` PID 11180, missions 0; precise PID mismatch. Private Job cleanup, 8768 release, production identity verified. Incident `docs/incidents/INCIDENT_2026-10-08T1043Z_PCE11_028_V16_PID_IDENTITY_MISMATCH.md`.
+- [x] PCE11.027 source PASS: 9 v16, 12 containment, 481 Windows, 119 consumer, 4 JS and archive/source. `Client/Relay/bin/SOURCE_TELEMETRY_ACCEPTANCE_2026-10-08T103943Z/acceptance.json`.
+- [x] PCE11.028 runtime FAILED: launch PID 1640, HTTP PID 11180, missions 0; private Job cleanup OK. `docs/incidents/INCIDENT_2026-10-08T1043Z_PCE11_028_V16_PID_IDENTITY_MISMATCH.md`.
 - [x] PCE11.029 PASS read-only: venv launcher python.exe 255,200 bytes vs base Python313 python.exe 105,696; historic 1640->11180 ancestry UNPROVEN. Main 18632 ARMED, 2 missions; 8768 free. `Client/Relay/bin/PCE11_029_PID_IDENTITY_DIAG_2026-10-08T104655Z.json`.
 - [x] Audit .025–.029 published `docs/audits/AUDIT_2026-10-08T1049Z_PCE11_OPERATIONS_025_029.md`. Independent GOVSYNC required before .030.
 - [x] PCE11.030 native venv lineage PASS: launcher 1360 → host 12844, parent=1360, both in exact Job, host exit confirmed, production and 8768 preserved. `ops/PCE11_030_LINEAGE_20261008T105116Z/lineage-report.json`.
-- [ ] PCE11.031: source-only test exact HTTP host PID=listener, Win32 parent=launcher, membership in OWN Job and observed host exit; targeted and full suites, JS/ZIP/historic source. No server launch.
-- [ ] PCE11.032: ONLY after .031 pass and independent fresh identity/rollback checks, one new isolated v16 8768 canary; never production cutover.
+- [x] PCE11.031 source acceptance FAILED: 11 host security guards passed, 12 v16 tests with 1 failure (outdated string-PID expected error); no full suites/JS/archive run and no canary. Evidence `Client/Relay/bin/SOURCE_HOST_IDENTITY_ACCEPTANCE_2026-10-08T105718Z/acceptance.json`. Incident `docs/incidents/INCIDENT_2026-10-08T1057Z_PCE11_031_MALFORMED_PID_TEST_EXPECTATION.md`.
+- [ ] PCE11.032: test-only strict malformed-PID assertion correction; full targeted v16, host, Win32, 493+ Windows and 119+ consumer, four JS, original ZIP and historic source checks; no v16 launch or production mutation.
+- [ ] PCE11.033: only after accepted .032 source, separately gated isolated v16 host-lineage canary; require actual listener PID in exact Job and direct parent, verify host exit; never production cutover.
 
 ## Full original queue preserved
 [Complete 2026-10-08T1011Z snapshot](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md).
@@ -54,4 +55,4 @@ Historical evidence and complete verbatim details: [dated task snapshot](TASKS_2
 - Human STOP, uncertain side effects, ambiguous tab identity, failed rollback or dirty checkout always prohibit unsafe unattended mutation; reporting and read-only diagnosis may continue.
 
 ## Historical task archives
-Original full TASKS retained [here](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md), plus [part 1](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_01.md) and [part 2](TASKS_2026-10-08T0752Z_WINDOWS_RELAY_PART_02.md). A running Relay is not proof of source SHA or browser runtime identity.
+Full prior task details in [pre020 snapshot](TASKS_2026-10-08T1011Z_PCE11_PRE020_FULL_SNAPSHOT.md). Prior series evidence preserved in GitHub audits and incidents.
