@@ -2593,8 +2593,10 @@ function pageErrorRecoveryRead(){
   try{
     const st=JSON.parse(sessionStorage.getItem(PAGE_ERROR_RECOVERY_KEY)||'null');
     if(!st || typeof st!=='object')return null;
+    // Timeout is NOT permission to start over and refresh the page twice.
+    // Retain the persisted obligation; an expired state requires operator reconciliation.
     if(!Number.isFinite(st.started_at)||Date.now()-st.started_at>PAGE_ERROR_MAX_AGE_MS){
-      sessionStorage.removeItem(PAGE_ERROR_RECOVERY_KEY);return null;
+      return {...st,phase:'expired_hold'};
     }
     return st;
   }catch{return null;}
@@ -2653,15 +2655,29 @@ function exactVisibleNewChatControl(){
 }
 async function resumePageErrorHandoff(){
   const st=pageErrorRecoveryRead();
-  if(!st || st.phase!=='new_chat_requested' || location.origin!==new URL(st.source_url).origin ||
-      location.pathname!=='/' || pageErrorRecoveryBusy)return;
-  const blocker=pageErrorNavigationBlocker();
-  if(blocker){pageErrorBlocked(blocker,st.kind);return;}
-  if(assistantUnits().length || !findComposer())return;
+  if(!st || !['new_chat_requested','handoff_submitting'].includes(st.phase) ||
+      location.origin!==new URL(st.source_url).origin || pageErrorRecoveryBusy)return;
+  // A New Chat may remain at / or immediately acquire a fresh /c/<id> URL.
+  // Never submit a handoff into the old conversation or another loaded conversation.
+  const sourcePath=new URL(st.source_url).pathname;
+  const newPath=location.pathname;
+  if(newPath===sourcePath || (newPath!=='/' && !/^\/c\/[^/?#]+$/.test(newPath)))return;
   if(recentUserTurnContainsToken(PAGE_ERROR_HANDOFF_TOKEN)){
     st.phase='verified';st.verified_at=Date.now();pageErrorRecoverySave(st);
     emitRelayEvent('chatgpt_page_recovery_handoff_verified',{old_conversation:st.source_url,new_conversation:location.href});
     return;
+  }
+  if(st.phase==='handoff_submitting'){
+    // The send button may have been clicked before a navigation/reload. Do not
+    // resubmit under uncertainty; wait for a visible user-turn receipt.
+    pageErrorBlocked('handoff_submission_unconfirmed_no_resend',st.kind);return;
+  }
+  const blocker=pageErrorNavigationBlocker();
+  if(blocker){pageErrorBlocked(blocker,st.kind);return;}
+  const composer=findComposer();
+  if(assistantUnits().length || !composer)return;
+  if(elementText(composer).trim()){
+    pageErrorBlocked('new_chat_composer_not_empty',st.kind);return;
   }
   pageErrorRecoveryBusy=true;
   try{
@@ -2687,7 +2703,7 @@ function maybeRecoverChatGPTPageError(found,now){
   let st=pageErrorRecoveryRead();
   if(!found){
     pageErrorFirstSeenAt=0;
-    if(st?.phase==='new_chat_requested'){
+    if(st?.phase==='new_chat_requested' || st?.phase==='handoff_submitting'){
       resumePageErrorHandoff().catch(()=>{});return;
     }
     if(st?.phase==='refreshed' && location.href===st.source_url && findComposer()){
