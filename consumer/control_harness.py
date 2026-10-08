@@ -152,6 +152,11 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
             "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
         },
+        "source_tree_hygiene": {
+            "dirty_preflight_rule": "Classify every dirty path before cleanup. Only deterministic generated caches may be removed automatically; any unknown or source-like path fails closed.",
+            "test_rule": "Run source acceptance with Python bytecode generation disabled when practical so tests do not create the next preflight failure.",
+            "ignore_contract": [".gitignore::__pycache__/", ".gitignore::*.py[cod]", ".gitignore::.pytest_cache/"]
+        },
         "incident_logging": {
             "method": "write_incident",
             "path_rule": "docs/incidents/INCIDENT_<UTC timestamp>_<short hint>.md",
