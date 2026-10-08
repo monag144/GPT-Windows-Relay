@@ -47,6 +47,7 @@ class StagedFirefoxActivationTests(unittest.TestCase):
         self.localappdata = self.root / "local"
         self.events = self.localappdata / "GPTWindowsRelay" / "browser-events.jsonl"
         self.events.parent.mkdir(parents=True)
+        (self.events.parent / "state.json").write_text(json.dumps({"armed": True}),encoding="utf-8")
         self.url = "https://chatgpt.com/c/6ac6cf1e-c210-83e8-be8f-77f4b2ca53c1"
 
     def tearDown(self):
@@ -73,8 +74,8 @@ class StagedFirefoxActivationTests(unittest.TestCase):
                     "detail": {"href": self.url, "runtime": "test-revision"}
                 }) + "\n", encoding="utf-8")
                 return {"ok": True, "action": action, "invoked": True,
-                        "selected_name": "Rename Current Chat"}
-            return {"ok": True, "action": action, "invoked": True}
+                        "selected_name": "Rename Current Chat", "firefox_pid": 9248}
+            return {"ok": True, "action": action, "invoked": True, "firefox_pid": 9248}
         with patch.dict(os.environ, {"LOCALAPPDATA": str(self.localappdata)}), \
              patch.object(activation, "call_adapter", side_effect=fake_adapter), \
              patch.object(activation.time, "sleep", return_value=None):
@@ -85,11 +86,22 @@ class StagedFirefoxActivationTests(unittest.TestCase):
         self.assertEqual(result["status"], "ACTIVATED_EVENT_CONFIRMED_CANARY_PENDING")
         self.assertEqual(result["observed"]["href"], self.url)
 
+    def test_operator_stop_blocks_runtime_mutation_even_when_staged(self):
+        state_path = self.events.parent / "state.json"
+        state_path.write_text(json.dumps({"armed": False}), encoding="utf-8")
+        with patch.dict(os.environ, {"LOCALAPPDATA": str(self.localappdata)}), \
+             patch.object(activation, "call_adapter") as call, \
+             patch.object(activation.time, "sleep", return_value=None):
+            result = activation.activate(self.manifest, self.live,
+                str(self.fake_python), self.url, "Rename Current Chat", delay=0, wait=0)
+        self.assertEqual(result["status"], "OPERATOR_STOPPED_NO_ACTION")
+        call.assert_not_called()
+
     def test_failed_refresh_rolls_back_all_bytes(self):
         def fake_adapter(py, live, action, log, *args):
             if action == "refresh-tab":
                 raise RuntimeError("REFRESH_FAILED")
-            return {"ok": True, "action": action, "invoked": True}
+            return {"ok": True, "action": action, "invoked": True, "firefox_pid": 9248}
         with patch.dict(os.environ, {"LOCALAPPDATA": str(self.localappdata)}), \
              patch.object(activation, "call_adapter", side_effect=fake_adapter), \
              patch.object(activation.time, "sleep", return_value=None):
