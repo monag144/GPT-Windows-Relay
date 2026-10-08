@@ -245,7 +245,7 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("method:'composer_cleared'",self.src)
         self.assertIn("DELIVERY_CLEAR_STABLE_MS=1500",self.src)
         self.assertIn("relay_result_replay_suppressed",self.src)
-        self.assertIn("reason:'existing_user_result_turn'",self.src)
+        self.assertIn("reason:'durable_execution_and_exact_user_result'",self.src)
 
     def test_submitted_result_state_survives_content_reload_without_resend(self):
         self.assertIn("function persistSubmittedResults()",self.src)
@@ -501,12 +501,12 @@ class BrowserContractTests(unittest.TestCase):
         self.assertIn("relay_deferred_superseded_by_newer",src)
 
 
-    def test_result_turn_confirmation_falls_back_to_exact_visible_packet_id(self):
+    def test_result_turn_confirmation_rejects_id_only_matches(self):
         start=self.src.index("function userTurnContainsPacketId(packetId){")
         end=self.src.index("function composerContainsPacketId(packetId){",start)
         body=self.src[start:end]
         self.assertIn("resultPacketIdFromUserUnit(nodes[i])===packetId",body)
-        self.assertIn("elementText(nodes[i]).includes(packetId)",body)
+        self.assertNotIn("elementText(nodes[i]).includes(packetId)",body)
         self.assertIn("emitResultTurnMatchDiagnostic(packetId,nodes,false)",body)
 
     def test_discovery_settle_has_bounded_stale_pending_lease(self):
