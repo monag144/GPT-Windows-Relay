@@ -152,6 +152,12 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "audit_rule": "Every fifth engineering turn/operation, audit the preceding five for harness compliance, incidents, repeated/disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift.",
             "harness_hole_rule": "If a stale, contradictory, unenforced, or missing control is discovered, repair the harness/test contract before continuing risky mutation."
         },
+        "test_runtime": {
+            "default_runner": "unittest",
+            "selection_rule": "Prefer Python stdlib unittest while the repository suite has no external-runner dependency.",
+            "external_runner_rule": "If an external runner such as pytest is used, capability-probe that exact interpreter and runner import before starting the suite. Executable existence is not proof of runner capability.",
+            "bytecode_rule": "Run acceptance with bytecode generation disabled where practical."
+        },
         "source_tree_hygiene": {
             "dirty_preflight_rule": "Classify every dirty path before cleanup. Only deterministic generated caches may be removed automatically; any unknown or source-like path fails closed.",
             "test_rule": "Run source acceptance with Python bytecode generation disabled when practical so tests do not create the next preflight failure.",
