@@ -178,6 +178,34 @@ class ReceiverFixtureTests(unittest.TestCase):
         status, _, _ = self.http("/api/ready", data, token="invalid")
         self.assertEqual(status, 403)
 
+    def test_early_bootstrap_telemetry_is_digest_free(self):
+        data = {"launch_id":"0123456789abcdef01234567","geometry_status":"NULL",
+                "outer_w":1382,"outer_h":744,"inner_w":1366,"inner_h":728,
+                "left":None,"top":96}
+        status, result, _ = self.http("/api/diagnostic", data)
+        self.assertEqual(status,200)
+        self.assertEqual(json.loads(result),{"accepted":True})
+        snapshot=self.receiver.snapshot(self.receiver.token)
+        self.assertEqual(snapshot["diagnostic"],data)
+        self.assertEqual(snapshot["total_effects"],0)
+
+    def test_bootstrap_rejects_private_text_and_unauthorized_telemetry(self):
+        data = {"launch_id":"0123456789abcdef01234567","geometry_status":"NULL",
+                "outer_w":1382,"outer_h":744,"inner_w":1366,"inner_h":728,
+                "left":8,"top":96}
+        self.assertEqual(self.http("/api/diagnostic",dict(data,text="private"))[0],422)
+        self.assertEqual(self.http("/api/diagnostic",data,token="bad-token")[0],403)
+        self.assertIsNone(self.receiver.snapshot(self.receiver.token)["diagnostic"])
+
+    def test_bootstrap_page_reports_numeric_window_fields_only(self):
+        status,body,_=self.http("/")
+        self.assertEqual(status,200)
+        self.assertIn("post('/api/diagnostic'",body)
+        self.assertIn("diagNumber(window.outerWidth)",body)
+        self.assertIn("diagNumber(window.mozInnerScreenX-window.screenX)",body)
+        self.assertIn("geometry_status:g?'VALID':'NULL'",body)
+        self.assertNotIn("document.cookie",body)
+
     def test_unknown_path_has_no_external_redirect(self):
         status, body, _ = self.http("/external-service")
         self.assertEqual(status, 404)
