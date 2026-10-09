@@ -80,6 +80,13 @@ if (g) {
  message.style.left=g.cx+'px'; message.style.top=g.cy+'px';
  newChat.disabled=false;
  state.textContent='Fixture ready ['+launchId+']. Press New chat, click composer, Ctrl+V, Enter. Test only.';
+ post('/api/ready',{launch_id:launchId,outer_w:Math.round(window.outerWidth),
+  outer_h:Math.round(window.outerHeight),
+  content_left:Math.round(window.mozInnerScreenX-window.screenX),
+  content_top:Math.round(window.mozInnerScreenY-window.screenY),
+  client_w:Math.round(window.innerWidth),client_h:Math.round(window.innerHeight),
+  new_chat_x:g.nx,new_chat_y:g.ny,composer_x:g.cx,composer_y:g.cy
+ }).catch(()=>{state.textContent='LOCAL READY HANDSHAKE FAILED; DO NOT SEND.';newChat.disabled=true;});
 }
 newChat.addEventListener('click',async function(){
  if (!g || submitting) return;
@@ -124,6 +131,32 @@ class Receiver:
     current_conversation: str | None = None
     receipts: dict = field(default_factory=dict)
     stopped: bool = False
+    ready_report: dict | None = None
+
+    def ready(self, token: str, data: dict) -> dict:
+        self.authenticate(token)
+        required = {"launch_id","outer_w","outer_h","content_left","content_top",
+                    "client_w","client_h","new_chat_x","new_chat_y","composer_x","composer_y"}
+        if not isinstance(data, dict) or set(data) != required:
+            raise FixtureError("INVALID_READY")
+        if not isinstance(data["launch_id"], str) or len(data["launch_id"]) != 24 or any(c not in "0123456789abcdef" for c in data["launch_id"]):
+            raise FixtureError("INVALID_LAUNCH_ID")
+        for key in required - {"launch_id"}:
+            if type(data[key]) is not int or not -200 <= data[key] <= 6000:
+                raise FixtureError("INVALID_GEOMETRY")
+        w, h = data["outer_w"], data["outer_h"]
+        left, top = data["content_left"], data["content_top"]
+        if not (700 <= w <= 5000 and 450 <= h <= 3000 and 0 <= left <= 240 and 0 <= top <= 250):
+            raise FixtureError("GEOMETRY_OUT_OF_RANGE")
+        if (data["new_chat_x"],data["new_chat_y"]) != (120-left,163-top) or (data["composer_x"],data["composer_y"]) != (int(w*.585+.5)-left,int(h*.56+.5)-top):
+            raise FixtureError("GEOMETRY_INCONSISTENT")
+        if not (0 <= data["new_chat_x"] < data["client_w"] and 0 <= data["new_chat_y"] < data["client_h"] and 0 <= data["composer_x"] < data["client_w"] and 0 <= data["composer_y"] < data["client_h"]):
+            raise FixtureError("CONTROLS_OUTSIDE_CLIENT")
+        with self.lock:
+            if self.stopped:
+                raise FixtureError("STOPPED",423)
+            self.ready_report = dict(data)
+            return {"ready": True}
 
     def authenticate(self, token: str) -> None:
         if not secrets.compare_digest(token, self.token):
@@ -171,6 +204,7 @@ class Receiver:
         self.authenticate(token)
         with self.lock:
             return {"total_effects": len(self.receipts), "stopped": self.stopped,
+                    "ready": dict(self.ready_report) if self.ready_report else None,
                     "receipts": [dict(v) for v in self.receipts.values()]}
 
     def stop(self, token: str) -> dict:
@@ -211,7 +245,7 @@ def server_for(receiver: Receiver) -> ThreadingHTTPServer:
             self._reply(404, {"error": "NOT_FOUND"})
         def do_POST(self):
             path = urlparse(self.path).path
-            if path not in ("/api/new-chat", "/api/send", "/api/stop"):
+            if path not in ("/api/new-chat", "/api/send", "/api/stop", "/api/ready"):
                 self._reply(404, {"error": "NOT_FOUND"});return
             try:
                 receiver.authenticate(self.headers.get("X-PCE14-Fixture", ""))
@@ -224,6 +258,8 @@ def server_for(receiver: Receiver) -> ThreadingHTTPServer:
                 if path == "/api/new-chat":
                     if payload != {}: raise FixtureError("INVALID_BODY")
                     self._reply(201, receiver.new_chat(self.headers["X-PCE14-Fixture"]))
+                elif path == "/api/ready":
+                    self._reply(200, receiver.ready(self.headers["X-PCE14-Fixture"],payload))
                 elif path == "/api/stop":
                     if payload != {}: raise FixtureError("INVALID_BODY")
                     self._reply(200, receiver.stop(self.headers["X-PCE14-Fixture"]))
