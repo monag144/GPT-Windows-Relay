@@ -139,4 +139,34 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertIn("GitHub connector", c["github_audit_checkpoint"]["publication"])
         self.assertIn("no Windows Relay git push", c["github_audit_checkpoint"]["publication"])
 
+
+    def test_blocked_operations_still_consume_ordinals(self):
+        issued = [
+            "PCE12.000-bootstrap", "PCE12.001-direct-new-chat-click",
+            "PCE12.002-canonical-controls-read",
+            "PCE12.003-bounded-canonical-index-and-preflight-discovery",
+            "PCE12.004-source-index-and-preflight-contract",
+            "PCE12.005-local-windows-authority-check",
+            "PCE12.005-verified-cursor-new-chat",
+        ]
+        next_op = ch.assess_next_engineering_operation("PCE12", issued, 6)
+        self.assertTrue(next_op["ok"])
+        self.assertEqual(next_op["next_ordinal"], 6)
+        self.assertEqual(next_op["historical_repeated_ordinals"], [5])
+        self.assertFalse(ch.assess_next_engineering_operation("PCE12", issued, 5)["ok"])
+        self.assertFalse(ch.assess_next_engineering_operation("PCE12", issued, 7)["ok"])
+
+    def test_attempt_ordinal_gate_applies_to_preflight(self):
+        issued = ["PCE12.005-GOVERNANCE_BLOCKED"]
+        allowed = ch.engineering_preflight("PCE12", 6, attempted_action_ids=issued)
+        rejected = ch.engineering_preflight("PCE12", 5, attempted_action_ids=issued)
+        self.assertTrue(allowed["ok"], allowed["blockers"])
+        self.assertIn("attempted_ordinal_must_not_be_reused_or_skipped", rejected["blockers"])
+
+    def test_attempt_history_rejects_cross_series_and_series_overflow(self):
+        with self.assertRaises(ch.ControlHarnessError):
+            ch.assess_next_engineering_operation("PCE12", ["PCE11.005-old"], 6)
+        with self.assertRaises(ch.ControlHarnessError):
+            ch.assess_next_engineering_operation("PCE12", ["PCE12.100-finished"], 101)
+
 if __name__=='__main__': unittest.main()
