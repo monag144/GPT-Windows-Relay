@@ -24,7 +24,8 @@ SHA64 = re.compile(r"^[0-9a-fA-F]{64}$")
 CLEAN_FIELDS = {
     "case_id", "trial_id", "source", "event", "at_ms", "operation_id",
     "tab_id", "conversation_id", "payload_sha256", "observer_id",
-    "role", "runtime_sha256"
+    "role", "runtime_sha256", "payload_bytes", "readback_bytes",
+    "readback_sha256", "unicode_seen", "multiline_seen"
 }
 
 
@@ -158,6 +159,21 @@ def check_trial(case: dict, events: list[dict], meta: dict, globally_forbidden: 
     if elapsed > case["limit_ms"]:
         return {"status": "FAIL", "reason": "latency limit exceeded", "duration_ms": elapsed}
     for event in events:
+        if key(event) in ("observer:composer_exact", "observer:payload_sha_verified"):
+            if event.get("readback_sha256") != ref["payload_sha256"]:
+                return {"status": "FAIL", "reason": "readback digest absent or different"}
+        if key(event) == "observer:composer_exact":
+            if (not isinstance(event.get("payload_bytes"), int)
+                or isinstance(event.get("payload_bytes"), bool)
+                or event.get("payload_bytes", 0) <= 0
+                or event.get("readback_bytes") != event.get("payload_bytes")):
+                return {"status": "FAIL", "reason": "composer byte count absent/mismatched"}
+            if case.get("payload_constraint") == "unicode_and_multiline":
+                if event.get("unicode_seen") is not True or event.get("multiline_seen") is not True:
+                    return {"status": "FAIL", "reason": "unicode/multiline evidence absent"}
+            if case.get("payload_constraint") == "min_12000_bytes":
+                if event["readback_bytes"] < 12000:
+                    return {"status": "FAIL", "reason": "long-payload size not demonstrated"}
         if key(event) == "observer:user_turn_verified":
             if (event.get("role") != "user"
                 or event.get("operation_id") != ref["operation_id"]
