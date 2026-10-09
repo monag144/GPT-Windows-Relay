@@ -113,18 +113,23 @@ function NewChatButton($window){
  return $hits[0]
 }
 function Composer($window){
+ # Firefox UIA forensic .035: the visible accessible Ask ChatGPT edit has
+ # a non-ProseMirror class, while the ProseMirror edit is offscreen.
+ # Require exactly one enabled, visible, named, writable Edit control.
  $edits=$window.FindAll([Windows.Automation.TreeScope]::Descendants,(New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)))
  $matching=@()
  foreach($e in $edits){
   try{
    if($e.Current.IsOffscreen -or -not $e.Current.IsEnabled){continue}
-   if(([string]$e.Current.Name) -eq 'Ask ChatGPT' -and ([string]$e.Current.ClassName) -eq 'ProseMirror'){$matching+=,$e}
+   if(([string]$e.Current.Name) -cne 'Ask ChatGPT'){continue}
+   $vp=$null
+   if(-not $e.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp)){continue}
+   if($vp.Current.IsReadOnly){continue}
+   $matching+=,[ordered]@{element=$e;value=$vp}
   }catch{}
  }
  if($matching.Count -ne 1){throw ('ROTATION_COMPOSER_COUNT_'+$matching.Count)}
- $vp=$null
- if(-not $matching[0].TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp) -or $vp.Current.IsReadOnly){throw 'ROTATION_COMPOSER_VALUE_UNAVAILABLE'}
- return @{element=$matching[0];value=$vp}
+ return $matching[0]
 }
 try{
  # POSITIVE WORKER-START RECEIPT: record execution before control/UI reads.
