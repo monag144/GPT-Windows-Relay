@@ -151,7 +151,7 @@ def assess_next_engineering_operation(series: str, attempted_action_ids: list[st
     if type(proposed_ordinal) is not int or not (0 <= proposed_ordinal <= max_ordinal <= 100):
         raise ControlHarnessError("invalid proposed operation ordinal")
     ordinals = []
-    pattern = re.compile(r"^" + re.escape(series) + r"\\.([0-9]{3})(?:[-_.]|$)")
+    pattern = re.compile(r"^" + re.escape(series) + r"\.([0-9]{3})(?:[-_.]|$)")
     for action_id in attempted_action_ids:
         matched = pattern.match(action_id)
         if not matched:
