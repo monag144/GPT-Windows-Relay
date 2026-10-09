@@ -32,6 +32,7 @@ $script:State=[ordered]@{
  send_invoked=$false
  destination_url_verified=$false
  marker_visible=$false
+ user_turn_verified=$false
  title_verified=$false
  source_editor_untouched=$true
  firefox_launched=$false
@@ -224,6 +225,7 @@ try{
  Add-Type -AssemblyName UIAutomationTypes
  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class Agent011AtomicFocus { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); }'
  . (Join-Path $PSScriptRoot 'agent011_editor_empty_state.ps1')
+ . (Join-Path $PSScriptRoot 'agent011_user_turn_proof.ps1')
  $windows=Inspect-Windows
  $source=@($windows|Where-Object {$_.kind -eq 'source'})[0]
  $home=@($windows|Where-Object {$_.kind -eq 'home'})[0]
@@ -281,9 +283,24 @@ try{
  if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl){throw 'SOURCE_URL_CHANGED_AFTER_SEND'}
  Check-SourceEditors $source.window
  $null=Assert-Controls
- # URL alone does not verify that a user turn appeared. Do not claim full handoff.
+ # URL only confirms navigation; require delivered user bubble in DESTINATION group.
+ # Never retry Invoke. A missing bubble is an uncertain send with no replay.
  Save-Receipt 'DISTINCT_NEW_CONVERSATION_VERIFIED_MESSAGE_PENDING'
- Write-Output 'AGENT011_DISTINCT_URL_ONLY_MESSAGE_AND_TITLE_STILL_UNVERIFIED'
+ $turnDeadline=[DateTime]::UtcNow.AddSeconds(25)
+ $delivered=$false
+ do{
+  if((Normalize-ChatUrl (UrlBar $home.window)) -cne $script:State.new_url){throw 'DESTINATION_URL_CHANGED_DURING_USER_TURN_CHECK'}
+  if(Test-Agent011DeliveredUserTurn $home.window){$delivered=$true;break}
+  Start-Sleep -Milliseconds 500
+ }while([DateTime]::UtcNow -lt $turnDeadline)
+ if(-not $delivered){throw 'DESTINATION_USER_TURN_MARKERS_NOT_VISIBLE_NO_RETRY'}
+ if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl){throw 'SOURCE_URL_CHANGED_AFTER_USER_TURN_CHECK'}
+ Check-SourceEditors $source.window
+ $null=Assert-Controls
+ $script:State.marker_visible=$true
+ $script:State.user_turn_verified=$true
+ Save-Receipt 'DISTINCT_NEW_CONVERSATION_USER_TURN_MARKERS_VERIFIED_TITLE_PENDING'
+ Write-Output 'AGENT011_DISTINCT_CONVERSATION_USER_TURN_MARKERS_VERIFIED_TITLE_PENDING'
 }catch{
  $script:State.error=([string]$_.Exception.Message).Substring(0,[Math]::Min(320,([string]$_.Exception.Message).Length))
  try{
