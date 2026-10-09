@@ -137,11 +137,54 @@ GITHUB_AUDIT_REPOSITORY = "monag144/GPT-Windows-Relay"
 GITHUB_AUDIT_BRANCH = "main"
 
 
+def assess_next_engineering_operation(series: str, attempted_action_ids: list[str], proposed_ordinal: int, max_ordinal: int = 100) -> dict:
+    """Every issued packet burns its ordinal, even if rejected or never executed.
+
+    The caller supplies the complete persisted action-ID ledger, including
+    GOVERNANCE_BLOCKED, transport rejection, timeout, crash and unknown results.
+    Never infer a retry exemption from an unsuccessful outcome.
+    """
+    if not isinstance(series, str) or re.fullmatch(r"PCE[1-9][0-9]*", series) is None:
+        raise ControlHarnessError("invalid PCE series")
+    if not isinstance(attempted_action_ids, list) or any(not isinstance(x, str) for x in attempted_action_ids):
+        raise ControlHarnessError("attempted action IDs must be a persisted list")
+    if type(proposed_ordinal) is not int or not (0 <= proposed_ordinal <= max_ordinal <= 100):
+        raise ControlHarnessError("invalid proposed operation ordinal")
+    ordinals = []
+    pattern = re.compile(r"^" + re.escape(series) + r"\.([0-9]{3})(?:[-_.]|$)")
+    for action_id in attempted_action_ids:
+        matched = pattern.match(action_id)
+        if not matched:
+            raise ControlHarnessError("attempt ledger contains an invalid or different-series action ID")
+        number = int(matched.group(1))
+        if number > max_ordinal:
+            raise ControlHarnessError("attempt ledger exceeded operation-series limit")
+        ordinals.append(number)
+    last = max(ordinals, default=-1)
+    expected = last + 1
+    repeated = sorted({n for n in ordinals if ordinals.count(n) > 1})
+    blockers = []
+    if expected > max_ordinal:
+        blockers.append("series_rotation_required")
+    if proposed_ordinal != expected:
+        blockers.append("attempted_ordinal_must_not_be_reused_or_skipped")
+    return {
+        "ok": not blockers,
+        "series": series,
+        "last_attempted_ordinal": last,
+        "next_ordinal": expected if expected <= max_ordinal else None,
+        "historical_repeated_ordinals": repeated,
+        "blockers": blockers,
+        "rule": "An issued ordinal is consumed even when GOVERNANCE_BLOCKED or unexecuted.",
+    }
+
+
 def engineering_preflight(
     series: str,
     next_ordinal: int,
     *,
     github_audit_receipt: dict | None = None,
+    attempted_action_ids: list[str] | None = None,
     max_ordinal: int = 100,
 ) -> dict:
     """Validate the GitHub-first five-operation checkpoint before a PCE command.
@@ -164,6 +207,9 @@ def engineering_preflight(
     expected_start = next_ordinal - 5 if audit_required else None
     expected_end = next_ordinal - 1 if audit_required else None
     blockers = []
+    if attempted_action_ids is not None:
+        sequence = assess_next_engineering_operation(series, attempted_action_ids, next_ordinal, max_ordinal)
+        blockers.extend(sequence["blockers"])
     validated = False
 
     if audit_required:
@@ -217,6 +263,11 @@ def build_control_harness_contract(mission_id: str) -> dict:
     return {
         "version": CONTROL_HARNESS_VERSION,
         "mission_id": mission_id,
+        "attempt_sequence": {
+            "method": "assess_next_engineering_operation",
+            "rule": "Each issued attempt consumes its ordinal, including GOVERNANCE_BLOCKED, transport-rejected and unknown outcomes. Never reuse .005; .006 follows a blocked .005.",
+            "source": "Complete persisted action-ID ledger; no inference from OK-only results.",
+        },
         "github_audit_checkpoint": {
             "method": "engineering_preflight",
             "repository": GITHUB_AUDIT_REPOSITORY,

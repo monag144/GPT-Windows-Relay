@@ -6,7 +6,7 @@ Canonical GitHub destination: `monag144/GPT-Windows-Relay/main`. Use the **conne
 
 ## Strict five-operation cadence
 
-Before attempting `PCE<n>.005`, commit the audit of `.000–.004`. Before `.010`, audit `.005–.009`; continue at every multiple of five through `.100`. A blocked attempt is documented but must not be retroactively marked as executed. Treat any missing operation receipt as **UNKNOWN**, not a fictitious success. Do not advance past `.100` within one series.
+Before attempting `PCE<n>.005`, commit the audit of `.000–.004`. Before `.010`, audit `.005–.009`; continue at every multiple of five through `.100`. A blocked attempt is documented as **attempted**, never retroactively marked as executed, and consumes its ordinal. Every emitted packet reserves exactly one new ordinal: after a blocked `.005`, the next packet MUST be `.006`, not another `.005`. Never replay an issued ordinal, even after governance rejection, timeout, lost result, or unknown outcome. Treat any missing operation receipt as **UNKNOWN**, not a fictitious success. Do not advance past `.100` within one series.
 
 For series PCE12 and checkpoint .005 the canonical audit is:
 
