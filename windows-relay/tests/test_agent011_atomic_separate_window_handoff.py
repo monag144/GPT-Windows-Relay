@@ -67,7 +67,7 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
     def test_all_side_effects_follow_durable_intent_and_gates(self):
         s = self.source
         assert_before = [
-            ("Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'", "[Agent011AtomicFocus]::SetForegroundWindow($home.handle)"),
+            ("Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'", "[Agent011AtomicFocus]::SetForegroundWindow($destination.handle)"),
             ("Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'", "$editor.pattern.SetValue($script:Handoff)"),
             ("Save-Receipt 'HANDOFF_SEND_UNCERTAIN_NO_RETRY'", "$send[0].invoke.Invoke()"),
             ("Save-Receipt 'DESTINATION_FOREGROUND_AND_STOP_VERIFIED'", "Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'"),
@@ -90,7 +90,7 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
         self.assertLess(handoff, checkout)
         self.assertLess(checkout, controls)
         self.assertLess(controls, uia)
-        self.assertEqual(s.count("SetForegroundWindow($home.handle)"), 1)
+        self.assertEqual(s.count("SetForegroundWindow($destination.handle)"), 1)
         self.assertEqual(s.count("$send[0].invoke.Invoke()"), 1)
         self.assertEqual(s.count("$editor.pattern.SetValue($script:Handoff)"), 1)
 
