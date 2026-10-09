@@ -104,7 +104,7 @@
       "forbidden": [
         "relay:enter_fallback"
       ],
-      "effects": 1,
+      "effects": 0,
       "sends": 1,
       "limit_ms": 30000,
       "az_links": []
@@ -120,7 +120,7 @@
       "forbidden": [
         "observer:assistant_quote_only"
       ],
-      "effects": 1,
+      "effects": 0,
       "sends": 1,
       "limit_ms": 30000,
       "az_links": []
@@ -270,7 +270,7 @@
       "forbidden": [
         "relay:timeout_ignored"
       ],
-      "effects": 1,
+      "effects": 0,
       "sends": 1,
       "limit_ms": 90000,
       "az_links": []
@@ -373,7 +373,7 @@
         "relay:new_window_opened",
         "observer:other_tab_targeted"
       ],
-      "effects": 1,
+      "effects": 0,
       "sends": 1,
       "limit_ms": 120000,
       "az_links": [
