@@ -3,6 +3,8 @@
 param(
  [Parameter(Mandatory=$true)][string]$SourcePacketId,
  [Parameter(Mandatory=$true)][string]$ReceiptFile,
+ [Parameter(Mandatory=$true)][string]$HandoffFile,
+ [Parameter(Mandatory=$true)][string]$ExpectedHandoffSha256,
  [Parameter(Mandatory=$true)][string]$ExpectedHead,
  [int]$ExpectedStopGeneration=9,
  [int]$ExpectedPendingMissions=2,
@@ -26,7 +28,10 @@ $script:State=[ordered]@{
  new_chat_clicked=$false
  same_tab_home_verified=$false
  paste_attempted=$false
+ pasted_exactly=$false
  send_invoked=$false
+ destination_url_verified=$false
+ user_turn_verified=$false
  error=$null
 }
 function Save([string]$phase){
@@ -136,6 +141,37 @@ function BackupSourceDraft($w){
  $script:State.source_draft_backup=$backup
  Save 'SOURCE_DRAFT_BACKUP_DURABLE'
 }
+function Composer($w){
+ $ec=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)
+ $edits=$w.FindAll([Windows.Automation.TreeScope]::Descendants,$ec)
+ $found=@()
+ foreach($e in $edits){
+  try{
+   if($e.Current.IsOffscreen -or -not $e.Current.IsEnabled -or ([string]$e.Current.Name) -cne 'Ask ChatGPT'){continue}
+   $vp=$null
+   if(-not $e.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp) -or $vp.Current.IsReadOnly){continue}
+   $found+=,[ordered]@{element=$e;value=$vp}
+  }catch{}
+ }
+ if($found.Count -ne 1){throw ('DESTINATION_EDITOR_AMBIGUOUS_'+$found.Count)}
+ $value=[string]$found[0].value.Current.Value
+ if($value -cne ('Ask ChatGPT'+[char]10) -and -not [string]::IsNullOrWhiteSpace($value)){throw 'DESTINATION_EDITOR_ALREADY_HAS_TEXT'}
+ return $found[0]
+}
+function SendControls($w){
+ $bc=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Button)
+ $buttons=$w.FindAll([Windows.Automation.TreeScope]::Descendants,$bc)
+ $found=@()
+ foreach($b in $buttons){
+  try{
+   if($b.Current.IsOffscreen -or -not $b.Current.IsEnabled){continue}
+   if(([string]$b.Current.Name) -notmatch '^(?i:Send(?: prompt| message)?)$'){continue}
+   $pattern=$null
+   if($b.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)){$found+=,[ordered]@{invoke=$pattern}}
+  }catch{}
+ }
+ return $found
+}
 function NewChat($w){
  $buttons=$w.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.Condition]::TrueCondition)
  $found=@()
@@ -160,6 +196,20 @@ try{
  if($SettleSeconds -lt 5 -or $SettleSeconds -gt 25){throw 'SETTLE_DELAY_INVALID'}
  Start-Sleep -Seconds $SettleSeconds
  if((& git -C $Repo rev-parse HEAD) -cne $ExpectedHead -or (& git -C $Repo status --porcelain)){throw 'CANONICAL_SOURCE_CHANGED'}
+ $raw=[IO.File]::ReadAllBytes($HandoffFile)
+ $sha=[Security.Cryptography.SHA256]::Create()
+ try{$digest=[BitConverter]::ToString($sha.ComputeHash($raw)).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
+ if($digest -cne $ExpectedHandoffSha256){throw 'HANDOFF_SHA256_MISMATCH'}
+ $original=[Text.Encoding]::UTF8.GetString($raw)
+ if(-not $original.Contains('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]') -or -not $original.Contains('PCE12.000')){throw 'HANDOFF_SCHEMA_REJECTED'}
+ $prefix=@'
+[PCE12_DIRECTOR_CURRENT_TAB_OVERRIDE_2026_10_09]
+You are taking over as PC Engineering 12, relay session pce12.1. The user explicitly authorized same-current-tab semantic New Chat, not another Firefox window, a new tab, or a destination chosen by window/tab count. This user message was delivered in the very ChatGPT tab that originated PCE11.087. All historical separate-window instructions in the older handoff document are OBSOLETE. First operation: PCE12.000. Read canonical source-of-truth controls and actual Git HEAD, preflight, audits, incidents, STOP. Do not repeat previous rotation workers or invent success for One-Click GO r28 endurance.
+[/PCE12_DIRECTOR_CURRENT_TAB_OVERRIDE_2026_10_09]
+
+'@
+ $script:Payload=$prefix+$original
+ if($script:Payload.Length -gt 14000){throw 'HANDOFF_PAYLOAD_TOO_LONG'}
  Guard
  Add-Type -AssemblyName UIAutomationClient
  Add-Type -AssemblyName UIAutomationTypes
@@ -195,7 +245,68 @@ try{
  $script:State.new_chat_clicked=$true
  $script:State.same_tab_home_verified=$true
  Save 'ORIGIN_TAB_SAME_TAB_NEW_CHAT_VERIFIED'
- Write-Output 'AGENT011_CURRENT_TAB_NEW_CHAT_CLICK_VERIFIED_HANDOFF_NOT_SENT'
+ Guard
+ $editor=Composer $origin.window
+ if(@(SendControls $origin.window).Count -ne 0){throw 'PREEXISTING_ENABLED_SEND'}
+ # DOM event is most reliably triggered by paste. Direct ValuePattern is a
+ # fail-closed fallback only when its associated Send control is enabled.
+ $rect=$editor.element.Current.BoundingRectangle
+ if($rect.Width -lt 250 -or $rect.Height -lt 15 -or $rect.Left -lt 0 -or $rect.Top -lt 0){throw 'ORIGIN_COMPOSER_BOUNDS_UNTRUSTED'}
+ Add-Type -AssemblyName System.Windows.Forms
+ Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class Agent011OriginMouse { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern void mouse_event(uint f,uint x,uint y,uint d,uint e); }'
+ $point=[System.Drawing.Point]::new([int][Math]::Round($rect.Left+$rect.Width/2),[int][Math]::Round($rect.Top+$rect.Height/2))
+ if(-not $origin.selected.pattern.Current.IsSelected){throw 'ORIGIN_SELECTION_LOST_BEFORE_COMPOSE'}
+ Save 'ONE_ORIGIN_COMPOSER_CLICK_INTENT_NO_RETRY'
+ [Windows.Forms.Cursor]::Position=$point
+ [Agent011OriginMouse]::mouse_event(2,0,0,0,0)
+ [Agent011OriginMouse]::mouse_event(4,0,0,0,0)
+ Start-Sleep -Milliseconds 250
+ if([Agent011OriginMouse]::GetForegroundWindow() -ne [IntPtr]::new($origin.handle)){throw 'ORIGIN_COMPOSER_FOREGROUND_NOT_CONFIRMED'}
+ if(-not (IsHome (Url $origin.window)) -or -not $origin.selected.pattern.Current.IsSelected){throw 'ORIGIN_IDENTITY_LOST_AFTER_COMPOSER_CLICK'}
+ Guard
+ [Windows.Forms.Clipboard]::SetText($script:Payload)
+ if([Windows.Forms.Clipboard]::GetText() -cne $script:Payload){throw 'HANDOFF_CLIPBOARD_MISMATCH'}
+ $script:State.paste_attempted=$true
+ Save 'ONE_ORIGIN_TAB_PASTE_INTENT_NO_RETRY'
+ [Windows.Forms.SendKeys]::SendWait('^v')
+ $until=[DateTime]::UtcNow.AddSeconds(8)
+ $exact=$false
+ do{
+  if(([string]$editor.value.Current.Value) -ceq $script:Payload){$exact=$true;break}
+  Start-Sleep -Milliseconds 250
+ }while([DateTime]::UtcNow -lt $until)
+ if(-not $exact){throw 'HANDOFF_EDITOR_READBACK_NOT_EXACT'}
+ $script:State.pasted_exactly=$true
+ Save 'HANDOFF_PASTED_IN_SAME_ORIGIN_TAB'
+ Guard
+ if(-not $origin.selected.pattern.Current.IsSelected -or -not (IsHome (Url $origin.window))){throw 'ORIGIN_SELECTED_TAB_CHANGED_PRE_SEND'}
+ if([Agent011OriginMouse]::GetForegroundWindow() -ne [IntPtr]::new($origin.handle)){throw 'FOREGROUND_LOST_PRE_SEND'}
+ if(([string]$editor.value.Current.Value) -cne $script:Payload){throw 'HANDOFF_CHANGED_PRE_SEND'}
+ $send=@(SendControls $origin.window)
+ if($send.Count -ne 1){throw ('ENABLED_SEND_BUTTON_COUNT_'+$send.Count)}
+ $script:State.send_invoked=$true
+ Save 'ONE_SAME_ORIGIN_TAB_SEND_INTENT_NO_RETRY'
+ $send[0].invoke.Invoke()
+ $deadline=[DateTime]::UtcNow.AddSeconds(35)
+ $conversation=$false
+ do{
+  Start-Sleep -Milliseconds 300
+  if(IsConversation (Url $origin.window)){$conversation=$true;break}
+ }while([DateTime]::UtcNow -lt $deadline)
+ if(-not $conversation){throw 'POST_SEND_CONVERSATION_URL_NOT_PROVEN'}
+ $script:State.destination_url_verified=$true
+ Save 'SAME_ORIGIN_TAB_NEW_CONVERSATION_VERIFIED'
+ . (Join-Path $PSScriptRoot 'agent011_user_turn_proof.ps1')
+ $until=[DateTime]::UtcNow.AddSeconds(30)
+ $seen=$false
+ do{
+  if(Test-Agent011DeliveredUserTurn $origin.window){$seen=$true;break}
+  Start-Sleep -Milliseconds 450
+ }while([DateTime]::UtcNow -lt $until)
+ if(-not $seen){throw 'PCE12_USER_TURN_NOT_PROVEN_NO_RETRY'}
+ $script:State.user_turn_verified=$true
+ Save 'PCE12_CURRENT_TAB_USER_MESSAGE_VERIFIED'
+ Write-Output 'PCE12_CURRENT_TAB_HANDOFF_DELIVERED_VERIFIED'
 }catch{
  $script:State.error=[string]$_.Exception.Message
  if($script:State.error.Length -gt 280){$script:State.error=$script:State.error.Substring(0,280)}
