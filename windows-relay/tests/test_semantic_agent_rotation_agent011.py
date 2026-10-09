@@ -73,7 +73,7 @@ class SemanticAgentRotationContractTests(unittest.TestCase):
 
     def test_composer_requires_unique_visible_writable_named_edit(self):
         """PCE11.035 UIA proved visible Ask ChatGPT differs from hidden ProseMirror."""
-        body=self.src[self.src.index("function Composer($window){"):self.src.index("try{\n # POSITIVE WORKER-START RECEIPT")]
+        body=self.src[self.src.index("function Composer($window){"):self.src.index("# POSITIVE WORKER-START RECEIPT")]
         self.assertIn("ControlType]::Edit",body)
         self.assertIn("$e.Current.IsOffscreen -or -not $e.Current.IsEnabled",body)
         self.assertIn("([string]$e.Current.Name) -cne 'Ask ChatGPT'",body)
