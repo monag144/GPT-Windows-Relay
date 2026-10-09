@@ -201,8 +201,10 @@ class BehavioralBenchmark(unittest.TestCase):
         traces = [e for c in self.cases.values() for i in range(3) for e in trial(c, i, "live")]
         result = rb.score(metadata("live"), self.catalog, traces)
         self.assertEqual(result["counts"]["passing"], 20)
-        self.assertTrue(result["full_behavioral_gate"])
+        self.assertTrue(result["trace_coverage_complete"])
+        self.assertFalse(result["full_behavioral_gate"])
         self.assertFalse(result["release_qualified"])
+        self.assertTrue(all(x["status"] == "TRACE_PASS" for x in result["capabilities"].values()))
 
     def test_output_is_write_once_and_atomic(self):
         with tempfile.TemporaryDirectory() as tmp:
