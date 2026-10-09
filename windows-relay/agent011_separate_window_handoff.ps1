@@ -42,10 +42,15 @@ function Save-Receipt([string]$Phase){
  $script:State.phase=$Phase
  $script:State.updated_at=[DateTime]::UtcNow.ToString('o')
  $tmp=$ReceiptFile+'.writing'
- if(Test-Path -LiteralPath $tmp){throw 'RECEIPT_TEMP_EXISTS_NO_RETRY'}
+ $backup=$ReceiptFile+'.previous'
+ if((Test-Path -LiteralPath $tmp) -or (Test-Path -LiteralPath $backup)){throw 'RECEIPT_TRANSITION_ARTIFACT_EXISTS_NO_RETRY'}
  [IO.File]::WriteAllText($tmp,($script:State|ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false))
  if(-not (Test-Path -LiteralPath $ReceiptFile)){throw 'RECEIPT_DISAPPEARED'}
- [IO.File]::Replace($tmp,$ReceiptFile,$null)
+ # Windows PowerShell/.NET Framework requires a real backup path here.
+ # The same-directory replacement is atomic; leftover backup/temp halts replay.
+ [IO.File]::Replace($tmp,$ReceiptFile,$backup)
+ if(-not (Test-Path -LiteralPath $ReceiptFile)){throw 'RECEIPT_REPLACEMENT_NOT_DURABLE'}
+ [IO.File]::Delete($backup)
 }
 function Assert-Handoff {
  if(-not(Test-Path -LiteralPath $HandoffFile -PathType Leaf)){throw 'HANDOFF_FILE_MISSING'}
