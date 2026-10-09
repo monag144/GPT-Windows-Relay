@@ -110,6 +110,41 @@ Write-Output 'AGENT011_STRICT_SEND_CARDINALITY_0_1_2_PASS'
         self.assertEqual(p.returncode, 0, p.stdout + "\n" + p.stderr)
         self.assertIn("AGENT011_STRICT_SEND_CARDINALITY_0_1_2_PASS", p.stdout)
 
+    def test_source_draft_is_snapshotted_not_rejected(self):
+        s = self.worker
+        self.assertIn("source_editor_sha256=$null", s)
+        self.assertIn("if($null -eq $script:State.source_editor_sha256)", s)
+        self.assertIn("SOURCE_EDITOR_CONTENT_CHANGED", s)
+        self.assertIn("$script:State.source_editor_untouched=$false", s)
+        self.assertNotIn("SOURCE_COMPOSER_HAS_DRAFT", s)
+        self.assertIn("Check-SourceEditors $source.window", s)
+
+    def test_production_inspect_only_and_clipboard_one_shot(self):
+        s = self.worker
+        self.assertIn("[switch]$InspectOnly", s)
+        self.assertIn("[switch]$ClipboardPaste", s)
+        inspect = "Save-Receipt 'INSPECT_ONLY_TWO_WINDOW_PAIR_VERIFIED_NO_FOCUS'"
+        focus = "SetForegroundWindow($destination.handle)"
+        self.assertLess(s.index(inspect), s.index(focus))
+        self.assertIn("[Windows.Forms.Clipboard]::SetText($script:Handoff)", s)
+        self.assertIn("[Windows.Forms.SendKeys]::SendWait('^v')", s)
+        order = [
+            "Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'",
+            "[Windows.Forms.Clipboard]::SetText($script:Handoff)",
+            "Save-Receipt 'CLIPBOARD_PREPARED_FOR_ONE_SHOT_PASTE'",
+            "$editor.element.SetFocus()",
+            "Save-Receipt 'PASTE_ATTEMPT_UNCERTAIN_NO_RETRY'",
+            "[Windows.Forms.SendKeys]::SendWait('^v')",
+            "if(([string]$editor.pattern.Current.Value) -cne $script:Handoff)",
+            "Save-Receipt 'HANDOFF_SEND_UNCERTAIN_NO_RETRY'",
+            "$send[0].invoke.Invoke()",
+        ]
+        for first,second in zip(order, order[1:]):
+            with self.subTest(earlier=first):
+                self.assertLess(s.index(first),s.index(second))
+        self.assertEqual(s.count("[Windows.Forms.SendKeys]::SendWait('^v')"), 1)
+        self.assertEqual(s.count("$send[0].invoke.Invoke()"), 1)
+
     def test_four_strong_markers_in_same_group_required(self):
         h = self.helper
         for token in (
