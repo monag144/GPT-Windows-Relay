@@ -1,0 +1,36 @@
+# Agent011 mandatory five-operation audit — PCE11.065–.069 — COMPLETE
+
+Evidence/creation UTC 2026-10-09T02:00Z. Repo `monag144/GPT-Windows-Relay`, branch `pce11/one-click-go-recovery-and-doc-hygiene`. Last accepted local and remote HEAD after PCE11.069: `d459232417cecdd018b2a93961e579d46ffe4cb7`. This is an engineering governance checkpoint, **not approval for any live Send**. Original conversation and separate Firefox homepage must remain intact.
+
+## Exact numbered operations, outcomes and unique evidence
+
+**PCE11.065 — PASS, read-only identity.** `PCE11.065-agent011-read-only-exact-two-window-handoff-readiness` returned status OK, exit 0. Source PCE11 chat and separate ChatGPT home each uniquely identified on Firefox PID 5440, real tab counts source 11/home 1, original editor ValuePattern exact placeholder `Ask ChatGPT\n`, source original selected, new home blank, no enabled Send button, foreground was source. Authenticated localhost relay status `ok=true,armed=true,outbound_owner=browser,pending_missions=2,stop_generation=9`; status is an **observed epoch**, not permanent permission. Durable read-only receipt `%LOCALAPPDATA%/GPTWindowsRelay/ops/PCE11_065_AGENT011_READ_ONLY_WINDOW_READINESS.json`. No focus or browser effect.
+
+**PCE11.066 — BLOCKED, exit 2, no browser effect.** `PCE11.066-agent011-read-only-user-message-accessibility-proof` read controls, passed preflight and STOP/pending checks, but Windows PowerShell rejected `$home=@()` with `VariableNotWritable` because the case-insensitive `$HOME` automatic variable is read-only. UIA text ancestry not collected in this slot. Saved result `%LOCALAPPDATA%/GPTWindowsRelay/results/PCE11.066-agent011-read-only-user-message-accessibility-proof.json`. No re-execution, no Send. This is a **live-path defect in the separate-window worker as well**, discovered only after .069 source acceptance: worker has `$home=@(...)[0]` and ~16 further `$home` references. Immediate remediation next numbered operation BEFORE worker live Send.
+
+**PCE11.067 — PASS, corrected read-only ancestry.** `PCE11.067-agent011-corrected-read-only-user-turn-accessibility-proof` renamed PowerShell diagnostic variables, reconciled prior .066 failure, reverified relay STOP epoch and two windows. Existing source PCE11 UIA had 2,156 Text elements, 1,859 named, 9 user role labels and 8 assistant labels, with 5 relay result marker nodes and 15 PCE11.065 nodes; zero content bodies returned. Receipt `PCE11_067_AGENT011_USER_TURN_ACCESSIBILITY_READ_ONLY.json`. No browser mutations.
+
+**PCE11.068 — PASS, saved evidence analysis only.** `PCE11.068-agent011-saved-uia-user-bubble-ancestry-analysis` read previously stored .067 receipt; observed user/assistant labels inside direct parent `ControlType.Group` class `block-BQZwFn`, followed by thread-scroll container hierarchy. Role labels alone do not attest the specific handoff. Receipt `PCE11_068_AGENT011_USER_BUBBLE_ANCESTRY_RECONCILIATION.json`. No browser interaction.
+
+**PCE11.069 — PASS, offline tests; live still UNTESTED.** `PCE11.069-agent011-user-turn-role-marker-proof-source-and-offline-acceptance` GitHub-first authored `windows-relay/agent011_user_turn_proof.ps1`, upgraded `windows-relay/agent011_separate_window_handoff.ps1`, and added `windows-relay/tests/test_agent011_user_turn_proof.py`. Exactly these three files were verified by Git blob and fast-forwarded on Windows to `d459232417cecdd018b2a93961e579d46ffe4cb7`. Nine synthetic user/assistant-marker combinations exercised by real PowerShell; source safety suite **5/5** (includes synthetic fixtures), atomic offline negative **8/8**, full Windows Relay **552/552**, consumer **123/123**; all green. A unique PowerShell `-ValidateOnly` invocation passed `VALIDATE_ONLY_PASSED_NO_UI` at the pinned handoff SHA `05cd9977e8f1b1f02dcaa10d599be472d1a0b10331a0b2297720471e15f444ca`, no focus/compose/Send. Source receipt `PCE11_069_AGENT011_USER_TURN_SOURCE_ACCEPTANCE.json`. Worker now requires a distinct /c/ URL plus a SAME-PER-MESSAGE user role group with opening and closing handoff markers and PCE12.000; title verification remains pending. These tests do **not** establish browser Send or actual user turn successfully delivered.
+
+**Aggregate:** 5 numbered operations, 4 passed (.065,.067,.068,.069), 1 blocked (.066), 0 browser mutations, 0 sent handoffs. No repeated uncertain operation, no manual source rescue, no source-window New Chat clicks, no Firefox launches, no extension reload, no One-Click GO r28 promotion and no endurance canary. Original PCE11 chat remains protected.
+
+## Mandatory controls and GitHub-first provenance
+Control SHA256 remained stable in each numbered result:
+- `consumer/control_harness.py`: `76d13b46ddc0289291a7bc155785c0b160d55751c4d1b515ea44db3f4bc6d883`
+- `windows-relay/TASKS.md`: `fda801655fa66da9885500cea8f885c2442f511359eacda8fabeee07fc66e33d`
+- `docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md`: `a2c2a4c0708432ee9325a21a65a9c6f9ea814399fa02a84849592fcedd9092ce`
+- `docs/roadmap/ROADMAP_2026-10-08T0735Z_PCE11_ONE_CLICK_GO_RECOVERY.md`: `5857ddc2361baaac4b14c186a177ca741cbe870985badc980bb0e89382185793`
+- `docs/windows-relay-established-facts.md`: `b1590bab9ca5b79a1182a4418f9fdc2c1b488a0154b286701d08ba8661545b2a`
+- `docs/relay-sandwich-procedure.md`: `b17263e8da2269344d6698a5111d582095fee85998036002ada7603ed7e58d01`
+
+Prior mandatory audit `docs/audits/AUDIT_2026-10-09T0149Z_AGENT011_FRESH_EPOCH_PCE11_OPERATIONS_060_064.md` was committed and GitHub-first ff-only synchronized in unique unnumbered governance packet before .065; `engineering_preflight(ROOT,65,series=11)` accepted [60,64]. Each new ordinal .065-.069 read six controls, passed `engineering_preflight` (with .066 failing later), checked canonical source identity/cleanliness and STOP. Twenty-operation review next due .080, not .070. Existing rollback/legacy extension and source-home windows remain unmodified.
+
+## Immediate blocker and next corrective gate
+
+**Critical new observation: current worker uses PowerShell's protected `$home` automatic variable.** This exact class of error already blocked PCE11.066, so it is unsafe to invoke the worker's live path. PCE11.070 must fix ALL case-insensitive `$home` references to `$destination` GitHub-first; add regression rejecting protected `$HOME` variable tokens, a real PowerShell synthetic assignment proof, syntax and 8+5 targeted tests, Windows full >=553 if test count grows, consumer >=123, and `-ValidateOnly` on current STOP epoch. No live Send in .070. Pin accepted worker/new test Git blobs and full SHA in receipt. Other runtime concerns (UIA ValuePattern.SetValue triggering ChatGPT DOM input and exact user group extraction) remain **untested**; fail closed, do not assume a source suite pass proves those.
+
+First commit this **AUDIT COMPLETE** report with basename ending `_PCE11_OPERATIONS_065_069.md`. Unique unnumbered ff-only sync of ONLY this report, re-read all controls, verify `engineering_preflight(ROOT,70,series=11)` selects audit [65,69], and only then dispatch PCE11.070. Keep source protected, never run legacy same-tab semantic rotation, preserve one-shot receipts and operator STOP.
+
+**AUDIT COMPLETE — PCE11.065, PCE11.066, PCE11.067, PCE11.068, PCE11.069.**
