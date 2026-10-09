@@ -179,6 +179,35 @@ def assess_next_engineering_operation(series: str, attempted_action_ids: list[st
     }
 
 
+def assess_engineering_rescue(failure_classes: list[str], proposed_ordinal: int) -> dict:
+    """Advisory Codex rescue after six consecutive same-class failed attempts.
+
+    Supply only confirmed per-ordinal failure categories in chronological order.
+    Successful operations must be recorded as 'OK', breaking the failure streak.
+    This never authorizes privileged execution or bypasses governance.
+    """
+    if not isinstance(failure_classes, list) or any(not isinstance(s, str) for s in failure_classes):
+        raise ControlHarnessError("failure class history must be a list of strings")
+    if type(proposed_ordinal) is not int or not 0 <= proposed_ordinal <= 100:
+        raise ControlHarnessError("proposed ordinal outside PCE budget")
+    if len(failure_classes) > proposed_ordinal + 1:
+        raise ControlHarnessError("failure history exceeds operations issued")
+    trailing = failure_classes[-6:]
+    stuck = len(trailing) == 6 and trailing[0] not in ("", "OK", "SUCCESS", "UNKNOWN") and all(
+        s == trailing[0] for s in trailing
+    )
+    return {
+        "codex_escalation_due": stuck,
+        "failure_signature": trailing[0] if stuck else None,
+        "minimum_consecutive_same_failure_attempts": 6,
+        "codex_model": "gpt-5.6-terra",
+        "codex_reasoning_effort": "medium",
+        "codex_mode": "review_and_repair_with_rollback_and_tests",
+        "requires_operator_approved_execution": True,
+        "reason": "six consecutive failed issued ordinals with the same failure class" if stuck else "not yet due",
+    }
+
+
 def engineering_preflight(
     series: str,
     next_ordinal: int,
@@ -248,6 +277,8 @@ def engineering_preflight(
         "series": series,
         "next_ordinal": next_ordinal,
         "audit_required": audit_required,
+        "review_due": next_ordinal > 0 and next_ordinal % 20 == 0,
+        "review_hard_gate": False,
         "audit_expected": (
             {"start": expected_start, "end": expected_end, "repository": GITHUB_AUDIT_REPOSITORY,
              "branch": GITHUB_AUDIT_BRANCH, "path_directory": "docs/audits/"}
@@ -267,6 +298,18 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "method": "assess_next_engineering_operation",
             "rule": "Each issued attempt consumes its ordinal, including GOVERNANCE_BLOCKED, transport-rejected and unknown outcomes. Never reuse .005; .006 follows a blocked .005.",
             "source": "Complete persisted action-ID ledger; no inference from OK-only results.",
+        },
+        "twenty_operation_review": {
+            "cadence": "Review attempted ordinals .000-.019 at .020 and every 20 thereafter.",
+            "hard_gate": False,
+            "publication": "GitHub connector; record review without stalling a working relay.",
+        },
+        "codex_escalation": {
+            "method": "assess_engineering_rescue",
+            "threshold": "six consecutive issued ordinals with the same non-success failure signature",
+            "model": "gpt-5.6-terra",
+            "reasoning_effort": "medium",
+            "safety": "Do not disable controls; use bounded workspace diagnostics, rollback and tests.",
         },
         "github_audit_checkpoint": {
             "method": "engineering_preflight",
