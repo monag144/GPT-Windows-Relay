@@ -18,6 +18,16 @@ Turn the 26-case A–Z release checklist into **measurable behavior** rather tha
 
 The existing A–Z scorer and 12-hour/24-hour observer remain mandatory *separate* release qualifications. A real dry-run lasting 15 seconds cannot substitute for case U or Z.
 
+## Immediate real-host read-only smoke test
+
+Even before a live desktop trial is authorized, the independent surface probe can answer which parts of the current Windows installation are alive and which source copies differ:
+
+~~~powershell
+python -B benchmarks/relay_readonly_surface.py --output "$env:LOCALAPPDATA\GPTWindowsRelay\ops\surface-pce14-001.json"
+~~~
+
+It checks a TCP listener, records the exact unauthenticated HTTP status (401 is a healthy **authorization denial**, not listener failure), obtains the native listener PID on Windows when uniquely resolvable, and hashes the three canonical and three Client content-script copies. It never accesses the bridge token. It explicitly marks the executing Firefox JS hash and real New Chat/paste/Send **NOT_RUN**; file hashes do not establish Firefox loaded-source provenance. This smoke test is safe to run in read-only mode against the existing installation and is not a substitute for a real browser send canary.
+
 ## Trace contract
 
 One JSON object per line. All traces use monotonic elapsed milliseconds, never wall-clock-relative guesses. Every line includes \`case_id\`, \`trial_id\`, \`source\` (\`relay\` or \`observer\`), \`event\`, \`at_ms\`, \`operation_id\`, \`tab_id\`, and \`payload_sha256\`. Observer events also require an \`observer_id\` matching the manifest. The final line of **each trial** must be \`observer:trial_complete\`. A missing terminal observation yields BLOCKED, not PASS.
