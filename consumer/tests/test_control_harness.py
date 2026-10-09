@@ -52,4 +52,91 @@ class ControlHarnessTests(unittest.TestCase):
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
         self.assertEqual(c["incident_logging"]["method"],"write_incident"); self.assertEqual(c["runtime_gates"]["source_contract_method"],"validate_windows_runtime_contract"); self.assertEqual(c["reflection"]["method"],"append_reflection"); self.assertEqual(c["data_policy"]["method"],"record_once"); self.assertEqual(c["continuous_improvement"]["method"],"evaluate_improvement"); self.assertIn("live-canary",c["continuous_improvement"]["cycle"])
+
+    @staticmethod
+    def github_receipt(ordinal=5, series="PCE12"):
+        first, last = ordinal - 5, ordinal - 1
+        path = f"docs/audits/AUDIT_2026-10-09T0710Z_{series}_{first:03d}_{last:03d}_CHECKPOINT.md"
+        sha = "a" * 40
+        return {
+            "repository": "monag144/GPT-Windows-Relay",
+            "branch": "main",
+            "source": "github_connector",
+            "path": path,
+            "start": first,
+            "end": last,
+            "commit_sha": sha,
+            "file_sha": "b" * 40,
+            "readback_verified": True,
+            "url": f"https://github.com/monag144/GPT-Windows-Relay/blob/{sha}/{path}",
+        }
+
+    def test_github_audit_is_required_at_fifth_operation(self):
+        result = ch.engineering_preflight("PCE12", 5)
+        self.assertFalse(result["ok"])
+        self.assertIn("github_checkpoint_audit_missing", result["blockers"])
+        self.assertEqual(result["audit_expected"]["start"], 0)
+        self.assertEqual(result["audit_expected"]["end"], 4)
+
+    def test_github_readback_receipt_allows_five_turn_checkpoint(self):
+        result = ch.engineering_preflight("PCE12", 5, github_audit_receipt=self.github_receipt())
+        self.assertTrue(result["ok"], result["blockers"])
+        self.assertTrue(result["github_audit_receipt_valid"])
+
+    def test_github_audit_rejects_wrong_repository_branch_and_transport(self):
+        for key, invalid in (
+            ("repository", "monag144/GPT-Termux-Relay"),
+            ("branch", "development"),
+            ("source", "windows_relay"),
+            ("readback_verified", False),
+        ):
+            with self.subTest(key=key):
+                receipt = self.github_receipt()
+                receipt[key] = invalid
+                self.assertFalse(ch.engineering_preflight("PCE12", 5, github_audit_receipt=receipt)["ok"])
+
+    def test_github_audit_rejects_wrong_range_path_and_uncommitted_receipt(self):
+        for key, invalid in (
+            ("start", 1),
+            ("end", 5),
+            ("path", "docs/audits/local-note.md"),
+            ("commit_sha", ""),
+            ("file_sha", "unverified"),
+            ("url", "https://github.com/monag144/GPT-Termux-Relay"),
+        ):
+            with self.subTest(key=key):
+                receipt = self.github_receipt()
+                receipt[key] = invalid
+                self.assertFalse(ch.engineering_preflight("PCE12", 5, github_audit_receipt=receipt)["ok"])
+
+    def test_five_operation_cadence_is_exact(self):
+        for ordinal in (0, 1, 4, 6, 9, 11):
+            with self.subTest(ordinal=ordinal):
+                verdict = ch.engineering_preflight("PCE12", ordinal)
+                self.assertTrue(verdict["ok"])
+                self.assertFalse(verdict["audit_required"])
+        for ordinal in (10, 20, 100):
+            with self.subTest(ordinal=ordinal):
+                expected = ch.engineering_preflight("PCE12", ordinal)
+                self.assertFalse(expected["ok"])
+                self.assertEqual(expected["audit_expected"]["start"], ordinal - 5)
+                self.assertEqual(expected["audit_expected"]["end"], ordinal - 1)
+                verdict = ch.engineering_preflight("PCE12", ordinal, github_audit_receipt=self.github_receipt(ordinal))
+                self.assertTrue(verdict["ok"], verdict["blockers"])
+
+    def test_operation_budget_and_bad_series_fail_closed(self):
+        for series, op in (("PCE12", 101), ("PCE12", -1), ("Termux", 5), ("PCE12", True)):
+            with self.subTest(series=series, op=op):
+                with self.assertRaises(ch.ControlHarnessError):
+                    ch.engineering_preflight(series, op)
+        with self.assertRaises(ch.ControlHarnessError):
+            ch.engineering_preflight("PCE12", 5, max_ordinal=101)
+
+    def test_contract_explicitly_mandates_github_first_audits(self):
+        c = ch.build_control_harness_contract("PCE12")
+        self.assertEqual(c["github_audit_checkpoint"]["method"], "engineering_preflight")
+        self.assertEqual(c["github_audit_checkpoint"]["repository"], "monag144/GPT-Windows-Relay")
+        self.assertIn("GitHub connector", c["github_audit_checkpoint"]["publication"])
+        self.assertIn("no Windows Relay git push", c["github_audit_checkpoint"]["publication"])
+
 if __name__=='__main__': unittest.main()
