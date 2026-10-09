@@ -148,7 +148,7 @@ class ReceiverFixtureTests(unittest.TestCase):
         self.assertIn("PCE14 LOCAL TEST FIXTURE - NOT CHATGPT", body)
 
     def test_receiver_records_valid_ready_attestation(self):
-        data = {"launch_id": "0123456789abcdef01234567", "outer_w": 1382, "outer_h": 744,
+        data = {"launch_id": "0123456789abcdef01234567", "geometry_mode":"window-outer", "outer_w": 1382, "outer_h": 744,
                 "content_left": 8, "content_top": 96, "client_w": 1366, "client_h": 620,
                 "new_chat_x": 112, "new_chat_y": 67,
                 "composer_x": round(1382*.585)-8, "composer_y": round(744*.56)-96}
@@ -160,7 +160,7 @@ class ReceiverFixtureTests(unittest.TestCase):
         self.assertEqual(snap["total_effects"], 0)
 
     def test_inconsistent_ready_geometry_rejected_without_side_effects(self):
-        data = {"launch_id": "0123456789abcdef01234567", "outer_w": 1382, "outer_h": 744,
+        data = {"launch_id": "0123456789abcdef01234567", "geometry_mode":"window-outer", "outer_w": 1382, "outer_h": 744,
                 "content_left": 8, "content_top": 96, "client_w": 1366, "client_h": 620,
                 "new_chat_x": 999, "new_chat_y": 67, "composer_x": 800, "composer_y": 320}
         status, _, _ = self.http("/api/ready", data)
@@ -177,6 +177,36 @@ class ReceiverFixtureTests(unittest.TestCase):
         data = {"launch_id": "0123456789abcdef01234567"}
         status, _, _ = self.http("/api/ready", data, token="invalid")
         self.assertEqual(status, 403)
+
+    def test_headless_zero_outer_frame_fallback_is_explicitly_attested(self):
+        data={"launch_id":"0123456789abcdef01234567","geometry_mode":"headless-inner",
+              "outer_w":1382,"outer_h":744,"content_left":0,"content_top":0,
+              "client_w":1382,"client_h":744,"new_chat_x":120,"new_chat_y":163,
+              "composer_x":int(1382*.585+.5),"composer_y":int(744*.56+.5)}
+        status,body,_=self.http("/api/ready",data)
+        self.assertEqual(status,200)
+        self.assertTrue(json.loads(body)["ready"])
+        snap=self.receiver.snapshot(self.receiver.token)
+        self.assertEqual(snap["ready"]["geometry_mode"],"headless-inner")
+        self.assertEqual(snap["total_effects"],0)
+
+    def test_headless_fallback_rejects_claimed_browser_frame_offsets(self):
+        data={"launch_id":"0123456789abcdef01234567","geometry_mode":"headless-inner",
+              "outer_w":1382,"outer_h":744,"content_left":0,"content_top":30,
+              "client_w":1382,"client_h":744,"new_chat_x":120,"new_chat_y":133,
+              "composer_x":int(1382*.585+.5),"composer_y":int(744*.56+.5)-30}
+        status,body,_=self.http("/api/ready",data)
+        self.assertEqual(status,422)
+        self.assertEqual(json.loads(body)["error"],"INVALID_HEADLESS_FALLBACK")
+        self.assertIsNone(self.receiver.snapshot(self.receiver.token)["ready"])
+
+    def test_page_headless_fallback_not_conflated_with_visible_geometry(self):
+        status,body,_=self.http("/")
+        self.assertEqual(status,200)
+        self.assertIn("window.outerWidth===0 && window.outerHeight===0",body)
+        self.assertIn("mode=manual?'manual':headless?'headless-inner':'window-outer'",body)
+        self.assertIn("outer_w:Math.round(g.w)",body)
+        self.assertIn("geometry_mode:g.mode",body)
 
     def test_early_bootstrap_telemetry_is_digest_free(self):
         data = {"launch_id":"0123456789abcdef01234567","geometry_status":"NULL",
