@@ -186,7 +186,7 @@ function Inspect-Windows {
   if($kind -eq 'source'){Check-SourceEditors $w}
   if($kind -eq 'home'){
    $editor=Get-Editor $w $true
-   if((Active-SendButtons $w).Count -ne 0){throw 'DESTINATION_HAS_PREEXISTING_SEND'}
+   if(@(Active-SendButtons $w).Count -ne 0){throw 'DESTINATION_HAS_PREEXISTING_SEND'}
   }else{$editor=$null}
   $handle=[IntPtr]::new([int64]$w.Current.NativeWindowHandle)
   if($handle -eq [IntPtr]::Zero){throw 'FIREFOX_WINDOW_HANDLE_MISSING'}
@@ -257,7 +257,7 @@ try{
  if(([string]$editor.pattern.Current.Value) -cne $script:Handoff){throw 'HANDOFF_EDITOR_READBACK_MISMATCH'}
  Check-SourceEditors $source.window
  $null=Assert-Controls
- $send=Active-SendButtons $destination.window
+ $send=@(Active-SendButtons $destination.window)
  if($send.Count -ne 1){throw ('HANDOFF_ENABLED_SEND_COUNT_'+$send.Count)}
  if([Agent011AtomicFocus]::GetForegroundWindow() -ne $destination.handle){throw 'DESTINATION_FOCUS_LOST_BEFORE_SEND'}
  if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl -or -not(Is-HomeUrl (UrlBar $destination.window))){throw 'BROWSER_IDENTITY_CHANGED_BEFORE_SEND'}
