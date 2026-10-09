@@ -11,6 +11,33 @@ Repository `monag144/GPT-Windows-Relay`, branch `pce11/one-click-go-recovery-and
 | .010–.014 | `docs/audits/AUDIT_2026-10-09T1905Z_PCE13_OPERATIONS_010_014.md` | .010 origin UIA diagnostic incorrectly uses PowerShell `$matches` automatic variable; false `PROVEN_ORIGIN_COUNT=1`. .011 saved result had no inner stderr. .012 fixes diagnostic variable, origin not proven; .013 localizes missing selected-tab UIA identity (1 Firefox, 1 ChatGPT, 1 readable doc, selected tab 0). .014 command emitted but never observed reserved or completed, no RESULT; side-effect status not inferred from missing user response alone. |
 | .015–.019 | `docs/audits/AUDIT_2026-10-09T1913Z_PCE13_OPERATIONS_015_019.md` | .015 durable journal `.014` not reserved, 0 outbound/result; relay still running. .016 Firefox crash files 0 and relevant Windows application/system crash events 0; browser journal active. .017 120-second confirmation watchdog failed four times in window. .018 exact result envelope visible for `.012/.013`, zero recognized role-selector candidates. .019 captured ChatGPT DOM nested `group/user-message`, `bg-user-message`, anonymous DIVs; fallback exact-envelope check remains unproven. |
 
+## Exact twenty-slot operation ledger (harness-required labels)
+
+This ledger explicitly accounts for every attempted slot. It does not retroactively turn blocked, uncertain, or unacknowledged results into successes; the linked five-operation audits retain precise packet IDs and preserved results.
+
+| Slot | Evidenced classification and result |
+| --- | --- |
+| PCE13.000 | Initial governance read incomplete; read-only baseline; remediation next slot |
+| PCE13.001 | Five controls and preflight accepted; stdout truncated; read-only |
+| PCE13.002 | Verified dirty PCE12 audit and protected listener; read-only |
+| PCE13.003 | Recovered PCE12 results and untracked audit; stdout truncated; read-only |
+| PCE13.004 | PCE12.018/.019 handoff outcomes found unsuccessful; read-only |
+| PCE13.005 | GOVERNANCE_BLOCKED due absent locally synced five-slot audit; no dispatch |
+| PCE13.006 | After GOVSYNC, verified PCE12.018 navigation error; read-only |
+| PCE13.007 | Recovered PCE12.019 COMPOSER_NOT_EMPTY_ABORT; read-only |
+| PCE13.008 | 33 targeted tests pass; misleading PowerShell parser diagnostic; no effect |
+| PCE13.009 | Correct ParseFile/ParseInput both zero errors; read-only |
+| PCE13.010 | UIA origin count false-positive due $Matches collision; no UI effect |
+| PCE13.011 | Read saved .010 failure; inner PowerShell stderr unavailable |
+| PCE13.012 | Resolved $Matches conflict in probe; real origin count zero; read-only |
+| PCE13.013 | One Firefox ChatGPT window/document; selected tab identity zero |
+| PCE13.014 | Packet emitted but no relay execution record or saved result; UNKNOWN delivery, no replay |
+| PCE13.015 | Backend journal shows .014 unreserved; relay process alive |
+| PCE13.016 | Browser journal live; Firefox crash reports zero and relevant Windows events zero |
+| PCE13.017 | Watchdog telemetry four expirations, one confirmed result submission, stdout truncated |
+| PCE13.018 | Two exact envelopes visible but zero role selector candidates; stdout truncated |
+| PCE13.019 | Captured nested real ChatGPT user-message DOM; structural fallback still unverified |
+
 ## Major failures, resolutions, unresolved blockers
 1. **P0 Rotation:** PCE12 handoff has NOT been delivered and positively verified in a new same-origin ChatGPT tab. PCE12.018 navigation URL unknown; PCE12.019 new composer nonempty (may be placeholder or draft). Preserve drafts; no blind paste or repeated click/Send. Agent011 current-tab worker is still PCE12-specific, not a safe PCE13→PCE14 drop-in.
 2. **Governance publication drift:** Audits committed to remote do not pass Windows pre-dispatch governance until synced. .005 was genuinely GOVERNANCE_BLOCKED, not retroactively successful. Resolved each boundary using separate explicitly identified, constrained, verified fast-forward, preserving original untracked PCE12.010–.014 audit and its immutable LOCALAPPDATA backup. As of most recent successful checkpoint, local HEAD `4ce1b42a91a5dd694267b1800e8b98cb372af209`, with exactly one preexisting untracked audit.
