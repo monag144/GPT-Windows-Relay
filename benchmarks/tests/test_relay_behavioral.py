@@ -42,6 +42,13 @@ def event(case_id, trial_id, marker, index, mode="fixture"):
     }
     if source == "observer":
         item["observer_id"] = "independent-observer-01"
+    if marker in ("observer:composer_exact", "observer:payload_sha_verified"):
+        item["readback_sha256"] = SHA
+    if marker == "observer:composer_exact":
+        item["payload_bytes"] = 14000
+        item["readback_bytes"] = 14000
+        item["unicode_seen"] = True
+        item["multiline_seen"] = True
     if marker == "observer:user_turn_verified":
         item["role"] = "user"
         item["conversation_id"] = "conversation-209"
@@ -134,6 +141,20 @@ class BehavioralBenchmark(unittest.TestCase):
         seq = trial(self.cases["R03"])
         seq[2]["tab_id"] = "other-tab"
         self.assertEqual(rb.check_trial(self.cases["R03"], seq, metadata(), self.catalog["forbidden_global"])["status"], "FAIL")
+
+    def test_composer_requires_exact_readback_sha(self):
+        seq = trial(self.cases["R04"])
+        next(e for e in seq if e["event"] == "composer_exact")["readback_sha256"] = "c" * 64
+        result = rb.check_trial(self.cases["R04"], seq, metadata(), self.catalog["forbidden_global"])
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_unicode_and_long_payload_must_be_demonstrated(self):
+        seq = trial(self.cases["R04"])
+        next(e for e in seq if e["event"] == "composer_exact")["unicode_seen"] = False
+        self.assertEqual(rb.check_trial(self.cases["R04"], seq, metadata(), self.catalog["forbidden_global"])["status"], "FAIL")
+        seq = trial(self.cases["R05"])
+        next(e for e in seq if e["event"] == "composer_exact")["readback_bytes"] = 500
+        self.assertEqual(rb.check_trial(self.cases["R05"], seq, metadata(), self.catalog["forbidden_global"])["status"], "FAIL")
 
     def test_deadline_is_checked(self):
         seq = trial(self.cases["R04"])
