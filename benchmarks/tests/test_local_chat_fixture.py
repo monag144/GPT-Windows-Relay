@@ -147,6 +147,37 @@ class ReceiverFixtureTests(unittest.TestCase):
         self.assertIn("newChat.disabled=false", body)
         self.assertIn("PCE14 LOCAL TEST FIXTURE - NOT CHATGPT", body)
 
+    def test_receiver_records_valid_ready_attestation(self):
+        data = {"launch_id": "0123456789abcdef01234567", "outer_w": 1382, "outer_h": 744,
+                "content_left": 8, "content_top": 96, "client_w": 1366, "client_h": 620,
+                "new_chat_x": 112, "new_chat_y": 67,
+                "composer_x": round(1382*.585)-8, "composer_y": round(744*.56)-96}
+        status, body, _ = self.http("/api/ready", data)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"ready": True})
+        snap = self.receiver.snapshot(self.receiver.token)
+        self.assertEqual(snap["ready"], data)
+        self.assertEqual(snap["total_effects"], 0)
+
+    def test_inconsistent_ready_geometry_rejected_without_side_effects(self):
+        data = {"launch_id": "0123456789abcdef01234567", "outer_w": 1382, "outer_h": 744,
+                "content_left": 8, "content_top": 96, "client_w": 1366, "client_h": 620,
+                "new_chat_x": 999, "new_chat_y": 67, "composer_x": 800, "composer_y": 320}
+        status, _, _ = self.http("/api/ready", data)
+        self.assertEqual(status, 422)
+        self.assertIsNone(self.receiver.snapshot(self.receiver.token)["ready"])
+
+    def test_ready_handshake_requires_nonce_and_disables_input_until_ack(self):
+        status, body, _ = self.http("/")
+        self.assertEqual(status, 200)
+        self.assertIn("Validating local fixture geometry; do not send.",body)
+        self.assertIn("post('/api/ready'",body)
+        self.assertIn("if(r.status!==200 || r.data.ready!==true)",body)
+        self.assertIn("newChat.disabled=false",body)
+        data = {"launch_id": "0123456789abcdef01234567"}
+        status, _, _ = self.http("/api/ready", data, token="invalid")
+        self.assertEqual(status, 403)
+
     def test_unknown_path_has_no_external_redirect(self):
         status, body, _ = self.http("/external-service")
         self.assertEqual(status, 404)
