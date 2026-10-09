@@ -1,0 +1,30 @@
+# PCE14 isolated Firefox / local receiver validation — checkpoint at 2026-10-09T2247Z
+
+## Authority and intent
+Canonical Windows repository: `monag144/GPT-Windows-Relay`. Active engineering branch `pce11/one-click-go-recovery-and-doc-hygiene`, Windows base checkout last verified `8b2673413e4c166fe1a3ec0eceddb5c71f5cba4d`. User requested this progress be logged in Git. This note is **a progress ledger, not an audit checkpoint**. The required PCE14.020–.024 audit must be created only after the actual PCE14.024 result is received, then synchronized *before* PCE14.025.
+
+Mission: reliable GPT ↔ Windows relay exact-once New Chat / paste / Send in the exact originating ChatGPT tab, independent receipt, operator STOP and draft preservation. Intermediate tests must never be misrepresented as actual end-to-end ChatGPT success.
+
+## Verified local Windows actions
+- **PCE14.020 — PASS**: `engineering_preflight(root,20,series=14)` accepted both immutable mandatory audit .015–.019 and review .000–.019. Discovered `C:\Program Files\Mozilla Firefox\firefox.exe`; Windows file-version hint `157.0.1.583`; normal Firefox profile directory exists. No separate profile created, no browser started or sent message.
+- **PCE14.021 — PASS, source read only**: working `Client\Relay\test\Copy-Contents-To-ChatGPT.ps1` SHA256 `e2ff24ca5b893fa6259bfdc2000872e581a512c13405cdcd6a9bc1c051b9223a`. HWND-relative New Chat click `left+120,top+163`, wait 1050ms; composer click `left+int(width*.585),top+int(height*.56)`, wait 250ms; Ctrl+V, wait 650ms; Enter once. No execution.
+- **PCE14.022 — PASS measured 65/65 tests** on Windows at pinned GitHub source SHA `4f79d2ce79a183d9ecdc1ef1b971898447390806`, suite runtime 7.523 seconds, zero fail/error, process exit 0. Includes real loopback HTTP receiver requests, payload SHA-256 receipts, duplicate operation denial, STOP tests. All server processes shut down, canonical tracked checkout unchanged, protected PCE12 original/backup both intact. **No Firefox GUI input or actual ChatGPT Send**.
+- **PCE14.023 — PASS source read only**: pinned working PowerShell helper uses `System.Windows.Forms`, `SetProcessDPIAware`, `ShowWindow`, `SetForegroundWindow`, `GetWindowRect`, `SetCursorPos`, and Win32 `mouse_event` down/up. Concise snippets output truncated after listing first 13/21 selected lines, so do not claim every helper line independently verified. No script run.
+
+## GitHub-only new source on draft feature PR #10
+Feature branch `pce14/behavioral-relay-benchmarks`, pinned current SHA when this note was written `d8b2e9e24d8e51c8cfc529a03c6e9baa7bbedb2b`; do not move this branch until the already-issued .024 Windows action resolves because it pins exactly that SHA.
+- `benchmarks/local_chat_fixture.py` — disposable loopback-only HTTP receiver, browser-mimicking New Chat/composer UI, nonce-bound submissions, receiver-side digest-only records, one-effect-per-operation, STOP, bounded message length. Page clearly says NOT CHATGPT. Its position mimics known HWND-relative coordinates using Firefox frame geometry and a unique synthetic launch token; browser controls are disabled without valid launch ID and bounds. Never use this to infer actual ChatGPT delivery.
+- `benchmarks/tests/test_local_chat_fixture.py` — 15 tests for loopback receiver, replay rejection, wrong conversation, STOP, privacy and unique launch ID. Original suite was 51 tests; adding initial receiver tests produced **65/65 Windows PASS at .022**; 66-test expanded suite after one later fixture test is **not yet confirmed**.
+
+## Issued but unverified
+- **PCE14.024 — PENDING RESULT (NOT PASS)**: uniquely numbered `PCE14.024-headless-isolated-firefox-fixture-smoke`, issued to Windows relay but *no* `[GPT_WINDOWS_RESULT]` has been received at the time of this note. Intended to run 66 offline+loopback tests, launch Firefox **headless** with a disposable `--profile` and `--no-remote`, visit only local `127.0.0.1` fixture, record a PNG screenshot size and server-side page GET with **zero submission effects**, then shut everything down. Outcomes, cleanup behavior, and 66/66 status are UNKNOWN until Windows result. Do not duplicate/replay the action ID. Current live Firefox session must remain untouched.
+
+## Safety / quality gates still open
+**NOT YET DEMONSTRATED**: real GUI mouse/paste/Enter loopback receipt, safe unique fixture HWND targeting under two visible Firefox windows, independent real ChatGPT user-role receipt, exact originating ChatGPT tab, live loaded Firefox extension JS provenance, 60 genuinely scored R01–R20 runs, 12h/24h endurance. Source/Client content-script on-disk hash drift observed at PCE14.008. PR #10 GitHub Actions CI had a pre-step failure, root cause unverified; passing Windows local tests does not establish CI green. No merge or live deployment approved.
+
+Protected original untracked `docs/audits/AUDIT_2026-10-09T0808Z_PCE12_OPERATIONS_010_014.md` and backup SHA256 `3d18d1f3b8b01df51b4b853f46dde1fa142eb335cbc351bcdd6639307e98ccab` must never be cleaned/reset/stashed. No changes to live Firefox profile, production deployed `Client\Relay`, user drafts, or clipboard are part of this progress commit.
+
+## Next action
+Receive and classify the exact PCE14.024 result. If successful, record measured headless baseline and design a *distinct* foreground-isolated GUI test with process+HWND ownership, safe single Send and independent receiver-side effect count, never against a real ChatGPT tab. If blocked, record incident details and repair GitHub-first. Create mandatory .020–.024 audit GitHub-first, synchronize its documentation-only commit by unique non-PCE GOVSYNC with pinned SHA/diff/path verification, then pass `engineering_preflight(root,25,series=14)` prior to numbered PCE14.025.
+
+**PROGRESS LOG COMPLETE; PCE14.024 execution still PENDING.**
