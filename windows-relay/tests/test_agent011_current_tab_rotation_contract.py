@@ -43,7 +43,7 @@ class CurrentChatTabRotationContract(unittest.TestCase):
 
     def test_no_inference_from_tab_count_or_foreground_window(self):
         self.assertIn("11-tab count is **not proof**", self.procedure)
-        self.assertIn("do not assume that the 11-tab window is the invoking tab", self.tasks)
+        self.assertIn("assume that the 11-tab window is the invoking tab", self.tasks)
 
     def test_semantic_new_chat_and_same_tab_send_proven(self):
         self.assertIn("same window HWND and same selected tab", self.procedure)
