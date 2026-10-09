@@ -183,7 +183,7 @@ def check_trial(case: dict, events: list[dict], meta: dict, globally_forbidden: 
         if key(event) == "observer:loaded_runtime_attested" and meta["mode"] == "live":
             if event.get("runtime_sha256") != meta["loaded_runtime_sha256"]:
                 return {"status": "FAIL", "reason": "loaded-runtime attestation disagrees"}
-    return {"status": "PASS" if meta["mode"] == "live" else "FIXTURE_PASS",
+    return {"status": "TRACE_PASS" if meta["mode"] == "live" else "FIXTURE_PASS",
             "reason": "trace checks satisfied; underlying observer not independently audited",
             "duration_ms": elapsed}
 
@@ -218,14 +218,14 @@ def score(meta: dict, catalog: dict, events: list[dict]) -> dict:
         elif len(outputs) < expected_trials or any(r["status"] == "BLOCKED" for r in outputs):
             state = "BLOCKED"
         else:
-            state = "PASS" if meta["mode"] == "live" else "FIXTURE_PASS"
+            state = "TRACE_PASS" if meta["mode"] == "live" else "FIXTURE_PASS"
         verdicts[case_id] = {
             "status": state, "trials": len(outputs),
             "median_ms": statistics.median(times) if times else None,
             "p95_ms": percentile_95(times),
             "reasons": sorted({r["reason"] for r in outputs if r["status"] in ("FAIL", "BLOCKED")})
         }
-    success = "PASS" if meta["mode"] == "live" else "FIXTURE_PASS"
+    success = "TRACE_PASS" if meta["mode"] == "live" else "FIXTURE_PASS"
     passed = sum(1 for r in verdicts.values() if r["status"] == success)
     return {
         "schema": "pce14-relay-behavior-score-v1",
@@ -238,7 +238,8 @@ def score(meta: dict, catalog: dict, events: list[dict]) -> dict:
                    "blocked": sum(r["status"] == "BLOCKED" for r in verdicts.values()),
                    "not_run": sum(r["status"] == "NOT_RUN" for r in verdicts.values())},
         "capabilities": verdicts,
-        "full_behavioral_gate": bool(meta["mode"] == "live" and passed == len(cases)),
+        "trace_coverage_complete": bool(passed == len(cases)),
+        "full_behavioral_gate": False,
         "release_qualified": False,
         "warning": ("Trace assertions do not independently authenticate their producer. "
                     "Live acceptance additionally needs vetted out-of-band observer, A-Z safety, "
