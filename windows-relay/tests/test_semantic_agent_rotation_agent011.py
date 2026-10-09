@@ -71,6 +71,21 @@ class SemanticAgentRotationContractTests(unittest.TestCase):
         self.assertIn("SOURCE_RESULT_VISIBLE_RECEIPT_NOT_PROVEN",self.src)
         self.assertIn("Save 'WORKER_ENTRY'",self.src)
 
+    def test_composer_requires_unique_visible_writable_named_edit(self):
+        """PCE11.035 UIA proved visible Ask ChatGPT differs from hidden ProseMirror."""
+        body=self.src[self.src.index("function Composer($window){"):self.src.index("try{\n # POSITIVE WORKER-START RECEIPT")]
+        self.assertIn("ControlType]::Edit",body)
+        self.assertIn("$e.Current.IsOffscreen -or -not $e.Current.IsEnabled",body)
+        self.assertIn("([string]$e.Current.Name) -cne 'Ask ChatGPT'",body)
+        self.assertIn("TryGetCurrentPattern([Windows.Automation.ValuePattern]",body)
+        self.assertIn("$vp.Current.IsReadOnly",body)
+        self.assertIn("$matching+=,[ordered]@{element=$e;value=$vp}",body)
+        self.assertIn("if($matching.Count -ne 1)",body)
+        self.assertIn("return $matching[0]",body)
+        self.assertNotIn("([string]$e.Current.ClassName) -eq 'ProseMirror'",body)
+        self.assertLess(body.index("$vp.Current.IsReadOnly"),body.index("$matching+=,"))
+        self.assertLess(body.index("if($matching.Count -ne 1)"),body.index("return $matching[0]"))
+
     def test_worker_script_has_valid_windows_powershell_syntax(self):
         engine=shutil.which("powershell.exe")
         if not engine:
