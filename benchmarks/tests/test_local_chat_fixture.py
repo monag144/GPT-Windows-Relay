@@ -137,6 +137,16 @@ class ReceiverFixtureTests(unittest.TestCase):
         self.assertNotIn("https://chatgpt.com", body)
         self.assertNotIn("document.cookie", body)
 
+    def test_unique_launch_id_is_required_for_clickable_fixture(self):
+        status, body, _ = self.http("/")
+        self.assertEqual(status, 200)
+        self.assertIn("validLaunchId ? geometry() : null", body)
+        self.assertIn("document.title += ' ['+launchId+']'", body)
+        self.assertIn("window.mozInnerScreenX-window.screenX", body)
+        self.assertIn("window.mozInnerScreenY-window.screenY", body)
+        self.assertIn("newChat.disabled=false", body)
+        self.assertIn("PCE14 LOCAL TEST FIXTURE - NOT CHATGPT", body)
+
     def test_unknown_path_has_no_external_redirect(self):
         status, body, _ = self.http("/external-service")
         self.assertEqual(status, 404)
