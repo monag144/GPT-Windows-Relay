@@ -1,10 +1,10 @@
-# GPT Windows Relay — Established Facts / Read This First
+# GPT Windows Relay — Established Facts (historical reference)
 
 Snapshot: `2026-10-07T2034Z`
 
-This is the canonical short-form knowledge base for the Windows↔ChatGPT Firefox relay.
+This is a legacy detailed knowledge base. The canonical entry point is `docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md`; it takes precedence over older locations and relay-result footers.
 
-**Before starting new relay debugging or forensics, read this file and the engineering log first.** Do not rediscover facts already proven here unless new evidence directly contradicts them.
+**Before new Windows relay engineering, read the source-of-truth index, operational rules and work backlog first.** Consult this historical reference and the engineering log only for missing evidence. Do not repeat established proofs without contradictory evidence.
 
 Current chronology and proof live in:
 - `docs/windows-relay-engineering-log-2026-10-07.md`
@@ -16,7 +16,7 @@ Historical chronology is frozen in:
 
 - GitHub repository: `monag144/GPT-Windows-Relay`
 - Active branch: `main`
-- Canonical local clone: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Termux-Relay`
+- Canonical local clone target: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay` (verify its Git remote before mutation; never fall back to another checkout)
 - Active live relay tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
 - Temporary Firefox manifest: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay\extension\manifest.json`
 - Persistent-extension source: `...\Client\Relay\extension-persistent`
