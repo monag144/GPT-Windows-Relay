@@ -10,8 +10,31 @@ TASKS = ROOT / "windows-relay" / "TASKS.md"
 class CurrentChatTabRotationContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.worker = (ROOT / 'windows-relay' / 'agent011_current_tab_new_chat.ps1').read_text(encoding='utf-8')
         cls.procedure = PROCEDURE.read_text(encoding="utf-8")
         cls.tasks = TASKS.read_text(encoding="utf-8")
+
+    def test_actual_worker_proves_current_originating_result(self):
+        self.assertIn('function RecentSourceResult', self.worker)
+        self.assertIn("LastIndexOf('[GPT_WINDOWS_RESULT]')", self.worker)
+        self.assertIn('chunk.Contains($SourcePacketId)', self.worker)
+        self.assertIn('CURRENT_RELAY_ORIGINATING_TAB_NOT_PROVEN_NO_UI_EFFECT', self.worker)
+
+    def test_actual_worker_has_exactly_one_semantic_newchat_action(self):
+        self.assertEqual(self.worker.count('$button.invoke.Invoke()'), 1)
+        self.assertIn('ORIGIN_TAB_SAME_TAB_NEW_CHAT_VERIFIED', self.worker)
+        self.assertIn('SAME_TAB_SELECTION_LOST', self.worker)
+        self.assertIn('SAME_WINDOW_HANDLE_CHANGED', self.worker)
+        self.assertNotIn('--new-window', self.worker)
+        self.assertNotIn('--new-tab', self.worker)
+        self.assertNotIn('Start-Process', self.worker)
+
+    def test_worker_never_submits_or_pastes(self):
+        self.assertNotIn("SendWait('^v')", self.worker)
+        self.assertNotIn('SetForegroundWindow(', self.worker)
+        self.assertIn('send_invoked=$false', self.worker)
+        self.assertIn('paste_attempted=$false', self.worker)
+        self.assertIn('SEMANTIC_NEW_CHAT_CLICK_INTENT_NO_RETRY', self.worker)
 
     def test_user_intent_is_same_current_tab(self):
         self.assertIn("SAME CURRENT TAB ONLY", self.procedure)
