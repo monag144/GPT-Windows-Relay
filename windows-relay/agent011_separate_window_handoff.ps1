@@ -12,7 +12,9 @@ param(
  [int]$ExpectedStopGeneration=9,
  [switch]$ValidateOnly,
  [switch]$InspectOnly,
- [switch]$ClipboardPaste
+ [switch]$ClipboardPaste,
+ [switch]$RequireDestinationAlreadyForeground,
+ [string]$ExpectedSourceEditorSha256=''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2
@@ -164,6 +166,7 @@ function Check-SourceEditors($Window){
  }
  if($count -lt 1){throw 'SOURCE_EDITOR_MISSING'}
  $fingerprint=Hash-String ([string]::Join(([string][char]10),$values.ToArray()))
+ if($ExpectedSourceEditorSha256 -ne '' -and $fingerprint -cne $ExpectedSourceEditorSha256){throw 'SOURCE_EDITOR_PREINCIDENT_FINGERPRINT_MISMATCH'}
  if($null -eq $script:State.source_editor_sha256){$script:State.source_editor_sha256=$fingerprint}
  elseif($script:State.source_editor_sha256 -cne $fingerprint){
   $script:State.source_editor_untouched=$false
@@ -256,8 +259,10 @@ try{
  $script:State.source_url_sha256=Hash-String $sourceUrl
  Save-Receipt 'PAIR_AND_EDITORS_VERIFIED'
  $foreground=[Agent011AtomicFocus]::GetForegroundWindow()
+ if($RequireDestinationAlreadyForeground -and $foreground -ne $destination.handle){throw 'DESTINATION_MUST_ALREADY_BE_FOREGROUND_NO_FOCUS_ATTEMPT'}
  if($foreground -ne $source.handle -and $foreground -ne $destination.handle){throw 'UNTRUSTED_FOREGROUND_WINDOW'}
  if($foreground -eq $source.handle){
+  if($RequireDestinationAlreadyForeground){throw 'FORBIDDEN_FOCUS_BRANCH_IN_NO_FOCUS_MODE'}
   $script:State.focus_attempted=$true
   Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'
   if(-not [Agent011AtomicFocus]::SetForegroundWindow($destination.handle)){throw 'SET_FOREGROUND_DECLINED'}
