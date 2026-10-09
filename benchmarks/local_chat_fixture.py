@@ -53,17 +53,23 @@ let submitting = false;
 let sent = 0;
 function geometry() {
  const q = new URLSearchParams(location.search);
- for (const k of ['outer_w','outer_h','content_left','content_top']) {
-   if (!q.has(k) || !/^[0-9]{1,4}$/.test(q.get(k))) return null;
- }
- const w=Number(q.get('outer_w')),h=Number(q.get('outer_h'));
- const left=Number(q.get('content_left')),top=Number(q.get('content_top'));
+ const manual = ['outer_w','outer_h','content_left','content_top'].every(k => q.has(k));
+ if (manual && !['outer_w','outer_h','content_left','content_top'].every(k =>
+     /^[0-9]{1,4}$/.test(q.get(k)))) return null;
+ const w=manual?Number(q.get('outer_w')):window.outerWidth;
+ const h=manual?Number(q.get('outer_h')):window.outerHeight;
+ const left=manual?Number(q.get('content_left')):window.mozInnerScreenX-window.screenX;
+ const top=manual?Number(q.get('content_top')):window.mozInnerScreenY-window.screenY;
+ if (![w,h,left,top].every(Number.isFinite)) return null;
  if (w<700 || w>5000 || h<450 || h>3000 || left>240 || top>250) return null;
  const nx=120-left,ny=163-top,cx=Math.round(w*.585)-left,cy=Math.round(h*.56)-top;
  if (nx<0 || ny<0 || cx<260 || cy<60 || cx>innerWidth || cy>innerHeight) return null;
  return {nx,ny,cx,cy};
 }
-const g=geometry();
+const launchId = new URLSearchParams(location.search).get('launch_id');
+const validLaunchId = typeof launchId==='string' && /^[a-f0-9]{24}$/.test(launchId);
+if (validLaunchId) document.title += ' ['+launchId+']';
+const g=validLaunchId ? geometry() : null;
 async function post(path, body) {
  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',
  'X-PCE14-Fixture':nonce},body:JSON.stringify(body)});
@@ -73,7 +79,7 @@ if (g) {
  newChat.style.left=g.nx+'px'; newChat.style.top=g.ny+'px';
  message.style.left=g.cx+'px'; message.style.top=g.cy+'px';
  newChat.disabled=false;
- state.textContent='Fixture ready. Press New chat, click composer, Ctrl+V, Enter. Test only.';
+ state.textContent='Fixture ready ['+launchId+']. Press New chat, click composer, Ctrl+V, Enter. Test only.';
 }
 newChat.addEventListener('click',async function(){
  if (!g || submitting) return;
