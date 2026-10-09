@@ -177,7 +177,7 @@ def engineering_preflight(
             stamp = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z"
             expected = (
                 r"docs/audits/AUDIT_" + stamp + "_" + re.escape(series) +
-                f"_{expected_start:03d}_{expected_end:03d}_CHECKPOINT" + r"\\.md"
+                f"_{expected_start:03d}_{expected_end:03d}_CHECKPOINT" + r"\.md"
             )
             checks = {
                 "github_repository": receipt.get("repository") == GITHUB_AUDIT_REPOSITORY,
