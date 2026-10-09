@@ -29,12 +29,18 @@ class CurrentChatTabRotationContract(unittest.TestCase):
         self.assertNotIn('--new-tab', self.worker)
         self.assertNotIn('Start-Process', self.worker)
 
-    def test_worker_never_submits_or_pastes(self):
-        self.assertNotIn("SendWait('^v')", self.worker)
-        self.assertNotIn('SetForegroundWindow(', self.worker)
+    def test_worker_pastes_and_sends_exactly_once_in_same_originating_tab(self):
+        self.assertEqual(self.worker.count("SendWait('^v')"), 1)
+        self.assertEqual(self.worker.count('$send[0].invoke.Invoke()'), 1)
         self.assertIn('send_invoked=$false', self.worker)
         self.assertIn('paste_attempted=$false', self.worker)
         self.assertIn('SEMANTIC_NEW_CHAT_CLICK_INTENT_NO_RETRY', self.worker)
+        self.assertIn('ONE_ORIGIN_TAB_PASTE_INTENT_NO_RETRY', self.worker)
+        self.assertIn('ONE_SAME_ORIGIN_TAB_SEND_INTENT_NO_RETRY', self.worker)
+        self.assertIn('PCE12_CURRENT_TAB_USER_MESSAGE_VERIFIED', self.worker)
+        self.assertIn('ORIGIN_SELECTION_LOST_BEFORE_COMPOSE', self.worker)
+        self.assertIn('ORIGIN_SELECTED_TAB_CHANGED_PRE_SEND', self.worker)
+        self.assertNotIn('SetForegroundWindow(', self.worker)
 
     def test_user_intent_is_same_current_tab(self):
         self.assertIn("SAME CURRENT TAB ONLY", self.procedure)
