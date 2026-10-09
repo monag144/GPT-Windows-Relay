@@ -70,8 +70,6 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
             ("Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'", "[Agent011AtomicFocus]::SetForegroundWindow($home.handle)"),
             ("Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'", "$editor.pattern.SetValue($script:Handoff)"),
             ("Save-Receipt 'HANDOFF_SEND_UNCERTAIN_NO_RETRY'", "$send[0].invoke.Invoke()"),
-            ("Assert-Handoff\n Save-Receipt", "Add-Type -AssemblyName UIAutomationClient"),
-            ("Assert-SourceCheckout\n $null=Assert-Controls", "Add-Type -AssemblyName UIAutomationClient"),
             ("Save-Receipt 'DESTINATION_FOREGROUND_AND_STOP_VERIFIED'", "Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'"),
             ("Save-Receipt 'SEND_GATES_VERIFIED'", "Save-Receipt 'HANDOFF_SEND_UNCERTAIN_NO_RETRY'"),
         ]
@@ -80,6 +78,18 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
                 self.assertIn(first, s)
                 self.assertIn(second, s)
                 self.assertLess(s.index(first), s.index(second))
+        # Match individual PowerShell statements by line, avoiding newline
+        # escape ambiguity between Python source, PowerShell and the relay.
+        statements = s.splitlines()
+        handoff = statements.index(" Assert-Handoff")
+        checkout = statements.index(" Assert-SourceCheckout")
+        controls = statements.index(" $null=Assert-Controls")
+        uia = statements.index(" Add-Type -AssemblyName UIAutomationClient")
+        self.assertEqual(statements[handoff + 1].strip(), "Save-Receipt 'HANDOFF_SCHEMA_AND_DIGEST_VALIDATED'")
+        self.assertEqual(statements[checkout + 1].strip(), "$null=Assert-Controls")
+        self.assertLess(handoff, checkout)
+        self.assertLess(checkout, controls)
+        self.assertLess(controls, uia)
         self.assertEqual(s.count("SetForegroundWindow($home.handle)"), 1)
         self.assertEqual(s.count("$send[0].invoke.Invoke()"), 1)
         self.assertEqual(s.count("$editor.pattern.SetValue($script:Handoff)"), 1)
