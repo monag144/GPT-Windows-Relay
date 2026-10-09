@@ -59,7 +59,7 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
             "HALT_AFTER_COMPOSE_NO_RETRY",
             "HALT_AFTER_FOCUS_NO_RETRY",
             "DISTINCT_NEW_CONVERSATION_VERIFIED_MESSAGE_PENDING",
-            "SOURCE_COMPOSER_HAS_DRAFT",
+            "SOURCE_EDITOR_CONTENT_CHANGED",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, s)
