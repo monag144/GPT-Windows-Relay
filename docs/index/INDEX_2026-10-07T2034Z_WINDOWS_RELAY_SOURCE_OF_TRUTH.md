@@ -6,7 +6,7 @@
 - Canonical branch: `main`
 - Canonical local clone target: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`
 - Live runtime tree: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`
-- Old `monag144/GPT-Termux-Relay`: Android/Termux project plus migration provenance. It is not a Windows development destination.
+- Retired Windows migration source: `monag144/GPT-Termux-Relay` (historical provenance only). Never use it for Windows engineering, local checkout fallback, remote fetch/pull/push, preflight, or active task routing. A missing Windows checkout is a fail-closed condition.
 
 ## Read order for an engineering agent
 
@@ -15,11 +15,14 @@
 3. `docs/RELAY_OPERATIONAL_RULES.md`.
 4. `docs/windows-relay-established-facts.md`.
 5. `windows-relay/TASKS.md`.
-6. The newest timestamped audit/incident/handoff relevant to the subject.
+6. `docs/windows-relay-mission-and-roadmap.md` when roadmap context is needed.
+7. The newest timestamped audit/incident/handoff relevant to the subject.
 
 Do not start by rereading the giant historical engineering log. Use it only when the compact index/facts do not answer the question.
 
-## Current repository reconciliation state
+If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout, a missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, or a nonexistent `engineering_preflight`, treat it as stale guidance—not authority. Verify the Windows repository and the functions actually implemented by its `consumer/control_harness.py`. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`.
+
+## Historical migration reconciliation snapshot (2026-10-07)
 
 The Windows split used old Termux r29 snapshot `d69666da530390146ba093dc1138dc794541b861`.
 The old r29 branch later advanced to `249e3bb46c6ea57968d9ecf5157d73867a7f918d`.
@@ -35,7 +38,7 @@ Against current Windows `main`, those 63 files classify as:
 - 24 divergent and requiring merge/reconciliation;
 - 29 absent from Windows and requiring review/import if valid.
 
-Do not copy the old branch wholesale. Reconcile the bounded post-split change set into Windows `main`, preserving newer Windows-only work.
+These numbers document historical divergence, not an instruction to access the retired repository. If work remains, reconcile only from evidence already transferred into this Windows repository, preserving newer Windows-only work. Do not fetch, check out, or push to Termux.
 
 Detailed move set: `docs/audits/AUDIT_2026-10-07T2034Z_TERMUX_WINDOWS_CONTAMINATION.md`.
 
