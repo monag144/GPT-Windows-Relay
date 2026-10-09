@@ -193,14 +193,14 @@ function Inspect-Windows {
 try{
  $folder=[IO.Path]::GetDirectoryName($ReceiptFile)
  [IO.Directory]::CreateDirectory($folder)|Out-Null
- $stream=New-Object IO.FileStream($ReceiptFile,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+ $stream=[IO.FileStream]::new($ReceiptFile,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
  try{
   $first=[Text.Encoding]::UTF8.GetBytes(($script:State|ConvertTo-Json -Depth 7))
   $stream.Write($first,0,$first.Length)
   $stream.Flush($true)
  }finally{$stream.Dispose()}
 }catch{
- Write-Error ('EXCLUSIVE_RECEIPT_NOT_CREATED_'+$_.Exception.Message)
+ [Console]::Error.WriteLine('EXCLUSIVE_RECEIPT_NOT_CREATED_'+$_.Exception.Message)
  exit 2
 }
 try{
@@ -287,6 +287,6 @@ try{
   elseif($script:State.focus_attempted){Save-Receipt 'HALT_AFTER_FOCUS_NO_RETRY'}
   else{Save-Receipt 'HALT_BEFORE_UI_MUTATION'}
  }catch{}
- Write-Error ('AGENT011_FAIL_CLOSED_'+$script:State.error)
+ [Console]::Error.WriteLine('AGENT011_FAIL_CLOSED_'+$script:State.error)
  exit 2
 }
