@@ -75,6 +75,16 @@ async function post(path, body) {
  'X-PCE14-Fixture':nonce},body:JSON.stringify(body)});
  return {status:r.status, data:await r.json()};
 }
+// Read-only fixture initialization telemetry. No URLs, clipboard, user text or browser titles.
+const diagNumber = v => Number.isFinite(v) ? Math.round(v) : null;
+post('/api/diagnostic',{
+ launch_id:validLaunchId?launchId:null,
+ geometry_status:g?'VALID':'NULL',
+ outer_w:diagNumber(window.outerWidth),outer_h:diagNumber(window.outerHeight),
+ inner_w:diagNumber(window.innerWidth),inner_h:diagNumber(window.innerHeight),
+ left:diagNumber(window.mozInnerScreenX-window.screenX),
+ top:diagNumber(window.mozInnerScreenY-window.screenY)
+}).catch(()=>{state.textContent='Local diagnostic channel failed; input remains disabled.';});
 if (g) {
  newChat.style.left=g.nx+'px'; newChat.style.top=g.ny+'px';
  message.style.left=g.cx+'px'; message.style.top=g.cy+'px';
@@ -135,6 +145,28 @@ class Receiver:
     receipts: dict = field(default_factory=dict)
     stopped: bool = False
     ready_report: dict | None = None
+    diagnostic_report: dict | None = None
+
+    def diagnostic(self, token: str, data: dict) -> dict:
+        self.authenticate(token)
+        required = {"launch_id","geometry_status","outer_w","outer_h","inner_w","inner_h","left","top"}
+        if not isinstance(data, dict) or set(data) != required:
+            raise FixtureError("INVALID_DIAGNOSTIC")
+        if data["launch_id"] is not None and (
+            not isinstance(data["launch_id"], str) or len(data["launch_id"]) != 24
+            or any(c not in "0123456789abcdef" for c in data["launch_id"])):
+            raise FixtureError("INVALID_LAUNCH_ID")
+        if data["geometry_status"] not in ("VALID","NULL"):
+            raise FixtureError("INVALID_GEOMETRY_STATUS")
+        for key in required - {"launch_id","geometry_status"}:
+            value = data[key]
+            if value is not None and (type(value) is not int or not -6000 <= value <= 6000):
+                raise FixtureError("INVALID_GEOMETRY_DIAGNOSTIC")
+        with self.lock:
+            if self.stopped:
+                raise FixtureError("STOPPED",423)
+            self.diagnostic_report = dict(data)
+            return {"accepted":True}
 
     def ready(self, token: str, data: dict) -> dict:
         self.authenticate(token)
@@ -208,6 +240,7 @@ class Receiver:
         with self.lock:
             return {"total_effects": len(self.receipts), "stopped": self.stopped,
                     "ready": dict(self.ready_report) if self.ready_report else None,
+                    "diagnostic": dict(self.diagnostic_report) if self.diagnostic_report else None,
                     "receipts": [dict(v) for v in self.receipts.values()]}
 
     def stop(self, token: str) -> dict:
@@ -248,7 +281,7 @@ def server_for(receiver: Receiver) -> ThreadingHTTPServer:
             self._reply(404, {"error": "NOT_FOUND"})
         def do_POST(self):
             path = urlparse(self.path).path
-            if path not in ("/api/new-chat", "/api/send", "/api/stop", "/api/ready"):
+            if path not in ("/api/new-chat", "/api/send", "/api/stop", "/api/ready", "/api/diagnostic"):
                 self._reply(404, {"error": "NOT_FOUND"});return
             try:
                 receiver.authenticate(self.headers.get("X-PCE14-Fixture", ""))
@@ -263,6 +296,8 @@ def server_for(receiver: Receiver) -> ThreadingHTTPServer:
                     self._reply(201, receiver.new_chat(self.headers["X-PCE14-Fixture"]))
                 elif path == "/api/ready":
                     self._reply(200, receiver.ready(self.headers["X-PCE14-Fixture"],payload))
+                elif path == "/api/diagnostic":
+                    self._reply(200, receiver.diagnostic(self.headers["X-PCE14-Fixture"],payload))
                 elif path == "/api/stop":
                     if payload != {}: raise FixtureError("INVALID_BODY")
                     self._reply(200, receiver.stop(self.headers["X-PCE14-Fixture"]))
