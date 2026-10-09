@@ -74,6 +74,42 @@ class Agent011UserTurnProofTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout + "\n" + p.stderr)
         self.assertIn("AGENT011_PROTECTED_HOME_ASSIGNMENT_SAFE", p.stdout)
 
+    def test_strictmode_send_result_is_a_real_array(self):
+        s = self.worker
+        self.assertIn(
+            "if(@(Active-SendButtons $w).Count -ne 0){throw 'DESTINATION_HAS_PREEXISTING_SEND'}", s
+        )
+        self.assertIn("$send=@(Active-SendButtons $destination.window)", s)
+        self.assertIn("if($send.Count -ne 1)", s)
+        self.assertIn("$send[0].invoke.Invoke()", s)
+        self.assertNotIn("if((Active-SendButtons $w).Count", s)
+        self.assertNotIn("$send=Active-SendButtons $destination.window", s)
+
+    @unittest.skipUnless(shutil.which("powershell.exe"), "Requires Windows PowerShell")
+    def test_real_powershell_strictmode_zero_one_two_send_results(self):
+        ps = r"""
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version 2
+function NoSend(){ return @() }
+function OneSend(){ return [pscustomobject]@{token='one'} }
+function TwoSend(){ return @([pscustomobject]@{token='first'},[pscustomobject]@{token='second'}) }
+$zero=@(NoSend)
+$one=@(OneSend)
+$two=@(TwoSend)
+if($zero.Count -ne 0 -or @(NoSend).Count -ne 0){throw 'ZERO_SEND_INVALID'}
+if($one.Count -ne 1 -or $one[0].token -cne 'one'){throw 'ONE_SEND_INVALID'}
+if($two.Count -ne 2){throw 'TWO_SEND_INVALID'}
+Write-Output 'AGENT011_STRICT_SEND_CARDINALITY_0_1_2_PASS'
+"""
+        p = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+             base64.b64encode(ps.encode("utf-16le")).decode("ascii")],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        self.assertEqual(p.returncode, 0, p.stdout + "\n" + p.stderr)
+        self.assertIn("AGENT011_STRICT_SEND_CARDINALITY_0_1_2_PASS", p.stdout)
+
     def test_four_strong_markers_in_same_group_required(self):
         h = self.helper
         for token in (
