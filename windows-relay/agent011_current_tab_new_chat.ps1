@@ -110,6 +110,32 @@ function FindOrigin{
  if($found.Count -ne 1){return $null}
  return $found[0]
 }
+function BackupSourceDraft($w){
+ $ec=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)
+ $edits=$w.FindAll([Windows.Automation.TreeScope]::Descendants,$ec)
+ $found=@()
+ foreach($e in $edits){
+  try{
+   if($e.Current.IsOffscreen -or -not $e.Current.IsEnabled -or ([string]$e.Current.Name) -cne 'Ask ChatGPT'){continue}
+   $vp=$null
+   if(-not $e.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$vp) -or $vp.Current.IsReadOnly){continue}
+   $found+=,[ordered]@{value=[string]$vp.Current.Value}
+  }catch{}
+ }
+ if($found.Count -ne 1){throw 'CURRENT_SOURCE_COMPOSER_UNREADABLE_OR_AMBIGUOUS'}
+ $draft=$found[0].value
+ if([string]::IsNullOrWhiteSpace($draft) -or $draft -ceq ('Ask ChatGPT'+[char]10)){return}
+ $backup=$ReceiptFile+'.source-draft.backup'
+ $fs=[IO.FileStream]::new($backup,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+ try{
+  $raw=[Text.Encoding]::UTF8.GetBytes($draft)
+  $fs.Write($raw,0,$raw.Length)
+  $fs.Flush($true)
+ }finally{$fs.Dispose()}
+ $script:State.source_draft_sha256=Hash $draft
+ $script:State.source_draft_backup=$backup
+ Save 'SOURCE_DRAFT_BACKUP_DURABLE'
+}
 function NewChat($w){
  $buttons=$w.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.Condition]::TrueCondition)
  $found=@()
@@ -150,6 +176,7 @@ try{
  $script:State.source_window_handle=$origin.handle
  $script:State.source_tab_runtime_id=[string]::Join(',',@($origin.selected.element.GetRuntimeId()))
  Save 'EXACT_CURRENT_RELAY_ORIGIN_TAB_VERIFIED'
+ BackupSourceDraft $origin.window
  $button=NewChat $origin.window
  Guard
  if(-not $origin.selected.pattern.Current.IsSelected -or (Url $origin.window) -cne $origin.url){throw 'SOURCE_TAB_CHANGED_PRE_CLICK'}
