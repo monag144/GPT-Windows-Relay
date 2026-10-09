@@ -78,14 +78,17 @@ async function post(path, body) {
 if (g) {
  newChat.style.left=g.nx+'px'; newChat.style.top=g.ny+'px';
  message.style.left=g.cx+'px'; message.style.top=g.cy+'px';
- newChat.disabled=false;
- state.textContent='Fixture ready ['+launchId+']. Press New chat, click composer, Ctrl+V, Enter. Test only.';
+ state.textContent='Validating local fixture geometry; do not send.';
  post('/api/ready',{launch_id:launchId,outer_w:Math.round(window.outerWidth),
   outer_h:Math.round(window.outerHeight),
   content_left:Math.round(window.mozInnerScreenX-window.screenX),
   content_top:Math.round(window.mozInnerScreenY-window.screenY),
   client_w:Math.round(window.innerWidth),client_h:Math.round(window.innerHeight),
   new_chat_x:g.nx,new_chat_y:g.ny,composer_x:g.cx,composer_y:g.cy
+ }).then(r=>{
+  if(r.status!==200 || r.data.ready!==true) throw Error('READY_REJECTED');
+  newChat.disabled=false;
+  state.textContent='Fixture ready ['+launchId+']. Press New chat, click composer, Ctrl+V, Enter. Test only.';
  }).catch(()=>{state.textContent='LOCAL READY HANDSHAKE FAILED; DO NOT SEND.';newChat.disabled=true;});
 }
 newChat.addEventListener('click',async function(){
