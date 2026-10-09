@@ -133,10 +133,99 @@ def assess_engineering_operation_budget(current_operation:int,max_operation:int=
     r=max_operation-current_operation
     return {"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":next_chat_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
 
+GITHUB_AUDIT_REPOSITORY = "monag144/GPT-Windows-Relay"
+GITHUB_AUDIT_BRANCH = "main"
+
+
+def engineering_preflight(
+    series: str,
+    next_ordinal: int,
+    *,
+    github_audit_receipt: dict | None = None,
+    max_ordinal: int = 100,
+) -> dict:
+    """Validate the GitHub-first five-operation checkpoint before a PCE command.
+
+    Callers must first commit the audit through the GitHub connector, then read
+    the file back from Windows main and supply that connector-derived receipt.
+    This pure function checks metadata only; it does NOT query GitHub or attest
+    that user-provided receipt contents are genuine.
+    """
+    if not isinstance(series, str) or not re.fullmatch(r"PCE[1-9][0-9]*", series):
+        raise ControlHarnessError("invalid PCE series")
+    if isinstance(next_ordinal, bool) or not isinstance(next_ordinal, int):
+        raise ControlHarnessError("next operation must be an integer")
+    if isinstance(max_ordinal, bool) or not isinstance(max_ordinal, int) or max_ordinal != 100:
+        raise ControlHarnessError("PCE maximum must be 100")
+    if not 0 <= next_ordinal <= max_ordinal:
+        raise ControlHarnessError("operation outside PCE 000..100 budget")
+
+    audit_required = next_ordinal > 0 and next_ordinal % 5 == 0
+    expected_start = next_ordinal - 5 if audit_required else None
+    expected_end = next_ordinal - 1 if audit_required else None
+    blockers = []
+    validated = False
+
+    if audit_required:
+        receipt = github_audit_receipt
+        if not isinstance(receipt, dict):
+            blockers.append("github_checkpoint_audit_missing")
+        else:
+            path = receipt.get("path")
+            commit = receipt.get("commit_sha")
+            file_sha = receipt.get("file_sha")
+            stamp = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z"
+            expected = (
+                r"docs/audits/AUDIT_" + stamp + "_" + re.escape(series) +
+                f"_{expected_start:03d}_{expected_end:03d}_CHECKPOINT" + r"\\.md"
+            )
+            checks = {
+                "github_repository": receipt.get("repository") == GITHUB_AUDIT_REPOSITORY,
+                "github_branch": receipt.get("branch") == GITHUB_AUDIT_BRANCH,
+                "github_connector": receipt.get("source") == "github_connector",
+                "audit_range": receipt.get("start") == expected_start and receipt.get("end") == expected_end,
+                "audit_path": isinstance(path, str) and re.fullmatch(expected, path) is not None,
+                "github_commit": isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit) is not None,
+                "github_file_sha": isinstance(file_sha, str) and re.fullmatch(r"[0-9a-f]{40}", file_sha) is not None,
+                "github_readback": receipt.get("readback_verified") is True,
+            }
+            checks["github_url"] = (
+                checks["audit_path"] and checks["github_commit"] and
+                receipt.get("url") == f"https://github.com/{GITHUB_AUDIT_REPOSITORY}/blob/{commit}/{path}"
+            )
+            blockers.extend("github_audit_" + key + "_invalid" for key, ok in checks.items() if not ok)
+            validated = not blockers
+
+    budget = assess_engineering_operation_budget(next_ordinal, max_ordinal) if next_ordinal else None
+    return {
+        "ok": not blockers,
+        "series": series,
+        "next_ordinal": next_ordinal,
+        "audit_required": audit_required,
+        "audit_expected": (
+            {"start": expected_start, "end": expected_end, "repository": GITHUB_AUDIT_REPOSITORY,
+             "branch": GITHUB_AUDIT_BRANCH, "path_directory": "docs/audits/"}
+            if audit_required else None
+        ),
+        "github_audit_receipt_valid": validated,
+        "blockers": blockers,
+        "budget": budget,
+    }
+
+
 def build_control_harness_contract(mission_id: str) -> dict:
     return {
         "version": CONTROL_HARNESS_VERSION,
         "mission_id": mission_id,
+        "github_audit_checkpoint": {
+            "method": "engineering_preflight",
+            "repository": GITHUB_AUDIT_REPOSITORY,
+            "branch": GITHUB_AUDIT_BRANCH,
+            "range": "PCE series 000..100 inclusive",
+            "cadence": "Before .005, audit .000-.004; before .010, audit .005-.009; every fifth thereafter.",
+            "publication": "GitHub connector create/update file and GitHub connector readback; no Windows Relay git push or GitHub Actions.",
+            "requirement": "Fail closed on missing or invalid GitHub audit receipt. Receipt metadata alone is not remote authentication; verify it through the GitHub connector first.",
+        },
         "incident_logging": {
             "method": "write_incident",
             "path_rule": "docs/INCIDENT_<UTC timestamp>_<short hint>.md",
