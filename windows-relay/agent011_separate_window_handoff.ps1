@@ -10,7 +10,9 @@ param(
  [int]$ExpectedFirefoxPid=5440,
  [int]$ExpectedPendingMissions=2,
  [int]$ExpectedStopGeneration=9,
- [switch]$ValidateOnly
+ [switch]$ValidateOnly,
+ [switch]$InspectOnly,
+ [switch]$ClipboardPaste
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2
@@ -35,6 +37,10 @@ $script:State=[ordered]@{
  user_turn_verified=$false
  title_verified=$false
  source_editor_untouched=$true
+ source_editor_sha256=$null
+ clipboard_paste_requested=[bool]$ClipboardPaste
+ clipboard_prepared=$false
+ paste_invoked=$false
  firefox_launched=$false
  new_chat_clicked=$false
  error=$null
@@ -143,17 +149,26 @@ function Get-Editor($Window,[bool]$RequireVisible){
  return $found[0]
 }
 function Check-SourceEditors($Window){
+ # Preserve source drafts byte-for-byte instead of demanding empty composer.
  $cond=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)
  $all=$Window.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
  $count=0
+ $values=New-Object System.Collections.Generic.List[string]
  foreach($e in $all){
   if(([string]$e.Current.Name) -cne 'Ask ChatGPT'){continue}
   $p=$null
   if(-not $e.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern,[ref]$p)){throw 'SOURCE_EDITOR_NO_VALUE'}
-  if(-not (Test-Agent011EmptyEditorValue ([string]$p.Current.Value))){throw 'SOURCE_COMPOSER_HAS_DRAFT'}
+  $value=[string]$p.Current.Value
+  $values.Add(([string]$value.Length)+':'+$value)
   $count++
  }
  if($count -lt 1){throw 'SOURCE_EDITOR_MISSING'}
+ $fingerprint=Hash-String ([string]::Join(([string][char]10),$values.ToArray()))
+ if($null -eq $script:State.source_editor_sha256){$script:State.source_editor_sha256=$fingerprint}
+ elseif($script:State.source_editor_sha256 -cne $fingerprint){
+  $script:State.source_editor_untouched=$false
+  throw 'SOURCE_EDITOR_CONTENT_CHANGED'
+ }
 }
 function Active-SendButtons($Window){
  $cond=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Button)
@@ -227,6 +242,13 @@ try{
  . (Join-Path $PSScriptRoot 'agent011_editor_empty_state.ps1')
  . (Join-Path $PSScriptRoot 'agent011_user_turn_proof.ps1')
  $windows=Inspect-Windows
+ if($InspectOnly){
+  # Production inspection path with normal PSScriptRoot and no focus/compose/Send.
+  $null=Assert-Controls
+  Save-Receipt 'INSPECT_ONLY_TWO_WINDOW_PAIR_VERIFIED_NO_FOCUS'
+  Write-Output 'AGENT011_INSPECT_ONLY_TWO_WINDOW_PAIR_VERIFIED'
+  exit 0
+ }
  $source=@($windows|Where-Object {$_.kind -eq 'source'})[0]
  $destination=@($windows|Where-Object {$_.kind -eq 'home'})[0]
  if($source.handle -eq $destination.handle){throw 'SOURCE_AND_DESTINATION_HWND_IDENTICAL'}
@@ -253,7 +275,21 @@ try{
  # Compose ONLY in the separate home window; no fallback/no retry on uncertainty.
  $script:State.compose_attempted=$true
  Save-Receipt 'COMPOSE_ATTEMPT_UNCERTAIN_NO_RETRY'
- $editor.pattern.SetValue($script:Handoff)
+ if($ClipboardPaste){
+  # Copy full pinned packet, focus destination editor and paste with native Ctrl+V.
+  # No fallback to SetValue and no automatic retry if paste is uncertain.
+  Add-Type -AssemblyName System.Windows.Forms
+  [Windows.Forms.Clipboard]::SetText($script:Handoff)
+  $script:State.clipboard_prepared=$true
+  Save-Receipt 'CLIPBOARD_PREPARED_FOR_ONE_SHOT_PASTE'
+  $editor.element.SetFocus()
+  if(-not $editor.element.Current.HasKeyboardFocus){throw 'DESTINATION_EDITOR_KEYBOARD_FOCUS_NOT_VERIFIED'}
+  $script:State.paste_invoked=$true
+  Save-Receipt 'PASTE_ATTEMPT_UNCERTAIN_NO_RETRY'
+  [Windows.Forms.SendKeys]::SendWait('^v')
+ }else{
+  $editor.pattern.SetValue($script:Handoff)
+ }
  if(([string]$editor.pattern.Current.Value) -cne $script:Handoff){throw 'HANDOFF_EDITOR_READBACK_MISMATCH'}
  Check-SourceEditors $source.window
  $null=Assert-Controls
