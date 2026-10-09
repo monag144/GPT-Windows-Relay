@@ -1,0 +1,25 @@
+# Agent011 five-operation audit: PCE11.055–.059 — COMPLETE
+Recorded UTC 2026-10-09T01:28Z. Canonical repository monag144/GPT-Windows-Relay, branch pce11/one-click-go-recovery-and-doc-hygiene, audited source HEAD a40857c565128994fa29dadb419e4d1611e241e0. Documentary checkpoint only; neither a live handoff authorization nor canary or release acceptance.
+
+## Numbered operation evidence: three PASS, two BLOCKED
+- **PCE11.055 PASS.** Corrected only the Python test process environment by explicitly setting PYTHONPATH to windows-relay, consumer and repo root. Module import smoke PASS, exact LF-placeholder PowerShell regression 3/3, full Windows Relay suite **539/539**, full consumer suite **123/123**, local Git clean. Receipt %LOCALAPPDATA%/GPTWindowsRelay/ops/PCE11_055_AGENT011_CORRECT_PYTHONPATH_SOURCE_ACCEPTANCE.json. This fixes .054's import-configuration issue, not a classifier defect; acceptance is source-only.
+- **PCE11.056 BLOCKED.** Read-only validated .055 exact test counts and relay ok/armed/browser-owner, pending_missions=2, stop_generation=9. Two Firefox windows PID 5440, source PC Engineer 11 eleven UIA tabs and separate homepage one tab; editors report exact value Ask ChatGPT followed by LF. Destination Edit initially offscreen, readiness=false; durable ops/PCE11_056_AGENT011_POST_ACCEPTANCE_DESTINATION_READINESS.json. No browser mutation or handoff.
+- **PCE11.057 PASS.** One-shot gated SetForegroundWindow activated only the previously existing exact homepage HWND, and verified foreground and window identities in the SAME invocation. Durable ops/PCE11_057_AGENT011_EXACT_HOME_WINDOW_FOCUS.json phase TARGET_FOREGROUND_VERIFIED, focus_attempted/verified true, no launch, New Chat, typing or Send. A transient foreground state is not a persistent focus lock.
+- **PCE11.058 BLOCKED.** On the next read-only relay turn the SOURCE PCE11 window was foreground again; ChatGPT destination homepage background, and home-foreground readiness failed safely. Cause of focus change was NOT established (do not assert relay was causal). Destination homepage editor nevertheless visible/enabled/writable, class ProseMirror, exact 12-character placeholder, TextPattern true, rectangle 538x26; no Send invoked. Durable ops/PCE11_058_AGENT011_FOREGROUND_COMPOSER_CONTRACT.json. Did not retry focus.
+- **PCE11.059 PASS.** GitHub-first architecture contract for an atomic separate-window successor handoff committed at docs/architecture/AGENT011_PCE11_TO_PCE12_SEPARATE_WINDOW_ATOMIC_HANDOFF_CONTRACT_2026-10-09.md, blob bd95747341c39d997d9e22e9a7028abcae7afe7b, remote verified. Only that document ff-only synced; new HEAD a40857c565128994fa29dadb419e4d1611e241e0. Receipt ops/PCE11_059_AGENT011_ATOMIC_HANDOFF_CONTRACT_SYNC.json proves .057/.058 reconciliation; no Firefox interaction/handoff.
+
+## Controls, rollback, governance and process
+Every numbered operation emitted full-file bytes/SHA256 for ALL SIX canonical governance sources, passed engineering_preflight(ROOT,ordinal,series=11), and verified monag144/GPT-Windows-Relay / clean source. SHA256 values unchanged:
+1. consumer/control_harness.py 76d13b46ddc0289291a7bc155785c0b160d55751c4d1b515ea44db3f4bc6d883
+2. windows-relay/TASKS.md fda801655fa66da9885500cea8f885c2442f511359eacda8fabeee07fc66e33d
+3. docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md a2c2a4c0708432ee9325a21a65a9c6f9ea814399fa02a84849592fcedd9092ce
+4. docs/roadmap/ROADMAP_2026-10-08T0735Z_PCE11_ONE_CLICK_GO_RECOVERY.md 5857ddc2361baaac4b14c186a177ca741cbe870985badc980bb0e89382185793
+5. docs/windows-relay-established-facts.md b1590bab9ca5b79a1182a4418f9fdc2c1b488a0154b286701d08ba8661545b2a
+6. docs/relay-sandwich-procedure.md b17263e8da2269344d6698a5111d582095fee85998036002ada7603ed7e58d01
+
+No manual operator rescue beyond ordinary forwarding of result packets. Exactly ONE bounded browser side effect in this window: .057 window foreground change. No source tab clicks, no editor mutation, no handoff sent. Both .056 and .058 fail closed correctly. Preserve original source window, rollback copies/stages, live Firefox extension and STOP/armed/owner gates. Never replay original .045 launch or legacy same-tab semantic_agent_rotation.ps1. No confirmed PCE12 successor chat/title/first operation, no r28 One-Click GO acceptance, no overnight canary. Last observed pending=2 and STOP generation=9, not guaranteed forever.
+
+## Required pre-.060 governance
+Before PCE11.060, commit this exact five-slot [55,59] audit AND twenty-slot [40,59] review on GitHub, sync both using UNIQUE UNNUMBERED ff-only relay action, and positively verify engineering_preflight(ROOT,60,series=11) selects both. Start the successor's isolated atomic one-worker implementation/tests only after those checkpoints. Do not use focus from a previous relay reply as identity proof at Send time; focus, exact window match, STOP, draft check, compose, durable send intent and one Send need one guarded invocation after strict source acceptance.
+
+**AUDIT COMPLETE: PCE11.055 .056 .057 .058 .059 — 3 PASS, 2 BLOCKED.**
