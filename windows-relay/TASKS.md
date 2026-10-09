@@ -3,6 +3,11 @@
 ## Read THIS ENTIRE FILE and the ENTIRE control harness before EVERY operation
 Read `consumer/control_harness.py` completely, this queue completely, `docs/roadmap/ROADMAP_2026-10-08T0852Z_PCE011_OVERNIGHT_RELAY_AND_R28_QUEUE.md`, established facts and relay sandwich procedure. Run `engineering_preflight(root, ordinal, series=11)` and log SHA256s. The full source is authoritative; a previous model summary is not a replacement.
 
+## Director override: PCE12 transition MUST stay in THIS CURRENT CHATGPT TAB (2026-10-09)
+- [ ] **P0 — Same-current-tab rotation**: supersede the distinct-window approach. Identify the currently selected tab that actually contains this relay action/result exchange; pin its current conversation URL, tab automation element, HWND and PID. Click its own **New chat** control, NOT one in another window. Do not launch a new Firefox window/tab, use the old separate-window worker, or assume that the 11-tab window is the invoking tab.
+- [ ] **P0 — Current-tab-only end-to-end canary**: after a unique semantic New Chat on the bound current tab (or skip if this very tab is already on blank home), paste pinned PCE12 prompt in that *same tab*, verify exact editor content, Send exactly once with durable no-replay receipt, and verify unique user-role message on the new conversation. Preserve existing unsent draft or stop for explicit resolution. STOP/armed/owner and preflight gates remain mandatory.
+- [ ] **P0 — Incident resolution**: PCE11.083 stopped `FIREFOX_NOT_ON_NEW_CHAT` with all click/paste/Send fields false; the worker incorrectly required every Firefox window to display New Chat. PCE11.084 confirmed. PCE11.085 window-by-window analysis, if already transmitted, is READ-ONLY; it does not authorize targeting any other window. User has explicitly vetoed separate-window selection. Do not replay legacy attempts. Latest user directive supersedes historical pinned separate-window handoff.
+
 ## ACTIVE ORDER (no speculative detours)
 - [x] GitHub verified legacy source references: historic full-tree One-Click GO r28 `d5b9db7ad785b5cae8dc3b64219303b9fcfa634a`; PCE8 v16 source `694d47ab89596d5c3801f749caa352b951a2be52`. Both original Git objects exist in Termux history; Termux branch tips have no `windows-relay/` folder.
 - [x] A–Z Relay and consumer benchmark criteria committed; no overnight pass is yet claimed.
