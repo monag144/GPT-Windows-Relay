@@ -23,6 +23,7 @@ public static class PCE12Input {
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra);
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
+ [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 }
 '@
 function CursorPosition {
@@ -61,8 +62,9 @@ Write-Host ('TARGET_TITLE='+$oldTitle)
 Write-Host ('TARGET_CENTER='+$x+','+$y)
 $handle=[IntPtr]$window.Current.NativeWindowHandle
 if($handle -eq [IntPtr]::Zero){throw 'ABORT: Firefox window handle unavailable'}
-[void][PCE12Input]::SetForegroundWindow($handle)
-Start-Sleep -Milliseconds 250
+if(-not [PCE12Input]::SetForegroundWindow($handle)){throw 'ABORT: unable to foreground Firefox'}
+Start-Sleep -Milliseconds 300
+if([PCE12Input]::GetForegroundWindow() -ne $handle){throw 'ABORT: Firefox not foreground; no click'}
 if(-not [PCE12Input]::SetCursorPos($x,$y)){throw 'ABORT: cursor move failed'}
 Start-Sleep -Milliseconds 160
 $position=CursorPosition
@@ -86,7 +88,7 @@ Write-Host ('TITLE_AFTER='+$newTitle)
 $proof='UNVERIFIED'
 if($newTitle -ne $oldTitle -and $newTitle -match 'ChatGPT'){ $proof='WINDOW_TITLE_CHANGED' }
 try {
- $nameCondition=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty,'Where should we begin?')
+ $nameCondition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Where should we begin?')
  $welcome=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$nameCondition)
  if($welcome.Count -gt 0){$proof='NEW_CHAT_WELCOME_FOUND'}
 } catch {}
