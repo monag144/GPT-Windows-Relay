@@ -94,6 +94,16 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
         self.assertEqual(s.count("$send[0].invoke.Invoke()"), 1)
         self.assertEqual(s.count("$editor.pattern.SetValue($script:Handoff)"), 1)
 
+    def test_receipt_replacement_uses_real_backup_and_no_stale_artifacts(self):
+        s = self.source
+        self.assertIn("$backup=$ReceiptFile+'.previous'", s)
+        self.assertIn("[IO.File]::Replace($tmp,$ReceiptFile,$backup)", s)
+        self.assertNotIn("[IO.File]::Replace($tmp,$ReceiptFile,$null)", s)
+        self.assertIn("RECEIPT_TRANSITION_ARTIFACT_EXISTS_NO_RETRY", s)
+        self.assertIn("[IO.File]::Delete($backup)", s)
+        self.assertLess(s.index("RECEIPT_TRANSITION_ARTIFACT_EXISTS_NO_RETRY"), s.index("[IO.File]::Replace($tmp,$ReceiptFile,$backup)"))
+        self.assertLess(s.index("[IO.File]::Replace($tmp,$ReceiptFile,$backup)"), s.index("[IO.File]::Delete($backup)"))
+
     def test_worker_syntax_parse_without_executing_script(self):
         powershell = shutil.which("powershell.exe")
         if not powershell:
@@ -142,6 +152,8 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
             data = json.loads(receipt.read_text(encoding="utf-8-sig"))
             self.assertEqual(data["phase"], "HALT_BEFORE_UI_MUTATION")
             self.assertIn("HANDOFF_FILE_MISSING", data["error"])
+            self.assertFalse(receipt.with_suffix(".json.writing").exists(), "unfinished write must halt")
+            self.assertFalse(receipt.with_suffix(".json.previous").exists(), "backup must be cleaned")
             for field in ("focus_attempted", "compose_attempted", "send_invoked",
                           "firefox_launched", "new_chat_clicked"):
                 self.assertFalse(data[field], field)
@@ -157,6 +169,8 @@ class AtomicSeparateWindowHandoffTests(unittest.TestCase):
             data = json.loads(receipt.read_text(encoding="utf-8-sig"))
             self.assertEqual(data["phase"], "HALT_BEFORE_UI_MUTATION")
             self.assertIn("HANDOFF_SHA256_MISMATCH", data["error"])
+            self.assertFalse(receipt.with_suffix(".json.previous").exists())
+            self.assertFalse(receipt.with_suffix(".json.writing").exists())
             self.assertFalse(data["focus_attempted"])
             self.assertFalse(data["send_invoked"])
 
