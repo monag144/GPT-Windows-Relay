@@ -40,10 +40,10 @@ class Agent011EmptyEditorContract(unittest.TestCase):
         if not powershell:
             self.skipTest("Windows PowerShell not installed")
         snippet = self.source + r"""
-$blank=@($null,'',[char]32,[char]9,([char]10),'Ask ChatGPT'+[char]10)
-$notBlank=@('Ask ChatGPT','Ask ChatGPT ', 'Ask ChatGPT'+[char]13+[char]10,
- 'Ask ChatGPT'+[char]9, 'Ask ChatGPT'+[char]10+'x',
- 'ask chatgpt'+[char]10, 'Hello', ' Hello', 'Ask ChatGPT!'+[char]10)
+$blank=@($null,'',[char]32,[char]9,([char]10),('Ask ChatGPT'+[char]10))
+$notBlank=@('Ask ChatGPT','Ask ChatGPT ', ('Ask ChatGPT'+[char]13+[char]10),
+ ('Ask ChatGPT'+[char]9), ('Ask ChatGPT'+[char]10+'x'),
+ ('ask chatgpt'+[char]10), 'Hello', ' Hello', ('Ask ChatGPT!'+[char]10))
 foreach($value in $blank) {
  if(-not (Test-Agent011EmptyEditorValue $value)) { throw 'FALSE_NEGATIVE_EMPTY' }
  if(-not (Test-Agent011DestinationReady $value $true 0)) { throw 'FALSE_NEGATIVE_DESTINATION' }
