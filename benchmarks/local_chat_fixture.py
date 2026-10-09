@@ -56,15 +56,19 @@ function geometry() {
  const manual = ['outer_w','outer_h','content_left','content_top'].every(k => q.has(k));
  if (manual && !['outer_w','outer_h','content_left','content_top'].every(k =>
      /^[0-9]{1,4}$/.test(q.get(k)))) return null;
- const w=manual?Number(q.get('outer_w')):window.outerWidth;
- const h=manual?Number(q.get('outer_h')):window.outerHeight;
- const left=manual?Number(q.get('content_left')):window.mozInnerScreenX-window.screenX;
- const top=manual?Number(q.get('content_top')):window.mozInnerScreenY-window.screenY;
+ // Firefox --headless --screenshot reports outerWidth/outerHeight as zero.
+ // This fallback is exclusively headless-test geometry, never a visible HWND proof.
+ const headless=!manual && window.outerWidth===0 && window.outerHeight===0;
+ const mode=manual?'manual':headless?'headless-inner':'window-outer';
+ const w=manual?Number(q.get('outer_w')):headless?window.innerWidth:window.outerWidth;
+ const h=manual?Number(q.get('outer_h')):headless?window.innerHeight:window.outerHeight;
+ const left=manual?Number(q.get('content_left')):headless?0:window.mozInnerScreenX-window.screenX;
+ const top=manual?Number(q.get('content_top')):headless?0:window.mozInnerScreenY-window.screenY;
  if (![w,h,left,top].every(Number.isFinite)) return null;
  if (w<700 || w>5000 || h<450 || h>3000 || left>240 || top>250) return null;
  const nx=120-left,ny=163-top,cx=Math.round(w*.585)-left,cy=Math.round(h*.56)-top;
  if (nx<0 || ny<0 || cx<260 || cy<60 || cx>innerWidth || cy>innerHeight) return null;
- return {nx,ny,cx,cy};
+ return {nx,ny,cx,cy,w,h,left,top,mode};
 }
 const launchId = new URLSearchParams(location.search).get('launch_id');
 const validLaunchId = typeof launchId==='string' && /^[a-f0-9]{24}$/.test(launchId);
@@ -89,10 +93,10 @@ if (g) {
  newChat.style.left=g.nx+'px'; newChat.style.top=g.ny+'px';
  message.style.left=g.cx+'px'; message.style.top=g.cy+'px';
  state.textContent='Validating local fixture geometry; do not send.';
- post('/api/ready',{launch_id:launchId,outer_w:Math.round(window.outerWidth),
-  outer_h:Math.round(window.outerHeight),
-  content_left:Math.round(window.mozInnerScreenX-window.screenX),
-  content_top:Math.round(window.mozInnerScreenY-window.screenY),
+ post('/api/ready',{launch_id:launchId,geometry_mode:g.mode,outer_w:Math.round(g.w),
+  outer_h:Math.round(g.h),
+  content_left:Math.round(g.left),
+  content_top:Math.round(g.top),
   client_w:Math.round(window.innerWidth),client_h:Math.round(window.innerHeight),
   new_chat_x:g.nx,new_chat_y:g.ny,composer_x:g.cx,composer_y:g.cy
  }).then(r=>{
@@ -170,19 +174,25 @@ class Receiver:
 
     def ready(self, token: str, data: dict) -> dict:
         self.authenticate(token)
-        required = {"launch_id","outer_w","outer_h","content_left","content_top",
+        required = {"launch_id","geometry_mode","outer_w","outer_h","content_left","content_top",
                     "client_w","client_h","new_chat_x","new_chat_y","composer_x","composer_y"}
         if not isinstance(data, dict) or set(data) != required:
             raise FixtureError("INVALID_READY")
         if not isinstance(data["launch_id"], str) or len(data["launch_id"]) != 24 or any(c not in "0123456789abcdef" for c in data["launch_id"]):
             raise FixtureError("INVALID_LAUNCH_ID")
-        for key in required - {"launch_id"}:
+        mode = data["geometry_mode"]
+        if mode not in ("headless-inner", "window-outer", "manual"):
+            raise FixtureError("INVALID_GEOMETRY_MODE")
+        for key in required - {"launch_id","geometry_mode"}:
             if type(data[key]) is not int or not -200 <= data[key] <= 6000:
                 raise FixtureError("INVALID_GEOMETRY")
         w, h = data["outer_w"], data["outer_h"]
         left, top = data["content_left"], data["content_top"]
         if not (700 <= w <= 5000 and 450 <= h <= 3000 and 0 <= left <= 240 and 0 <= top <= 250):
             raise FixtureError("GEOMETRY_OUT_OF_RANGE")
+        if mode == "headless-inner" and (
+            left != 0 or top != 0 or w != data["client_w"] or h != data["client_h"]):
+            raise FixtureError("INVALID_HEADLESS_FALLBACK")
         if (data["new_chat_x"],data["new_chat_y"]) != (120-left,163-top) or (data["composer_x"],data["composer_y"]) != (int(w*.585+.5)-left,int(h*.56+.5)-top):
             raise FixtureError("GEOMETRY_INCONSISTENT")
         if not (0 <= data["new_chat_x"] < data["client_w"] and 0 <= data["new_chat_y"] < data["client_h"] and 0 <= data["composer_x"] < data["client_w"] and 0 <= data["composer_y"] < data["client_h"]):
