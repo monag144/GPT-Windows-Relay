@@ -228,26 +228,26 @@ try{
  . (Join-Path $PSScriptRoot 'agent011_user_turn_proof.ps1')
  $windows=Inspect-Windows
  $source=@($windows|Where-Object {$_.kind -eq 'source'})[0]
- $home=@($windows|Where-Object {$_.kind -eq 'home'})[0]
- if($source.handle -eq $home.handle){throw 'SOURCE_AND_DESTINATION_HWND_IDENTICAL'}
+ $destination=@($windows|Where-Object {$_.kind -eq 'home'})[0]
+ if($source.handle -eq $destination.handle){throw 'SOURCE_AND_DESTINATION_HWND_IDENTICAL'}
  $sourceUrl=$source.url
  $script:State.source_url_sha256=Hash-String $sourceUrl
  Save-Receipt 'PAIR_AND_EDITORS_VERIFIED'
  $foreground=[Agent011AtomicFocus]::GetForegroundWindow()
- if($foreground -ne $source.handle -and $foreground -ne $home.handle){throw 'UNTRUSTED_FOREGROUND_WINDOW'}
+ if($foreground -ne $source.handle -and $foreground -ne $destination.handle){throw 'UNTRUSTED_FOREGROUND_WINDOW'}
  if($foreground -eq $source.handle){
   $script:State.focus_attempted=$true
   Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'
-  if(-not [Agent011AtomicFocus]::SetForegroundWindow($home.handle)){throw 'SET_FOREGROUND_DECLINED'}
+  if(-not [Agent011AtomicFocus]::SetForegroundWindow($destination.handle)){throw 'SET_FOREGROUND_DECLINED'}
  }
- if([Agent011AtomicFocus]::GetForegroundWindow() -ne $home.handle){throw 'DESTINATION_NOT_FOREGROUND'}
+ if([Agent011AtomicFocus]::GetForegroundWindow() -ne $destination.handle){throw 'DESTINATION_NOT_FOREGROUND'}
  # Recheck the already pinned URLs, original source editor, selection and STOP.
  if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl){throw 'SOURCE_URL_CHANGED_AFTER_FOCUS'}
- if(-not (Is-HomeUrl (UrlBar $home.window))){throw 'DESTINATION_URL_CHANGED_AFTER_FOCUS'}
+ if(-not (Is-HomeUrl (UrlBar $destination.window))){throw 'DESTINATION_URL_CHANGED_AFTER_FOCUS'}
  if((Selected-RealTab $source.window).name -cne $source.tab.name){throw 'SOURCE_SELECTED_TAB_CHANGED'}
- if((Selected-RealTab $home.window).name -cne $home.tab.name){throw 'DESTINATION_SELECTED_TAB_CHANGED'}
+ if((Selected-RealTab $destination.window).name -cne $destination.tab.name){throw 'DESTINATION_SELECTED_TAB_CHANGED'}
  Check-SourceEditors $source.window
- $editor=Get-Editor $home.window $true
+ $editor=Get-Editor $destination.window $true
  $null=Assert-Controls
  Save-Receipt 'DESTINATION_FOREGROUND_AND_STOP_VERIFIED'
  # Compose ONLY in the separate home window; no fallback/no retry on uncertainty.
@@ -257,11 +257,11 @@ try{
  if(([string]$editor.pattern.Current.Value) -cne $script:Handoff){throw 'HANDOFF_EDITOR_READBACK_MISMATCH'}
  Check-SourceEditors $source.window
  $null=Assert-Controls
- $send=Active-SendButtons $home.window
+ $send=Active-SendButtons $destination.window
  if($send.Count -ne 1){throw ('HANDOFF_ENABLED_SEND_COUNT_'+$send.Count)}
- if([Agent011AtomicFocus]::GetForegroundWindow() -ne $home.handle){throw 'DESTINATION_FOCUS_LOST_BEFORE_SEND'}
- if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl -or -not(Is-HomeUrl (UrlBar $home.window))){throw 'BROWSER_IDENTITY_CHANGED_BEFORE_SEND'}
- if((Selected-RealTab $home.window).name -cne $home.tab.name){throw 'HOME_TAB_CHANGED_BEFORE_SEND'}
+ if([Agent011AtomicFocus]::GetForegroundWindow() -ne $destination.handle){throw 'DESTINATION_FOCUS_LOST_BEFORE_SEND'}
+ if((Normalize-ChatUrl (UrlBar $source.window)) -cne $sourceUrl -or -not(Is-HomeUrl (UrlBar $destination.window))){throw 'BROWSER_IDENTITY_CHANGED_BEFORE_SEND'}
+ if((Selected-RealTab $destination.window).name -cne $destination.tab.name){throw 'HOME_TAB_CHANGED_BEFORE_SEND'}
  if(([string]$editor.pattern.Current.Value) -cne $script:Handoff){throw 'HANDOFF_CHANGED_BEFORE_SEND'}
  Save-Receipt 'SEND_GATES_VERIFIED'
  $script:State.send_invoked=$true
@@ -270,7 +270,7 @@ try{
  $deadline=[DateTime]::UtcNow.AddSeconds(30)
  do{
   Start-Sleep -Milliseconds 300
-  $newUrl=UrlBar $home.window
+  $newUrl=UrlBar $destination.window
   $canonical=$null
   try{$canonical=Normalize-ChatUrl $newUrl}catch{}
   if($null -ne $canonical -and $canonical -cne $sourceUrl){
@@ -289,8 +289,8 @@ try{
  $turnDeadline=[DateTime]::UtcNow.AddSeconds(25)
  $delivered=$false
  do{
-  if((Normalize-ChatUrl (UrlBar $home.window)) -cne $script:State.new_url){throw 'DESTINATION_URL_CHANGED_DURING_USER_TURN_CHECK'}
-  if(Test-Agent011DeliveredUserTurn $home.window){$delivered=$true;break}
+  if((Normalize-ChatUrl (UrlBar $destination.window)) -cne $script:State.new_url){throw 'DESTINATION_URL_CHANGED_DURING_USER_TURN_CHECK'}
+  if(Test-Agent011DeliveredUserTurn $destination.window){$delivered=$true;break}
   Start-Sleep -Milliseconds 500
  }while([DateTime]::UtcNow -lt $turnDeadline)
  if(-not $delivered){throw 'DESTINATION_USER_TURN_MARKERS_NOT_VISIBLE_NO_RETRY'}
