@@ -43,6 +43,10 @@ These numbers document historical divergence, not an instruction to access the r
 
 Detailed move set: `docs/audits/AUDIT_2026-10-07T2034Z_TERMUX_WINDOWS_CONTAMINATION.md`.
 
+## PCE12 verified New Chat interaction — 2026-10-09
+
+PCE12.006 successfully reached a fresh ChatGPT chat; screenshots and operator acknowledgement document the acceptance. Reuse the guarded Windows click method **only after resolving the current New chat location**, since sidebar coordinates change. Details: `docs/acceptance/ACCEPTANCE_2026-10-09T0747Z_PCE12_006_NEW_CHAT_COORDINATE_CLICK.md`. Every emitted ordinal is consumed even if blocked; next is PCE12.007, not a repeat of .006.
+
 ## Current high-priority product state
 
 - Result-confirmation selector/role-gate repair: live-proven.
