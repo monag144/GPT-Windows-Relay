@@ -145,6 +145,31 @@ Write-Output 'AGENT011_STRICT_SEND_CARDINALITY_0_1_2_PASS'
         self.assertEqual(s.count("[Windows.Forms.SendKeys]::SendWait('^v')"), 1)
         self.assertEqual(s.count("$send[0].invoke.Invoke()"), 1)
 
+    def test_no_focus_recovery_mode_fails_before_any_focus_attempt(self):
+        s = self.worker
+        self.assertIn("[switch]$RequireDestinationAlreadyForeground", s)
+        gate = "if($RequireDestinationAlreadyForeground -and $foreground -ne $destination.handle)"
+        stop = "throw 'DESTINATION_MUST_ALREADY_BE_FOREGROUND_NO_FOCUS_ATTEMPT'"
+        reject_branch = "if($RequireDestinationAlreadyForeground){throw 'FORBIDDEN_FOCUS_BRANCH_IN_NO_FOCUS_MODE'}"
+        focus_receipt = "Save-Receipt 'FOCUS_ATTEMPT_UNCERTAIN_NO_RETRY'"
+        focus_effect = "[Agent011AtomicFocus]::SetForegroundWindow($destination.handle)"
+        for token in (gate,stop,reject_branch,focus_receipt,focus_effect):
+            self.assertIn(token,s)
+        self.assertLess(s.index(gate),s.index(stop))
+        self.assertLess(s.index(stop),s.index(reject_branch))
+        self.assertLess(s.index(reject_branch),s.index(focus_receipt))
+        self.assertLess(s.index(focus_receipt),s.index(focus_effect))
+        self.assertEqual(s.count(focus_effect),1)
+
+    def test_source_draft_preincident_digest_gate_blocks_before_focus(self):
+        s = self.worker
+        self.assertIn("[string]$ExpectedSourceEditorSha256=''", s)
+        gate = "if($ExpectedSourceEditorSha256 -ne '' -and $fingerprint -cne $ExpectedSourceEditorSha256)"
+        self.assertIn(gate,s)
+        self.assertIn("SOURCE_EDITOR_PREINCIDENT_FINGERPRINT_MISMATCH",s)
+        self.assertLess(s.index(gate),s.index(" $windows=Inspect-Windows"))
+        self.assertLess(s.index(" $windows=Inspect-Windows"),s.index("SetForegroundWindow($destination.handle)"))
+
     def test_four_strong_markers_in_same_group_required(self):
         h = self.helper
         for token in (
