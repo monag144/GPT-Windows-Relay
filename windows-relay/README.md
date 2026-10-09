@@ -3,7 +3,7 @@
 > **Before debugging:** read `../docs/windows-relay-established-facts.md` and search the engineering log before starting new forensics. The established-facts file is the canonical short-form record of proven paths, architecture decisions, known root causes, Firefox/runtime facts, and operational lessons.\n>\n> Product direction and priority order live in `../docs/windows-relay-mission-and-roadmap.md`.
 
 
-Windows counterpart to the phone GPT-Termux relay.
+Windows-native ChatGPT↔PC execution bridge. Its sole canonical source repository is `monag144/GPT-Windows-Relay`; see `docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md`.
 
 ## Loop
 

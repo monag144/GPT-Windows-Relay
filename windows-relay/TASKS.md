@@ -1,5 +1,7 @@
 # GPT Windows Relay - Work Backlog
 
+**Repository gate (PCE12):** This backlog belongs only to `monag144/GPT-Windows-Relay/main`, local checkout target `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`. Start with `docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md`; use `docs/windows-relay-mission-and-roadmap.md` as the current roadmap. Do not use the retired Termux repository, its local checkout, or an obsolete/missing PCE10 roadmap as a fallback.
+
 ## Current priority / execution state
 
 1. **P0 — Scroll / conversation-follow UX: DEFERRED.** The contained V6 attempt regressed and was reverted; the stable runtime remains scroll-v5. Do not re-enter the scroll rabbit-hole unless the Director explicitly reopens it or new evidence materially changes the problem.
@@ -151,7 +153,7 @@
 - [x] Dual-runtime ownership diagnosed: 8766 control plane and isolated 8767 consumer runtime are intentional.
 - [x] Dedicated 8766 control-launcher split implemented and deployed to the current live tree.
 - [ ] Reconcile the richer HUD with canonical RETRY support; RETRY exists in Windows-repo source but is absent from the current richer live HUD.
-- [ ] Port/reconcile all valid PCE9 Windows changes from the old Termux repository into `monag144/GPT-Windows-Relay`; do not continue Windows development in the old repository.
+- [ ] Reconcile any remaining PCE9 Windows behavior using provenance and evidence already migrated into `monag144/GPT-Windows-Relay`; preserve newer Windows changes. Do not reopen, fetch, or modify the retired Termux repository.
 - [ ] Complete canonical STOP -> START ancestry acceptance proving restarted 8766 is owned by `run-control.ps1`; the pending attempt was interrupted during harness repair.
 - [ ] Enforce operation-series rollover so no future managed series can emit OP101.
 - [ ] Signed persistent Firefox XPI/policy and full Firefox + Windows/login restart acceptance remain open.

@@ -1,5 +1,7 @@
 # Windows Relay repository split — 2026-10-06
 
+**Historical provenance only (PCE12 clarification, 2026-10-09).** This document records a completed repository split. It does not authorize new Windows development, fetches, pulls, pushes, or dependency on the retired Termux repository. Begin all new operations from `monag144/GPT-Windows-Relay/main` and its source-of-truth index. Archived Termux references below are evidence, not current routing instructions.
+
 ## Canonical destination
 
 Windows relay development, the Windows consumer/control plane, job-application automation, and associated Windows relay projects now live in:
