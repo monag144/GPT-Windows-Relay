@@ -1,5 +1,8 @@
 # Codex CLI workspace discovery mission — 2026-10-07T2034Z
 
+**CLOSED / HISTORICAL HANDOFF (PCE12, 2026-10-09):** The Termux-worktree discovery steps below are archived evidence, not executable instructions. All current Windows engineering occurs solely in `monag144/GPT-Windows-Relay` using `docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md`. Do not scan, fetch, pull from, or mutate the retired Termux repository as a fallback.
+
+
 Read-only first. Do not delete, move, restart Firefox, reload extensions, stop/start relays, or rewrite Git history.
 
 Canonical target:
