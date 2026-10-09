@@ -74,7 +74,8 @@
       "effects": 0,
       "sends": 0,
       "limit_ms": 10000,
-      "az_links": []
+      "az_links": [],
+      "payload_constraint": "unicode_and_multiline"
     },
     {
       "id": "R05",
@@ -90,7 +91,8 @@
       "effects": 0,
       "sends": 0,
       "limit_ms": 18000,
-      "az_links": []
+      "az_links": [],
+      "payload_constraint": "min_12000_bytes"
     },
     {
       "id": "R06",
