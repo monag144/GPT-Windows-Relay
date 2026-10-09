@@ -13,6 +13,7 @@
 1. This index.
 2. `docs/policy/POLICY_2026-10-07T2034Z_DOCUMENTATION_STRUCTURE.md`.
 3. `docs/RELAY_OPERATIONAL_RULES.md`.
+   - For five-operation checkpoints: `docs/policy/POLICY_2026-10-09T0710Z_GITHUB_FIRST_AUDIT_GATES.md`.
 4. `docs/windows-relay-established-facts.md`.
 5. `windows-relay/TASKS.md`.
 6. `docs/windows-relay-mission-and-roadmap.md` when roadmap context is needed.
@@ -20,7 +21,7 @@
 
 Do not start by rereading the giant historical engineering log. Use it only when the compact index/facts do not answer the question.
 
-If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout, a missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, or a nonexistent `engineering_preflight`, treat it as stale guidance—not authority. Verify the Windows repository and the functions actually implemented by its `consumer/control_harness.py`. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`.
+If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout or the missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, treat it as stale guidance—not authority. Verify Windows repository files on `main` instead. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`. The original v2 harness lacked `engineering_preflight`; the PCE12 GitHub-first audit change adds that API. Read back its current signature before use.
 
 ## Historical migration reconciliation snapshot (2026-10-07)
 
