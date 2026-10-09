@@ -11,7 +11,8 @@ class CurrentChatTabRotationContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.worker = (ROOT / 'windows-relay' / 'agent011_current_tab_new_chat.ps1').read_text(encoding='utf-8')
-        cls.procedure = PROCEDURE.read_text(encoding="utf-8")
+        cls.compat_procedure = PROCEDURE.read_text(encoding="utf-8")
+        cls.procedure = cls.compat_procedure + "\n" + (ROOT / "docs" / "architecture" / "CONTRACT_2026-10-09T0636Z_AGENT011_CURRENT_TAB_SEMANTIC_ROTATION.md").read_text(encoding="utf-8")
         cls.tasks = TASKS.read_text(encoding="utf-8")
 
     def test_actual_worker_proves_current_originating_result(self):
@@ -41,6 +42,11 @@ class CurrentChatTabRotationContract(unittest.TestCase):
         self.assertIn('ORIGIN_SELECTION_LOST_BEFORE_COMPOSE', self.worker)
         self.assertIn('ORIGIN_SELECTED_TAB_CHANGED_PRE_SEND', self.worker)
         self.assertNotIn('SetForegroundWindow(', self.worker)
+
+    def test_architecture_contract_is_timestamped_and_compat_pointer_small(self):
+        self.assertIn("CONTRACT_2026-10-09T0636Z_AGENT011_CURRENT_TAB_SEMANTIC_ROTATION.md", self.compat_procedure)
+        self.assertLessEqual(len(PROCEDURE.read_bytes()), 10240)
+        self.assertIn("SAME CURRENT TAB ONLY", self.procedure)
 
     def test_user_intent_is_same_current_tab(self):
         self.assertIn("SAME CURRENT TAB ONLY", self.procedure)
