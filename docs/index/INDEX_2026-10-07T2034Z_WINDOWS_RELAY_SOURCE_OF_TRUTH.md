@@ -14,6 +14,7 @@
 2. `docs/policy/POLICY_2026-10-07T2034Z_DOCUMENTATION_STRUCTURE.md`.
 3. `docs/RELAY_OPERATIONAL_RULES.md`.
    - For five-operation checkpoints: `docs/policy/POLICY_2026-10-09T0710Z_GITHUB_FIRST_AUDIT_GATES.md`.
+   - **User-directed agent-switching hold (2026-10-10):** `docs/policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md`. It supersedes legacy automatic-chat-rotation instructions until explicitly lifted. Verified one-shot method: `docs/handoffs/HANDOFF_2026-10-10T0331Z_ONE_SHOT_WINDOWS_SCRIPT_AGENT_TRANSFER.md`.
 4. `docs/windows-relay-established-facts.md`.
 5. `windows-relay/TASKS.md`.
 6. `docs/windows-relay-mission-and-roadmap.md` when roadmap context is needed.
