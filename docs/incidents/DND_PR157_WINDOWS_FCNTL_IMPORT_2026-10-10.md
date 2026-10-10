@@ -1,0 +1,15 @@
+# PR15.7 Windows focused test collection incident — 2026-10-10
+
+## Observation
+D&D Bot Windows migration operation `DND-WINDOWS-20261010-017-PR157-FOCUSED-WINDOWS-TESTS` was accepted by Windows Relay, but returned `COMMAND_FAILED` / exit 1 because the nested pytest process returned exit 2 during collection. In isolated candidate snapshot `backups/pr157_a1b03ae2`, `tests/test_pr15_7_campaign_creation.py` imported `app/services/campaign_creation_service.py`, which imported `app/services/api_credential_service.py`; that module unconditionally imports Unix-only `fcntl`, so Windows Python 3.13 raised `ModuleNotFoundError: No module named 'fcntl'`. Multiple focused modules failed collection. No gameplay assertions were reached; output was truncated and cannot establish every collection error. The user-supplied receipt verified `FOCUSED_TEST_EXIT=2`. The operation's own final guard raised `RuntimeError('PR157_FOCUSED_WINDOWS_TESTS_FAILED_REVIEW_OUTPUT')`.
+
+## Scope, provenance and safety
+The snapshot consists of 461 files extracted from Git candidate `a1b03ae2cd0115a93fd9f5bef28acdfdc6c18112` with archive SHA-256 `0d0324d3b5fe9526d61285b071b699c4185760a398415c15b4c10aff6a75facc`; original source archive and local development branch are preserved. Before executing tests, the script verified active checkout at local portability commit `6bcc567ab75b62c2870c99319dcfc550fdd7823d`, only untracked `cmd.exe`, no local `.env`, and no real `data/*.db`. The test process ran in isolated directory with disposable `DATABASE_URL`, filtered secret environment variables, and `PYTHONUTF8=1`. No bot was started and no protected campaign database was targeted.
+
+## Root cause and caution
+The import is unequivocally platform-dependent; **do not** install a fake `fcntl`, monkey-patch the global module in the actual bot, or replace locking with a no-op. The credential store has a larger Unix-specific trust model: `os.fchmod` on descriptors, POSIX permission checks, and directory `os.fsync` may also be incompatible on Windows. The implementation's security invariants and owner/concurrent-access tests must be preserved, with a separate Windows ACL and lock strategy before claiming Windows BYOK readiness. Import alone is not the final problem.
+
+## Recovery and next experiment
+Do not replay operation 017. Next unique DND operation 018 performs **read-only platform compatibility inventory** over the isolated source and actual Win32 Python capabilities, including `msvcrt` and filesystem operations; inspect relevant credential tests and coverage, not secrets. Then propose minimal test-isolated compatibility patch with deliberate fail-closed behavior for unsafe credential storage and rerun focused suite with new ID. Preserve immutable archive and original Windows branch as rollback. Mark all failing gates explicitly.
+
+This log concerns `monag144/DnD-RP-Bot` development, and is stored in canonical `monag144/GPT-Windows-Relay/main` only as Windows Relay migration incident documentation. It does not authorize any PCE ordinal, change Relay source/Client or override the retired automatic-handoff policy.
