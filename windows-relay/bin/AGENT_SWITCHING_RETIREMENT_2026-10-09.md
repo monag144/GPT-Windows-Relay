@@ -23,6 +23,8 @@ Historical executable rotation source remains available **in Git history at comm
 - `windows-relay/extension/content.js` and mirrors (old navigate/insert/send/rename/resume)
 - `consumer/control_harness.py` (old automatic-rotation budget and clipboard/UIA capture guidance)
 - Original positive-only tests copied verbatim into this bin as `legacy_rotation_trigger_test_2026-10-09.py.txt` and `legacy_rotation_handler_test_2026-10-09.py.txt`.
+- Obsolete runnable `tools/CLICK-NEW-CHAT.bat` removed from `tools/` and preserved verbatim in this bin as `legacy_CLICK-NEW-CHAT_2026-10-09.bat.txt`. **This is not the working** `Client/Relay/test/Run-Copy-Contents.cmd`; do not confuse the two.
+- Ordinary `relay_handoff_scroll` and `HANDOFF_SESSION_KEY` names in the content script refer to *scrolling after result delivery*, **not conversation/agent switching**; those remain essential and must not be removed for their names alone.
 
 **Temporarily suspended for agent switching only:** existing UI Automation, clipboard fallback, tab/window discovery, out-of-band prompt sending, screenshot/navigation recovery, and browser supervisory machinery. Do not use these to open a successor chat, rewrite a handoff, or transfer agent ownership. Their implementations are **not deleted or globally disabled**, because they are shared by unrelated normal Windows Relay command delivery, security/STOP, recovery, or user-requested non-handoff workflows. Reusing them for agent-switching is prohibited unless the Director issues a new explicit decision; this retirement is intended to be permanent.
 
