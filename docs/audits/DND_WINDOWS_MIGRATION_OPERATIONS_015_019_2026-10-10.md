@@ -1,0 +1,22 @@
+# D&D Bot Windows migration checkpoint — operations 015–019 — 2026-10-10
+
+Scope: user-directed D&D Windows portability and candidate evaluation, not PCE relay engineering. Evidence consists of the exact [GPT_WINDOWS_RESULT] receipts presented to this conversation. Do not infer a current loaded extension version or exact-once guarantee.
+
+| DND Windows operation | Receipt | Net-new result |
+| --- | --- | --- |
+| 015-PR157-QUALIFICATION-LINEAGE | OK | Local candidate a1b03ae2cd0115a93fd9f5bef28acdfdc6c18112 descends from historically qualified a9d5d3e34128d4a0fe9f1837033bc3c7a3fe5406, only 1 later commit/1 changed file, no implementation paths changed. Historical qualification text: 56 focused and 456 full Linux tests passed; these are not Windows results. |
+| 016-ISOLATED-CANDIDATE-SNAPSHOT | OK | Extracted 461 files using `git archive` at candidate SHA, archive SHA256 `0d0324d3b5fe9526d61285b071b699c4185760a398415c15b4c10aff6a75facc` under ignored `backups/pr157_a1b03ae2`. Original active branch fix/windows-python313-utf8-20261010 at 6bcc567ab75b62c2870c99319dcfc550fdd7823d unchanged; no credentials/real DB copied. |
+| 017-PR157-FOCUSED-WINDOWS-TESTS | COMMAND_FAILED | pytest returned 2 during collection because app/services/api_credential_service.py unconditionally imports Unix-only `fcntl`; Windows Python 3.13 ModuleNotFoundError. Script returned exit 1 by an intentional guard. No gameplay assertions reached. Captured stdout truncated. |
+| 018-WINDOWS-CREDENTIAL-LOCK-AUDIT | OK | `os.fchmod`, `os.chmod`, `os.fsync`, `msvcrt`, `icacls` present; `fcntl` and `os.O_NOFOLLOW` absent. Credential source SHA256 3ebf1faf7ddac0754d8ce7c03e2296e34194d88148460a7b2dde8a8c29c9eb63. Identified POSIX mode checks and directory fsync dependence. Output truncated; do not invent unseen path inventory. |
+| 019-WIN32-SECURITY-PRIMITIVES | OK | Isolated tempfile only: `chmod(0600)` and `fchmod(0600)` returned success, but file stat mode 0o666; dir chmod 0700 success but dir stat mode 0o777. File fsync succeeded; opening/fsyncing directory failed PermissionError 13. `msvcrt` byte-range exclusive lock blocked second handle and released/reacquired correctly. os.replace succeeded on closed files. Temporary test files removed; no secret/campaign DB touched. |
+
+## Findings and safety
+**Critical blocker:** import-time fcntl dependency is only the first failure. On this Windows host POSIX chmod/stat bits do NOT secure credential storage, and directory fsync cannot be carried over as written. Replacing fcntl with a no-op, bypassing permission assertions, or globally faking POSIX features would violate the security boundary. The Windows path needs real discretionary access control checks, interprocess serialization, explicit replacement/durability policy, and test coverage, especially credential-owner isolation and concurrent writes. Unix original remains unchanged in immutable archive. Windows branch remains committed separately; only known untracked cmd.exe.
+
+**Failures/manual rescues:** Operation 017 is the sole failure in this 5-operation range, diagnosed at collection rather than gameplay. Logged separately in docs/incidents/DND_PR157_WINDOWS_FCNTL_IMPORT_2026-10-10.md (SHA e2ffaeb8ead10757803f6fcb5e0bd56cd56f7ebf). No manually rescued sends or duplicate side effects observed here.
+
+## Next action
+Operation 020: disposable Win32 ACL / filesystem capability investigation with icacls and SID metadata, without touching actual secrets, system files or production DB; establish whether enforceable restrictive DACLs can be created and validated. Do not patch the credential store until the ACL acceptance gates are identified. Preserve rollback; no bot starts, no PR15.7 merge/push.
+
+## Canonical Relay governance
+Verified readbacks from monag144/GPT-Windows-Relay main: consumer/control_harness.py ca2141c45726366abb889db0cb5a794ed8735075; windows-relay/TASKS.md d49999dc29466a04ba2c27cc39f341b9162779e9; index bfa29203c03238015cb088d717810d818a980d90; dated roadmap a7b65a643cbcdecd440d6675d1dfb7190300a6fb; mission 86c3e0c3f2d1c44de9cccdc819597f120c8732be; safety 693ad770964352de7de26886ba3b4e295ac0357a; action sandwich 2b300c59320f144126f8a2a2c0b2dd5dbc349596. Deprecated PCE10 roadmap path is NOT_FOUND; dated successors are authority. PCE 000-100 ordinal requirement and PCE audit gate are distinct from DND action IDs. No Relay code/client or handoff behavior altered.
