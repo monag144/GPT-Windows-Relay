@@ -62,7 +62,6 @@ let scrollRoot=null;
 let scrollTimer=null;
 let relayHandoffScrollUntil=0;
 const HANDOFF_SESSION_KEY='gptWindowsRelayHandoffUntil';
-const ENGINEERING_ROTATION_SESSION_KEY='gptEngineeringRotationV1';
 let followBottom=true;
 let conversationRoot=null;
 let conversationObserver=null;
@@ -1481,63 +1480,6 @@ bindToolApprovalPromptDetector();
   },500);
 }
 
-/* GPT_ENGINEERING_CHAT_ROTATION_HANDLER_V1 */
-function rotationLoad(){try{return JSON.parse(sessionStorage.getItem(ENGINEERING_ROTATION_SESSION_KEY)||'null');}catch{return null;}}
-function rotationSave(v){try{sessionStorage.setItem(ENGINEERING_ROTATION_SESSION_KEY,JSON.stringify(v));}catch{}}
-function rotationPath(){return /^\/c\/[^/?#]+/.test(location.pathname)?location.pathname:null;}
-function rotationExactAnchor(title,path){return [...document.querySelectorAll('a[href]')].find(a=>{try{return new URL(a.href,location.origin).pathname===path && String(a.textContent||'').trim()===title;}catch{return false;}})||null;}
-async function renameEngineeringChat(title,path){
- const until=Date.now()+45000;
- while(Date.now()<until){
-  const exact=rotationExactAnchor(title,path);if(exact)return true;
-  const anchor=[...document.querySelectorAll('a[href]')].find(a=>{try{return new URL(a.href,location.origin).pathname===path;}catch{return false;}});
-  if(anchor){
-   const row=anchor.closest('li')||anchor.parentElement?.parentElement||anchor.parentElement;
-   try{row?.dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));}catch{}
-   await new Promise(r=>setTimeout(r,200));
-   const buttons=[...(row?.querySelectorAll?.('button')||[])].filter(visibleElement);
-   const menu=buttons.find(b=>/more|options|conversation/i.test(String(b.getAttribute('aria-label')||b.getAttribute('title')||'')))||buttons.at(-1);
-   if(menu){
-    menu.click();await new Promise(r=>setTimeout(r,250));
-    const rename=[...document.querySelectorAll('[role="menuitem"],button')].find(e=>visibleElement(e)&&/^rename$/i.test(String(e.textContent||'').trim()));
-    if(rename){
-     rename.click();await new Promise(r=>setTimeout(r,250));
-     const inputs=[...document.querySelectorAll('input')].filter(visibleElement);const input=inputs.at(-1);
-     if(input){
-      const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter?.call(input,title);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));
-      const save=[...document.querySelectorAll('button')].find(e=>visibleElement(e)&&/^(save|rename)$/i.test(String(e.textContent||'').trim()));
-      if(save)save.click();else input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));
-     }
-    }
-   }
-  }
-  await new Promise(r=>setTimeout(r,500));
- }
- throw new Error('engineering_chat_rename_timeout');
-}
-async function resumeEngineeringRotation(){
- const st=rotationLoad();if(!st||st.target_title!=='💻PC Engineering 9🔧'||st.target_session!=='pce9.1'||!st.handoff)return;
- if(Date.now()-Number(st.started_at||0)>180000)throw new Error('engineering_rotation_expired');
- if(st.phase==='navigate'){if(location.pathname!=='/'){location.assign('https://chatgpt.com/');return;}st.phase='handoff';rotationSave(st);}
- if(st.phase==='handoff'||st.phase==='handoff_submitting'){
-  if(recentUserTurnContainsToken('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]')){st.phase='await_conversation';rotationSave(st);}
-  else{
-   const until=Date.now()+30000;while((operatorPaused||!findComposer())&&Date.now()<until)await new Promise(r=>setTimeout(r,250));
-   const composer=findComposer();if(operatorPaused||!composer)throw new Error('engineering_rotation_composer_unavailable');
-   const existing=elementText(composer).trim();if(existing && !existing.includes('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]'))throw new Error('engineering_rotation_composer_not_empty');
-   if(!existing)setText(st.handoff);st.phase='handoff_submitting';rotationSave(st);await new Promise(r=>setTimeout(r,250));await send();
-   if(!await waitForUserToken('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]',15000))throw new Error('engineering_rotation_handoff_unconfirmed');
-   st.phase='await_conversation';rotationSave(st);
-  }
- }
- if(st.phase==='await_conversation'){const until=Date.now()+30000;while(!rotationPath()&&Date.now()<until)await new Promise(r=>setTimeout(r,250));const path=rotationPath();if(!path)throw new Error('engineering_rotation_conversation_identity_timeout');st.conversation_path=path;st.phase='rename';rotationSave(st);}
- if(st.phase==='rename'){const path=st.conversation_path||rotationPath();if(!path)throw new Error('engineering_rotation_identity_missing');await renameEngineeringChat(st.target_title,path);if(!rotationExactAnchor(st.target_title,path))throw new Error('engineering_rotation_title_verify_failed');st.phase='verified';st.verified_at=Date.now();rotationSave(st);emitRelayEvent('chat_rotation_verified',{source_packet_id:st.source_packet_id,title:st.target_title,session:st.target_session,conversation_key:location.origin+path});}
-}
-function beginEngineeringRotation(m){
- if(m?.target_title!=='💻PC Engineering 9🔧'||m?.target_session!=='pce9.1'||!String(m?.handoff||'').includes('[GPT_ENGINEERING_ROTATION_HANDOFF_V1]'))return;
- const st={phase:'navigate',source_packet_id:m.source_packet_id||null,target_title:m.target_title,target_session:m.target_session,handoff:m.handoff,started_at:Date.now()};rotationSave(st);emitRelayEvent('chat_rotation_started',{source_packet_id:st.source_packet_id,title:st.target_title,session:st.target_session});location.assign('https://chatgpt.com/');
-}
-
 function connectBackgroundPort(){
   if(backgroundPort)return backgroundPort;
   try{
@@ -1548,7 +1490,6 @@ function connectBackgroundPort(){
 
     port.onMessage.addListener(m=>{
       if(m?.type==='operator_control_state'){applyOperatorControlState(m);return;}
-      if(m?.type==='relay_chat_rotation_start'){beginEngineeringRotation(m);return;}
       if(m?.type==='consumer_mission'){
         if(operatorPaused)return;
         deliverConsumerMission(m.mission).catch(()=>{});
@@ -2453,7 +2394,6 @@ hydrateRecoveryPacketWatch();
 connectBackgroundPort();
 operatorControlPollTimer=setInterval(pollOperatorControlState,250);
 setTimeout(pollOperatorControlState,25);
-setTimeout(()=>resumeEngineeringRotation().catch(e=>emitRelayEvent('chat_rotation_failed',{error:String(e?.message||e).slice(0,240),phase:rotationLoad()?.phase||null})),800);
 emitRelayEvent('content_script_started',{
   href:location.href,
   runtime:'v11-scroll-v5-delivery-v17-whole-stop-v1-submit-once-scoped-recovery-draft-owner-release-approval-v3-uierror-v1-owner-v1',
