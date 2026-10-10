@@ -38,3 +38,32 @@ Twenty unique ordinals: **16 OK**, **2 GOVERNANCE_BLOCKED** (.005,.010), **2 COM
 6. Preserve/classify unique untracked documentation and commits before proposing archive/removal of old checkouts.
 
 **Bottom line:** Progress moved from uncontrolled build ambiguity to a verified 28-source comparison stage and a syntactically valid, offline HUD candidate. Live build consolidation and product-grade reliability still require implementation and independent acceptance.
+
+## Full native audit ledger — exact ordinal coverage
+
+**Checkpoint status: COMPLETE AS A 20-ATTEMPT REVIEW; NOT A PRODUCT RELEASE.** Every row is cross-checked against one of the four committed five-operation audits named above. These are issued operation identifiers and native result classifications, including every failure; the individual audits contain detailed timestamps and evidence. The one-row-per-ordinal ledger is added for auditability and for the installed legacy validator's required proof of each .000–.019 operation.
+
+| Issued Windows action | Native result |
+| --- | --- |
+| `PCE16.000-read-only-live-hud-and-backend-inventory` | OK |
+| `PCE16.001-read-only-hud-controller-behavior-audit` | OK |
+| `PCE16.002-runtime-identity-and-hud-bindings` | OK |
+| `PCE16.003-scanner-recovery-and-queue-read-only-audit` | OK |
+| `PCE16.004-force-scanner-safety-and-ledger-audit` | OK |
+| `PCE16.005-force-path-and-adapter-contract-inspection` | GOVERNANCE_BLOCKED |
+| `PCE16.006-local-checkpoint-validator-source-audit` | OK |
+| `PCE16.007-verified-audit-ingestion-and-legacy-preflight` | COMMAND_FAILED |
+| `PCE16.008-corrected-legacy-audit-compatibility` | OK |
+| `PCE16.009-force-scanner-dispatch-and-safety-review` | OK |
+| `PCE16.010-windows-relay-workspace-and-runtime-inventory` | GOVERNANCE_BLOCKED |
+| `PCE16.011-read-only-workspace-build-and-codex-inventory` | OK |
+| `PCE16.012-codex-readonly-relay-build-lineage-review` | COMMAND_FAILED |
+| `PCE16.013-deterministic-source-capability-comparison` | OK |
+| `PCE16.014-readonly-git-preservation-and-runtime-identity` | OK |
+| `PCE16.015-live-source-and-untracked-work-preservation-review` | OK |
+| `PCE16.016-create-verified-isolated-consolidation-source-stage` | OK |
+| `PCE16.017-verified-stage-hud-controller-diff` | OK |
+| `PCE16.018-build-isolated-five-control-hud-candidate` | OK |
+| `PCE16.019-offline-hud-control-contract-and-dependency-test` | OK |
+
+**Native accounting checked:** 16 OK, 2 GOVERNANCE_BLOCKED (.005 and .010), 2 COMMAND_FAILED (.007 and .012), 20 unique issued identifiers, no missing/reused ordinal. This review continues to report material source and Client drift. Authenticated GitHub evidence is not proof that the local compatibility file has been installed; the actual old local validator must still accept PCE16.020 before issuance.
