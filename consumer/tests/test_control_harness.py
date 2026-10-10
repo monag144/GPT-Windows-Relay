@@ -59,6 +59,16 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertNotIn("capture_policy",c)
         self.assertNotIn("rotation",c)
 
+    def test_every_operation_requires_source_and_roadmap_reads(self):
+        c=ch.build_control_harness_contract("PCE16")
+        reads=c["per_operation_source_reads"]
+        self.assertTrue(reads["required_every_issued_pce_operation"])
+        self.assertIn("consumer/control_harness.py",reads["control_harness"])
+        self.assertIn("WINDOWS_RELAY_TASK_BACKLOG_2026-10-09.md",reads["roadmap"])
+        self.assertIn("GitHub",reads["roadmap"])
+        self.assertIn("drift",c["twenty_operation_review"]["cadence"])
+        self.assertNotIn("rotation_priority",str(c))
+
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
         self.assertEqual(c["incident_logging"]["method"],"write_incident"); self.assertEqual(c["runtime_gates"]["source_contract_method"],"validate_windows_runtime_contract"); self.assertEqual(c["reflection"]["method"],"append_reflection"); self.assertEqual(c["data_policy"]["method"],"record_once"); self.assertEqual(c["continuous_improvement"]["method"],"evaluate_improvement"); self.assertIn("live-canary",c["continuous_improvement"]["cycle"])

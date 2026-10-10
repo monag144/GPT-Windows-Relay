@@ -310,10 +310,17 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "rule": "Each issued attempt consumes its ordinal, including GOVERNANCE_BLOCKED, transport-rejected and unknown outcomes. Never reuse .005; .006 follows a blocked .005.",
             "source": "Complete persisted action-ID ledger; no inference from OK-only results.",
         },
+        "per_operation_source_reads": {
+            "required_every_issued_pce_operation": True,
+            "control_harness": "Read consumer/control_harness.py from canonical GitHub main, and the installed/development copy when local operations are involved.",
+            "roadmap": "Read docs/roadmap/WINDOWS_RELAY_TASK_BACKLOG_2026-10-09.md plus the dated mission/priorities before each operation; use GitHub if local dated roadmap is missing.",
+            "incidents_and_logs": "Consult relevant latest dated incidents, receipts and operation logs before any mutation; report source/Client drift, never silently assume parity.",
+            "verification": "Log the read identities and date/source before changing or executing. A literal substring check is not enough to prove a policy ran.",
+        },
         "twenty_operation_review": {
-            "cadence": "Review attempted ordinals .000-.019 at .020 and every 20 thereafter.",
+            "cadence": "At .020 review .000-.019 and every 20 attempted operations thereafter; assess actual progress against the latest roadmap, source/Client drift, failed alternatives, operator rescues, incident trends, rollback, and next priorities.",
             "hard_gate": False,
-            "publication": "GitHub connector; record review without stalling a working relay.",
+            "publication": "GitHub connector; record a drift/no-drift verdict with evidence without stalling a working relay.",
         },
         "codex_escalation": {
             "method": "assess_engineering_rescue",
