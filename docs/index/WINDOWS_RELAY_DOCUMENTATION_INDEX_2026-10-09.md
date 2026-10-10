@@ -15,10 +15,13 @@
 
 ## More specific later evidence and live gates
 
-- [Manually requested agent handoff / automatic rotation hold](../policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md) — specific user directive recorded as a historical UTC timestamp, corresponding to **October 9 Pacific**. **Still in force**. It overrides earlier automatic-rotation wording regardless of file naming convention.
+- [Script-only agent handoff](../policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md) — newer user directive **permanently retires automatic switching** and standardizes the existing CMD/PowerShell one-shot script. Supersedes the [historical temporary hold](../policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md); Git commit chronology resolves same-Pacific-date updates.
+- [Agent switching retirement bin](../../windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md) — reasons, historical code SHA, archived rotation test sources and retained shared-component boundaries.
 - [User-confirmed one-shot Windows script transfer](../handoffs/HANDOFF_2026-10-10T0331Z_ONE_SHOT_WINDOWS_SCRIPT_AGENT_TRANSFER.md) — known working `Run-Copy-Contents.cmd`, with PCE15 successor-series hitch.
 - [PCE15 audit of operations 45–49](../audits/AUDIT_2026-10-10T0304Z_PCE15_OPERATIONS_045_049.md), [non-atomic claim incident](../incidents/INCIDENT_2026-10-10T0250Z_PCE15_NONATOMIC_ACTION_CLAIM_AND_OWNER_GUARD_GAPS.md), and [post-eviction replay incident](../incidents/INCIDENT_2026-10-10T0304Z_PCE15_DEDUP_RETENTION_POST_EVICTION_REPLAY.md). Preserve their original exact event timestamps; do not relabel historical events.
 - Control-harness code, actual latest test results and current Client/Firefox runtime state are separate evidence sources and may be newer than this index.
+
+The remaining work is the [Windows Relay task backlog](../roadmap/WINDOWS_RELAY_TASK_BACKLOG_2026-10-09.md); removed rotation projects are not open items.
 
 ## Stable compatibility entry points
 

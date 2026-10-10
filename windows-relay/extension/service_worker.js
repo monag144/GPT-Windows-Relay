@@ -14,16 +14,7 @@ let operatorStopAckEmittedGeneration=0;
 let preferredConsumerMissionTabId=null;
 let lastBrowserHeartbeatAt=0;
 
-const CHAT_ROTATION_KEY='gptRelayChatRotationV1';
-const CHAT_ROTATION_EVERY=100;
-const ENGINEERING_ROTATION_KEY='gptEngineeringRotationV1';
-const ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP=99;
-/* GPT_ENGINEERING_ROTATION_TRIGGER_V1 */
-function engineeringGeneration(id){const m=String(id||'').match(/PCE(\d+)/i);return m?Number(m[1]):null;}
-function engineeringOperation(id){const m=String(id||'').match(/PCE\d+BOOT-OP(\d+)/i);return m?Number(m[1]):null;}
-function pce9Target(){return {title:'💻PC Engineering 9🔧',session:'pce9.1'};}
-function pce9Handoff(id){return `[GPT_ENGINEERING_ROTATION_HANDOFF_V1]\nTarget title: 💻PC Engineering 9🔧\nTarget relay session: pce9.1\nSource packet: ${id}\nRead docs/HANDOFF_2026-10-07_PCE8_TO_PCE9.md, roadmap, established facts, recent incidents, and engineering log. Continue autonomously; do not restart the audit. First relay operation: PCE9BOOT-OP001 with owner_claim true.\n[/GPT_ENGINEERING_ROTATION_HANDOFF_V1]`;}
-
+// Automatic conversation/agent switching retired. See windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md.
 function extensionStorageGet(key){
   return new Promise(resolve=>{
     try{chrome.storage.local.get(key,v=>resolve(v||{}));}
@@ -36,13 +27,6 @@ function extensionStorageSet(value){
     try{chrome.storage.local.set(value,()=>resolve());}
     catch{resolve();}
   });
-}
-
-function operationOrdinal(id){
-  const matches=[...String(id||'').matchAll(/(?:^|[-.])(\d{2,})(?=[-.]|$)/g)];
-  if(!matches.length)return null;
-  const n=Number(matches[matches.length-1][1]);
-  return Number.isSafeInteger(n) && n>0?n:null;
 }
 
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
@@ -167,48 +151,6 @@ function checkAndAdvanceOperationCursor(id,owner){
 }
 /* GPT_RELAY_CONVERSATION_OWNER_V1 */
 /* GPT_RELAY_OP_TOKEN_CURSOR_V1 */
-
-async function noteDeliveredOperation(port,id){
-  const raw=await extensionStorageGet(CHAT_ROTATION_KEY);
-  const saved=raw?.[CHAT_ROTATION_KEY];
-  const state=saved && typeof saved==='object'?saved:{};
-  const counted=Array.isArray(state.counted_ids)?state.counted_ids.filter(x=>typeof x==='string'):[];
-  if(counted.includes(id))return;
-  counted.push(id);
-  while(counted.length>512)counted.shift();
-
-  const ordinal=operationOrdinal(id);
-  const count=Math.max(0,Number(state.delivered_count)||0)+1;
-  let fallbackSinceRotation=Math.max(0,Number(state.fallback_since_rotation)||0)+1;
-  let lastRotationOrdinal=Number(state.last_rotation_ordinal)||0;
-  const eg=engineeringGeneration(id),eop=engineeringOperation(id);
-  const engineeringDue=eg===8 && Number.isFinite(eop) && eop>=ENGINEERING_ROTATION_FORCE_FROM_PCE8_OP;
-  let rotationDue=engineeringDue;
-  if(ordinal && !rotationDue){
-    rotationDue=ordinal%CHAT_ROTATION_EVERY===0 && ordinal!==lastRotationOrdinal;
-    if(rotationDue)lastRotationOrdinal=ordinal;
-  }else if(!ordinal && !rotationDue && fallbackSinceRotation>=CHAT_ROTATION_EVERY){
-    rotationDue=true;
-    fallbackSinceRotation=0;
-  }
-
-  await extensionStorageSet({[CHAT_ROTATION_KEY]:{
-    delivered_count:count,
-    fallback_since_rotation:fallbackSinceRotation,
-    last_rotation_ordinal:lastRotationOrdinal,
-    counted_ids:counted,
-    updated_at:new Date().toISOString()
-  }});
-
-  browserEvent('relay_operation_counted',{packet_id:id,ordinal,delivered_count:count,rotation_due:rotationDue,engineering_due:engineeringDue}).catch(()=>{});
-  const tabId=port?.sender?.tab?.id;
-  if(!rotationDue || RELAY_BROWSER_ID!=='firefox' || !Number.isInteger(tabId))return;
-  const target=pce9Target();
-  const rotation={source_packet_id:id,target_title:target.title,target_session:target.session,handoff:pce9Handoff(id),phase:'requested',requested_at:new Date().toISOString()};
-  await extensionStorageSet({[ENGINEERING_ROTATION_KEY]:rotation});
-  browserEvent('chat_rotation_due',{packet_id:id,ordinal,tab_id:tabId,target}).catch(()=>{});
-  try{port.postMessage({type:'relay_chat_rotation_start',...rotation});}catch{}
-}
 
 function rememberConsumerPort(port){
   const tabId=port?.sender?.tab?.id;
@@ -419,10 +361,6 @@ chrome.runtime.onConnect.addListener(port=>{
       call('/mission-ack',{method:'POST',body:JSON.stringify({id:m.id})},5000).catch(()=>{});
       return;
     }
-    if(m?.type==='relay_operation_delivered' && typeof m.id==='string'){
-      noteDeliveredOperation(port,m.id).catch(()=>{});
-      return;
-    }
     if(m?.type!=='relay_action' || typeof m.request_id!=='string')return;
     (async()=>{
       let reply;
@@ -491,5 +429,4 @@ chrome.runtime.onMessage.addListener((m,_s,reply)=>{(async()=>{try{
 /* GPT_ONE_CLICK_BROWSER_QUEUE_TARGET_V1 */
 
 /* GPT_ONE_CLICK_BROWSER_HEARTBEAT_V1 */
-/* GPT_RELAY_CHAT_ROTATION_100_V1 */
-/* GPT_RELAY_DELIVERED_OPERATION_DEDUPE_V1 */
+/* GPT_AGENT_SWITCHING_RETIRED_2026_10_09 */

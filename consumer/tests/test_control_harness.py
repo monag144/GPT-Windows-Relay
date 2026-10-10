@@ -38,16 +38,26 @@ class ControlHarnessTests(unittest.TestCase):
         bad=ch.evaluate_runtime_transition({"main_8766":True,"consumer_8767":True,"main_pid":1,"consumer_pid":1,"hud_processes":0,"firefox_runtime":"","helper_finalized":False})
         self.assertTrue(good["ok"]); self.assertFalse(bad["ok"]); self.assertIn("one_hud",bad["blockers"])
 
-    def test_operation_budget_makes_rotation_p0(self):
-        x=ch.assess_engineering_operation_budget(77)
-        self.assertEqual(x["remaining_after_current"],23)
-        self.assertEqual(x["rotation_priority"],"P0")
-        self.assertTrue(x["rotation_build_due"])
-        self.assertEqual(x["next_chat_title"],"💻PC Engineering 9🔧")
+    def test_operation_budget_stops_without_automatic_switching(self):
+        early=ch.assess_engineering_operation_budget(77)
+        self.assertEqual(early["remaining_after_current"],23)
+        self.assertFalse(early["automatic_switching_allowed"])
+        self.assertFalse(early["manual_handoff_required_after_current"])
+        final=ch.assess_engineering_operation_budget(100)
+        self.assertEqual(final["remaining_after_current"],0)
+        self.assertTrue(final["manual_handoff_required_after_current"])
+        self.assertIn("STOP",final["action_at_limit"])
+        self.assertNotIn("next_chat_title",final)
+        with self.assertRaises(ch.ControlHarnessError):
+            ch.assess_engineering_operation_budget(101)
 
-    def test_pce9_rotation_budget_is_p0(self):
-        x=ch.assess_engineering_operation_budget(78)
-        self.assertEqual(x["rotation_priority"],"P0"); self.assertEqual(x["remaining_after_current"],22); self.assertEqual(x["next_chat_title"],"💻PC Engineering 9🔧")
+    def test_contract_uses_only_approved_script_for_handoff(self):
+        c=ch.build_control_harness_contract("PCE16")
+        self.assertEqual(c["agent_handoff"]["mode"],"user_requested_one_shot_only")
+        self.assertIn("Run-Copy-Contents.cmd",c["agent_handoff"]["transport"])
+        self.assertIn("next PCE series",c["agent_handoff"]["procedure"])
+        self.assertNotIn("capture_policy",c)
+        self.assertNotIn("rotation",c)
 
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")

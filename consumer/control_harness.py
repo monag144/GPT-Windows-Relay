@@ -128,10 +128,21 @@ def evaluate_runtime_transition(observed: dict) -> dict:
     blockers=[name for name,ok in checks.items() if not ok]
     return {"ok":not blockers,"checks":checks,"blockers":blockers}
 
-def assess_engineering_operation_budget(current_operation:int,max_operation:int=100,next_chat_title:str="💻PC Engineering 9🔧")->dict:
-    if current_operation<1 or current_operation>max_operation: raise ControlHarnessError("invalid operation")
-    r=max_operation-current_operation
-    return {"current_operation":current_operation,"remaining_after_current":r,"next_chat_title":next_chat_title,"rotation_priority":"P0" if r<=25 else "P1","rotation_build_due":r<=25,"rotation_live_proof_due":r<=10,"block_non_rotation_mutations":r<=4}
+def assess_engineering_operation_budget(current_operation: int, max_operation: int = 100) -> dict:
+    """Track a finite operation series; never trigger browser/chat rotation."""
+    if type(current_operation) is not int or type(max_operation) is not int or max_operation != 100:
+        raise ControlHarnessError("invalid PCE operation budget")
+    if not 0 <= current_operation <= max_operation:
+        raise ControlHarnessError("operation outside PCE 000..100 budget")
+    remaining = max_operation - current_operation
+    return {
+        "current_operation": current_operation,
+        "remaining_after_current": remaining,
+        "manual_handoff_required_after_current": remaining == 0,
+        "automatic_switching_allowed": False,
+        "action_at_limit": "STOP and request an explicitly approved one-shot script handoff",
+    }
+
 
 GITHUB_AUDIT_REPOSITORY = "monag144/GPT-Windows-Relay"
 GITHUB_AUDIT_BRANCH = "main"
@@ -165,7 +176,7 @@ def assess_next_engineering_operation(series: str, attempted_action_ids: list[st
     repeated = sorted({n for n in ordinals if ordinals.count(n) > 1})
     blockers = []
     if expected > max_ordinal:
-        blockers.append("series_rotation_required")
+        blockers.append("manual_handoff_required")
     if proposed_ordinal != expected:
         blockers.append("attempted_ordinal_must_not_be_reused_or_skipped")
     return {
@@ -344,9 +355,13 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "method": "record_once",
             "goal": "Accumulated data should become indexed evidence, not repeated payload waste."
         },
-        "capture_policy": {
-            "visual": "Use managed screenshot capture and ChatGPT attachment transport for visual state.",
-            "text_preference": ["semantic UIA/readback", "window Ctrl+A then Ctrl+C clipboard capture fallback"],
-            "send_rule": "Hash captured bytes before storing/sending; deny exact duplicate captures; attach large captured text instead of repeatedly pasting giant payloads."
+        "agent_handoff": {
+            "mode": "user_requested_one_shot_only",
+            "transport": "existing Client/Relay/test/Run-Copy-Contents.cmd",
+            "payload_file": "existing Client/Relay/test/Copy Contents.txt",
+            "procedure": "Current engineer derives the next PCE series by incrementing its own verified series; script handles Firefox New Chat, Paste, Enter.",
+            "verification": "Confirm the actual new conversation received the message; a launched process is not delivery proof.",
+            "prohibition": "No autonomous new-chat navigation, browser-agent rotation, scheduled switching, or alternate clipboard/UIA handoff.",
+            "historical_retirement": "windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md",
         }
     }

@@ -1,22 +1,29 @@
 # Windows Relay task backlog — 2026-10-09
 
-**Scope:** `monag144/GPT-Windows-Relay`, Pacific-local date snapshot. This is a short prioritized backlog based on known PCE15 results, not an active-operation allocation to a running agent.
+**Scope:** `monag144/GPT-Windows-Relay`, Pacific-local date. Revised after the Director permanently retired autonomous agent-switching. Historical rotation tasks are archived under `windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md`, not remaining milestones. This is a source/planning update, not a live Client rollout.
 
-## Open verification work
+## P0 — safety and reliable command execution
+- [ ] Make backend action-id lookup and claim one durable atomic transaction. Isolated PCE15.043 reproduced concurrent duplicate synthetic executions; block identical-ID parallel commands, changed-payload collisions, unsafe restart cases and uncertain outcomes.
+- [ ] Prevent post-500 processed-ID eviction from enabling re-execution. Keep durable replay tombstones/identity hashes and enforce pre-execute collision checks across restarts. PCE15.047 source-level proof, PCE15.049 memory-only prototype; **not fixed in Client**.
+- [ ] Preserve and verify operator STOP/ARM and exact-conversation sender ownership, without allowing same-session stale packets from old chats. PCE15.050 cross-conversation rejection was protective; don't bypass it.
+- [ ] Confirm authenticated localhost 8766 normal same-chat packet -> exactly-one Windows execution -> exact saved result -> one delivered visible reply, including failure/recovery. No GUI handoff automation necessary.
 
-- [ ] Correct the non-atomic lookup → reserve claim race revealed in isolated PCE15.043 tests, under an explicitly authorized source-change gate, and prove concurrency across thread/process boundaries.
-- [ ] Prevent processed-ID cache eviction from permitting post-execution replay. Make identity retention durable, bounded safely and fail closed across restart, including SUBMITTED and SUBMIT_UNCERTAIN outbound states. The PCE15.049 ledger prototype was memory-only.
-- [ ] Identify the **actually loaded** Firefox extension and preserve conversation ownership. Close G16 with live evidence.
-- [ ] Verify G26 independent exact-result sends (last verified 0/60), and G27 endurance runs (last verified 0/2). Do not count mock execution or static code scans.
-- [ ] Reconcile signed XPI, source/Client build provenance, release packaging and Firefox/Windows lifecycle acceptance.
-- [ ] Respect the GitHub-first five-operation checkpoint and twenty-operation review; no unverified audit credit. The last observed governance sync accepted PCE15 audit [45,49] and saw PCE15.050 unconsumed, but another agent may have progressed since then; inspect actual receipts before using an ordinal.
+## P1 — tested deployment and user-visible delivery
+- [ ] Determine GitHub/development/Client/loaded Firefox extension and backend identity. Reconcile G04 deployment drift, G16 unresolved originating-tab/loaded extension identity. A file existing on disk is not loaded-code attestation.
+- [ ] Build and verify a coherent signed/persistent five-file Firefox release, with rollback; avoid historical XPI backup contamination. Do not deploy automatically as part of archive changes.
+- [ ] Demonstrate independently witnessed real ChatGPT sends and receipts under exact identity/STOP/collision tests (last G26 **0/60**), then 12h and 24h endurance (G27 **0/2**). Static-marker unit tests and headless readiness do not count.
+- [ ] Test controlled browser, service and Windows restart/recovery behavior, preserve screenshot evidence, no duplicate sends and no user rescue under specified failures. Verify Chrome/Edge consumer compatibility where supported.
 
-## On hold by direct user instruction
+## P1 — standardize confirmed one-shot operator workflows
+- [ ] Record and verify the existing `Client/Relay/test/Run-Copy-Contents.cmd`, `Copy-Contents-To-ChatGPT.ps1`, and `Copy Contents.txt` without rewriting a working script. Source agent derives next PCE number by verified current series +1; no fixed successor; user requests launch explicitly; confirm posted user turn, not just new chat/Enter dispatched.
+- [ ] Prefer bounded scripted *machine actions* for directly requested UI tasks when evidence supports them; maintain focus/input/readback safeguards and explicit user control. **Do not** use this goal to restore unattended agent switching.
+- [ ] After separate authorization and source+test review, roll out retirement to the installed Client and positively attest that no legacy rotation timer or extension trigger remains loaded. Repository changes alone are not activation.
 
-- [ ] **PAUSED, do not execute or develop:** automatic new-agent / new-conversation rotation, watcher-driven switching, experimental replacement switching mechanism, and fallback agent handoff automation. A manual user-requested one-shot `Run-Copy-Contents.cmd` transfer is the only approved handoff for now.
+## P2 — operator experience and optional features
+- [ ] Improve HUD state labels, STOP, retry, incident/screenshot visibility and user-facing diagnostics; preserve successful existing capabilities.
+- [ ] Continue consumer one-click installation, governed source/Client sync, update safety and downstream user-requested workflows (e.g. job applications) as separately scoped projects.
 
-## Evidence/reference
-
-Historic `windows-relay/TASKS.md` at commit `24d4c2bad800f689ae4ad4d9c67b54e6c50e73e8` contains extensive prior PCE8/PCE9 task chronology, old statuses and rotation items. That archived state should not be relabeled 'current'. Open release blocker incidents: `docs/incidents/INCIDENT_2026-10-10T0250Z_PCE15_NONATOMIC_ACTION_CLAIM_AND_OWNER_GUARD_GAPS.md` and `docs/incidents/INCIDENT_2026-10-10T0304Z_PCE15_DEDUP_RETENTION_POST_EVICTION_REPLAY.md`.
-
-Before editing or executing, inspect the actual installed governance files and any more recent engineering actions. Do not replace a current in-progress agent's backlog merely because this document was published.
+## Governance and evidence
+- Preserve GitHub-first five-operation audits, twenty-operation reviews, issued-ID consumption and unique PCE ordinals. PCE16 starts at `PCE16.000`; `PCE15.050` was emitted and rejected, **not free to retry**. No GitHub Actions usage while credits unavailable.
+- **Permanent retirement:** Do not implement/test operation-count rotation, extension-driven new-agent navigation, UIA fallback transfers, scheduled agent watchers or the replacement switching project. Existing UIA/clipboard/tab tools are temporarily suspended **for agent switching only**, not removed from normal relay execution or recovery. Reference the dated policy `docs/policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md`.
+- Last verified product grade **F / BLOCKED**, 11/28; G16 unknown, G26 0/60, G27 0/2. New grades require new real evidence.
