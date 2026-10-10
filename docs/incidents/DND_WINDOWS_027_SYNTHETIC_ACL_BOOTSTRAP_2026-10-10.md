@@ -1,0 +1,15 @@
+# D&D Windows PR15.7 synthetic credential directory ACL bootstrap incident — 2026-10-10
+
+## Receipt and failure boundary
+Windows Relay operation `DND-WINDOWS-20261010-027-VALIDATED-SYNTHETIC-CREDENTIAL-STORE` was accepted and executed, then returned COMMAND_FAILED/exit 1 because its nested synthetic credential test exited 1. The nested traceback failed at first synthetic `ApiCredentialStore.add()`, entering `_locked` -> `_prepare` -> `winsec.protect_directory(self.path.parent)` -> `assert_private(path)`, raising `WindowsCredentialSecurityError('Windows credential ACL has unexpected entries.')`. No subsequent persistence, owner isolation, concurrent additions, update, delete or injected unsafe-file checks executed. The nested test output was truncated. Assistant's outer assert deliberately surfaced failed qualification, not a credential leak.
+
+## Distinguish from earlier passes
+Isolated helper `app/services/windows_credential_security.py` SHA256 `aabbdd834adcddc983ef8471b24a53dba42c61eb372ec08b7e900dbea1a71b49` passed temporary directory acceptance when its parent was created with default `Path.mkdir()` at operations 023/024. Actual store creates parent through `path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)`; behavior on Python 3.13 Windows may differ. One hypothesis is an extra explicit Administrators ACL entry left by special handling of `mode=0o700`. This hypothesis **must be verified on new disposable directories**; do not treat it as established fact or remove ACLs from an actual credential directory based on a guess. Previous evidence confirms normal Windows POSIX chmod bits do not establish privacy; directory fsync cannot be used unchanged.
+
+## Safety and rollback
+The failed store test used fake credentials under `TemporaryDirectory`, and the outer runner completed cleanup. No real secret, authoritative campaign database, bot runtime or deployment was targeted. Original candidate source archive SHA256 `0d0324d3b5fe9526d61285b071b699c4185760a398415c15b4c10aff6a75facc`; active D&D development branch `fix/windows-python313-utf8-20261010` at `6bcc567ab75b62c2870c99319dcfc550fdd7823d`. Isolated snapshot's prior op025 credential module SHA256 `a4ffbff503e6f98db6e237c8a47b2dea22b3cabf109fc274a9e887d99151eeff`; original was independently saved in `backups/security_portability_20261010_025/api_credential_service.py`. No copy, push, or merge is authorized from this failure.
+
+## Next experiment
+New operation 028 only: compare fresh disposable `mkdir(mode=0o700)` and default `mkdir()` ACL ACE role/flags before and after the helper's hardening path. Summarize trustee roles (USER, SYSTEM, BUILTIN_ADMINS, OTHER), not identity/SID text. Verify expected source hashes, protect canonical worktree, and cleanup. Once root cause proven, make **minimal snapshot-only** exact-change patch preserving fail-closed ACL checking and original rollback, then re-run synthetic store tests with a new unique ID. Do not replay 027.
+
+This is a task-scoped failure log saved to canonical `monag144/GPT-Windows-Relay/main` for audit; it does not change relay code or permit automated agent switching.
