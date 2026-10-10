@@ -9,8 +9,16 @@
 - The memory-only ledger/atomic-claim prototype in PCE15.049 was not deployed or proven durable. Never claim remediation until a reviewed fix and loaded-runtime acceptance exist.
 - Latest independently graded PCE15 product checkpoint: audit window [45,49] accepted for the subsequently attempted PCE15.050. That packet later returned `relay_owner_same_session_different_conversation` in PCE16, and its ordinal is consumed, not eligible for retry. Grade F / BLOCKED (11/28), G16 loaded Firefox identity UNKNOWN, G26 independent live sends 0/60, G27 endurance 0/2. Reconfirm actual running evidence before reporting newer status.
 - **Permanently retired:** all automatic agent/chat switching and replacement development. The only authorized transfer is an expressly requested one-shot existing `Run-Copy-Contents.cmd`, with the source engineer deriving current PCE series +1. See `docs/policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md` and the retirement bin `windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md`. Previous hold is historical. At the PCE ordinal limit, stop rather than auto-rotate.
-- Honor STOP/ARM, governance preflight, GitHub-first audit checkpoint cadence, and independent verification of all file mutations. The installed `consumer/control_harness.py` API must be inspected rather than assumed equal to GitHub source.
+- The current **operator HUD** uses START / STOP / RESTART / OFF / KILL; RETRY is present in the local development version only, and neither local variant has FORCE. Authenticated `/arm` remains an **internal backend permission/quiescence control**, not a HUD button. Honor STOP, governance preflight and GitHub-first audit checkpoints. The installed `consumer/control_harness.py` API must be inspected rather than assumed equal to GitHub source.
 - Do not infer browser extension loaded state, Windows scheduled-task state, Firefox signing, or production readiness from documentation or static code alone.
+
+## PCE16 runtime observations (2026-10-09 Pacific; user-provided read-only receipts)
+
+- PCE16.000: Client HUD SHA256 `363c3d55446df3e850ce53dc1c4def6ccaa1ff665126a5a41ff1d93b24cbc44e`; active Client worker SHA256 `dd43c9f50ab3a173e4c58ec33f5af59dacde252dbb25fc00cf0ff9bd6bdb5592` still carries retired auto-rotation logic; live installation has not been reconciled to GitHub main.
+- PCE16.001: development HUD supports RETRY, Client HUD does not; no FORCE. Local control harness still has retired rotation policy and is not GitHub-main-equivalent; dated roadmap absent locally.
+- PCE16.002: authenticated status returned PID **10684**, owner `browser`, 2 pending missions, internal `armed=true`, and stop/quiesce generation 11/11; controller returned `STATE=RUNNING PID=10684`. Exact HUD bindings confirmed five operational buttons.
+- PCE16.003: two **October 4 Chrome-only** queued mission IDs remain, not yet acknowledged or executed by these read-only operations; state contained **501 processed entries** with backend's historical >500 eviction logic still in Client source. This is not evidence of two executions of one command. Local content script has an internal `forceRecoveryPacketInspect()` without external FORCE trigger.
+- No source files, runtime state, browser windows or mission queues were mutated by PCE16.000–.003. This is a source/runtime snapshot, not proof the Firefox loaded extension matches a file on disk.
 
 ## History and evidence
 
