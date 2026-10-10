@@ -13,6 +13,10 @@
 7. [One-Click Go consumer guide](../guides/ONE_CLICK_GO_CONSUMER_GUIDE_2026-10-09.md) — user setup, with historical Firefox-compatibility inconsistency identified.
 8. [Document authority audit](../audits/WINDOWS_RELAY_DOCUMENT_AUTHORITY_AUDIT_2026-10-09.md) — exactly which misleading legacy documents were superseded and which still need migration.
 
+## HUD feature design (proposed, not shipped)
+
+- [Windows Relay HUD conversation controls — 2026-10-10](../design/WINDOWS_RELAY_HUD_CONVERSATION_CONTROLS_2026-10-10.md) — user-requested exact-conversation **FOCUS CHAT**, **SELECT CHAT / CLAIM–CONNECT** and visible **FORCE** button; requires STOP/owner/dedup gates, preserves five working Client buttons and prohibits automatic handoff. **Design only; no live Client changes.**
+
 ## More specific later evidence and live gates
 
 - [Script-only agent handoff](../policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md) — newer user directive **permanently retires automatic switching** and standardizes the existing CMD/PowerShell one-shot script. Supersedes the [historical temporary hold](../policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md); Git commit chronology resolves same-Pacific-date updates.
