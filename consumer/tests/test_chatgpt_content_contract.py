@@ -101,16 +101,15 @@ class ChatGPTContentContractTests(unittest.TestCase):
         self.assertIn("recoverDiscoveredPacket(p,'packet_changed_during_settle')",src)
         self.assertIn("setTimeout(()=>recoverLatestAssistant(),0)",src)
 
-    def test_service_worker_rotates_firefox_chat_every_100_operations(self):
+    def test_service_worker_never_rotates_chat_automatically(self):
         src=(ROOT/"windows-relay"/"extension"/"service_worker.js").read_text(encoding="utf-8-sig")
-        self.assertIn("GPT_RELAY_CHAT_ROTATION_100_V1",src)
-        self.assertIn("CHAT_ROTATION_EVERY=100",src)
-        self.assertIn("noteDeliveredOperation",src)
-        self.assertIn("GPT_ENGINEERING_ROTATION_TRIGGER_V1",src)
-        self.assertIn("type:'relay_chat_rotation_start'",src)
-        self.assertIn("title:'💻PC Engineering 9🔧'",src)
-        self.assertIn("session:'pce9.1'",src)
-        self.assertNotIn("chrome.tabs.update(tabId,{url:'https://chatgpt.com/'})",src)
+        self.assertIn("GPT_AGENT_SWITCHING_RETIRED_2026_10_09",src)
+        for retired in ("GPT_RELAY_CHAT_ROTATION_100_V1", "CHAT_ROTATION_EVERY",
+                        "noteDeliveredOperation", "GPT_ENGINEERING_ROTATION_TRIGGER_V1",
+                        "relay_chat_rotation_start", "pce9Handoff"):
+            self.assertNotIn(retired,src)
+        self.assertIn("checkAndClaimRelayOwner",src)
+        self.assertIn("callAction(m.packet)",src)
 
     def test_recovery_advice_has_secondary_observer_contract(self):
         src=(ROOT/"windows-relay"/"extension"/"content.js").read_text(encoding="utf-8-sig")
