@@ -19,3 +19,8 @@ Do not replay the rejected ID. A documented earlier authenticated `owner_claim: 
 
 ## Development-log update
 D&D migration checkpoint: 205/205 unit tests pass on Windows; relay ownership is the only presently observed blocker for agent-driven commands. Transport acceptance, authenticated ownership, running Client identity and live game deployment remain unverified. Next safe step: one explicit claimed read-only environment probe with a unique ID; inspect result before any mutation.
+
+## Resolution and verified acceptance (2026-10-10 20:10:36–20:10:37 UTC)
+Authenticated read-only action `DND-WINDOWS-20261010-002-CLAIM-READONLY` on session `dnd-windows-migration` included `owner_claim: true` and returned `[GPT_WINDOWS_RESULT]` `status=OK`, `exit_code=0`, `duration_ms=1306`, cwd `C:\Users\Craig Morgan\Downloads\Dev\DnD-RP-Bot`, Python `3.13.15`, saved result path under local GPTWindowsRelay results. User supplied exact result receipt. This establishes **one accepted Windows command with explicit ownership claim**, not generalized delivery reliability, installed-code provenance or exact-once safety.
+
+The first attempt `DND-WINDOWS-20261010-001-ENV-PROBE` remains a rejected transport packet and was not replayed. The approved claim path restored this conversation's ability to execute, with no observed database or source mutation. The previous development-log statement that transport acceptance was pending is historical and superseded by this receipt. Next scope: D&D repository checkout read-only examination, not engineering changes to the relay. This DND namespace does not advance or bypass PCE-series ordinals or retired automatic agent switching.
