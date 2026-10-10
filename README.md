@@ -6,7 +6,7 @@ Windows relay engineering, documentation, testing, issues, and commits belong ex
 
 Local source checkout target: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`. Deployed runtime: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`. The deployed tree is not a replacement for the source checkout.
 
-Start at [`docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md`](docs/index/INDEX_2026-10-07T2034Z_WINDOWS_RELAY_SOURCE_OF_TRUTH.md).
+**Documentation:** [Windows Relay documentation index — 2026-10-09](docs/index/WINDOWS_RELAY_DOCUMENTATION_INDEX_2026-10-09.md). This is the newer date-only reading directory; earlier timestamped indexes remain historical evidence. Root `README.md` stays as a conventional GitHub navigation alias.
 
 ## Repository scope
 

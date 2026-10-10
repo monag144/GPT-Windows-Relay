@@ -1,5 +1,7 @@
 # Windows Relay source-of-truth index — 2026-10-07T2034Z
 
+> **Historic October 7 index.** For maintained guidance use [Windows Relay documentation index — 2026-10-09](WINDOWS_RELAY_DOCUMENTATION_INDEX_2026-10-09.md). The new index reflects the user's simplified **descriptive title + Pacific-local date** convention. The newer user-requested *manual agent switching only* hold remains in force. Historical claims of automatic rotation, durable replay protection, or 'current status' below are not independently authoritative.
+
 ## Canonical repository
 
 - GitHub: `monag144/GPT-Windows-Relay`

@@ -1,90 +1,15 @@
-GPT ONE-CLICK GO — CONSUMER 1.1.0
+ONE-CLICK GO CONSUMER GUIDE POINTER — 2026-10-09
 
-WHAT THE USER DOES
-1. Unzip the package or clone/fork the repository.
-2. Double-click GO.bat.
-3. In the main GUI, choose the browser you want One-Click Go to use.
-4. Click Setup Browser once. One-Click Go configures the selected browser integration automatically and opens ChatGPT.
-5. Sign in once in that browser's isolated One-Click profile if needed.
-6. If several ChatGPT tabs are open there, activate the tab you want.
-7. Once the GUI reports CONNECTED, describe the mission and click GO (or press Ctrl+Enter).
-8. Click Update in the GUI whenever you want the latest consumer build.
+This path is retained for packaging and existing links. Read:
+docs/guides/ONE_CLICK_GO_CONSUMER_GUIDE_2026-10-09.md
+docs/index/WINDOWS_RELAY_DOCUMENTATION_INDEX_2026-10-09.md
 
-BROWSER OWNERSHIP
-- The browser is supplied by the user. One-Click Go does not install or replace it.
-- Chromium-family browsers are supported through a local MV3 extension:
-  Microsoft Edge, Google Chrome, Brave, Vivaldi, Chromium, Opera, plus a custom Chromium-compatible .exe.
-- One-Click Go verifies the extension bridge before GO is enabled; merely starting a browser is not considered success.
-- Setup Browser is a zero-touch consumer flow: it prepares the local extension, installs/loads it using the supported browser automation path, opens ChatGPT, and verifies the relay connection.
-- Google Chrome uses a local DevTools setup channel with an ephemeral localhost debugging port to load the unpacked extension into the dedicated One-Click session. Because branded Chrome does not persist that unpacked load, One-Click keeps that isolated session alive; if the user closes it, Open ChatGPT transparently configures the next isolated session again.
-- Other supported Chromium-family browsers use their automatic extension-loading path and are also connection-verified.
-- The consumer UI does not require Developer mode, Load unpacked, Explorer navigation, or copying an extension folder path.
-- Browser choice is saved locally.
-- Each browser gets its own isolated One-Click profile and its own generated extension identity/configuration.
-- A mission is bound to the browser selected in the GUI.
-- Inside that browser, the most recently active connected ChatGPT tab receives the mission.
-- This prevents two different connected browsers from racing for the same targeted mission.
-- Firefox is detected but remains disabled in this release because normal Firefox requires a signed add-on for persistent installation. Temporary/unsigned loading is not treated as consumer-ready.
+Quick start: launch consumer/GO.bat from a verified Windows consumer checkout, choose the browser in the app, run Setup Browser, sign into ChatGPT when needed, and verify the app reports a connected state before starting a mission.
 
-DEPENDENCIES
-- Browser: user-supplied.
-- Python: automatically detected or provisioned.
-- Preferred automatic Python installation uses Windows Package Manager when available.
-- If winget is absent, bootstrap downloads the pinned official Python installer from python.org and verifies its SHA-256 before installing.
-- An isolated virtual environment is created under runtime\.venv.
-- tkinter and required Python standard-library modules are verified.
-- Third-party Python packages: NONE.
-- requirements.txt is intentionally empty except for documentation comments.
-- PowerShell is used only for Windows bootstrap/runtime supervision and is part of supported Windows installations.
-- Packaged users do NOT need Git for updates.
+HISTORICAL FIREFOX INCONSISTENCY:
+The old README said Firefox was disabled until an add-on was signed. The tracked consumer/release.json separately specifies automatic temporary Firefox setup. Neither proves the actual running browser or a signed persistent Firefox release; inspect installed runtime evidence.
 
-SELF UPDATE
-- The Update button lives in the main GUI.
-- Packaged installs update directly from the configured GitHub repository/branch using Python's standard library; Git is not required.
-- The updater preserves the local virtual environment and generated per-browser relay credentials/configuration.
-- Source checkouts/forks update from their own current Git origin and branch using fast-forward-only pull.
-- Source updates refuse to overwrite a dirty checkout.
-- After an update, the GUI offers to restart One-Click Go.
+AGENT SWITCHING: automatic chat/agent switching methods are on hold. Existing user-requested one-shot Run-Copy-Contents.cmd only.
 
-HOW MISSION TARGETING WORKS
-GUI-selected browser
-  -> browser-specific One-Click extension
-  -> most recently active ChatGPT tab in that browser
-  -> mission delivery
-  -> ChatGPT response
-  -> normal GPT Windows Relay action/result automation
-
-WHAT GO.BAT DOES
-- Ensures Python 3.10+ with tkinter exists.
-- Creates/verifies the isolated runtime environment.
-- Installs any future declared requirements (currently zero).
-- Creates/loads the localhost relay token.
-- Starts/verifies the local relay.
-- Launches the main GUI directly.
-- It does NOT choose or install a browser.
-
-SECURITY NOTES
-- The relay listens on 127.0.0.1 only and uses a random local token.
-- Base64 is transport encoding, not encryption.
-- The relay is powerful when armed: ChatGPT can execute commands as the signed-in Windows user.
-- Browser profiles and generated extension config remain local.
-- The consumer package does not include the Workday/job-application engine.
-
-DEVELOPERS / FORKS
-- Consumer release metadata is in release.json. The GUI title shows both semantic version and release revision (for example, 1.1.0 r10).
-- A fork can change repository/branch there for packaged self-updates.
-- A Git checkout's Update button follows that checkout's own origin/current branch.
-- Run build-package.ps1 to create dist\GPT-OneClick-Go.zip.
-- Run consumer_app.py --layout-probe on Windows to verify GO and Update stay visible.
-
-
-RELAY RENDERING RELIABILITY
-- The first mission delivered to ChatGPT automatically includes the canonical Windows relay sandwich contract.
-- Every browser-visible Windows relay result automatically ends with:
-  Reply to this with the sandwich technique
-- Any GPT_WINDOWS_ACTION must be emitted in one final assistant response as:
-  visible prose header -> bare Markdown fence -> action envelope/JSON only -> visible prose footer.
-- Language-tagged fences and commentary/progress relay packets are prohibited because they have caused folded/inaccessible relay packets in the ChatGPT client.
-- Keep relay packets compact; use bounded local steps instead of giant inline scripts.
-
-- The Windows GUI is single-instance: repeated GO.bat launches or accidental manual launches do not create duplicate control windows.
+Previous detailed Consumer 1.1.0 README is retained by Git history:
+https://github.com/monag144/GPT-Windows-Relay/blob/24d4c2bad800f689ae4ad4d9c67b54e6c50e73e8/consumer/README.txt

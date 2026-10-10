@@ -1,5 +1,7 @@
 # Documentation structure policy — 2026-10-07T2034Z
 
+> **Superseded date-format rule:** the user subsequently requested **descriptive title + Pacific-local calendar date, with no time in filename or title**. Apply [Document titles and date precedence — 2026-10-09](DOCUMENT_TITLES_AND_DATE_PRECEDENCE_2026-10-09.md) to new maintained documents. The earlier UTC minute-format instructions below remain historical context only; existing dated records are not retroactively renamed.
+
 ## Goal
 
 Make the repository easy for a lazy or stateless agent to browse without guessing which file is newest or authoritative.
