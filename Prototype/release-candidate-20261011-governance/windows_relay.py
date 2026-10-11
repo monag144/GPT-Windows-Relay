@@ -174,11 +174,19 @@ class State:
             self._mutate_and_save(mutate)
             return generation
     def bind_conversation_owner(self, owner):
-        if not isinstance(owner,dict) or not isinstance(owner.get('conversation_key'),str) or not isinstance(owner.get('session'),str):
+        if (not isinstance(owner,dict) or not isinstance(owner.get('conversation_key'),str)
+            or not owner['conversation_key'].startswith('https://chatgpt.com/')
+            or not isinstance(owner.get('session'),str) or not owner['session']
+            or type(owner.get('tab_id')) is not int or owner['tab_id']<=0):
             raise RelayError('conversation_owner_invalid')
         with self.lock:
-            self.data['conversation_owner']={'conversation_key':owner['conversation_key'],'session':owner['session'],'tab_id':owner.get('tab_id'),'bound_at':now(),'authorization':'operator'}
-            self.save()
+            before=copy.deepcopy(self.data)
+            try:
+                self.data['conversation_owner']={'conversation_key':owner['conversation_key'],'session':owner['session'],'tab_id':owner['tab_id'],'bound_at':now(),'authorization':'operator'}
+                self.save()
+            except Exception:
+                self.data=before
+                raise
 
     def ack_browser_quiesced(self,generation):
         if type(generation) is not int or generation<=0: return False
@@ -781,7 +789,7 @@ def config(path:Path):
 
 class Server(ThreadingHTTPServer):
     daemon_threads=True
-    def __init__(self,addr,token,state): super().__init__(addr,Handler); self.token=token; self.state=state
+    def __init__(self,addr,token,state,operator_token=None): super().__init__(addr,Handler); self.token=token; self.operator_token=operator_token; self.state=state
     def handle_error(self,request,client_address):
         et,ev,_=sys.exc_info()
         if isinstance(ev,(BrokenPipeError,ConnectionResetError,ConnectionAbortedError,OSError)):
@@ -883,7 +891,8 @@ class Handler(BaseHTTPRequestHandler):
                 print(f'ARM_STATE_CHANGE requested={requested} origin={self.headers.get("Origin","")[:120]} user_agent={self.headers.get("User-Agent","")[:160]}',flush=True)
                 generation=self.server.state.set_armed(requested); return self.sendj(200,{'ok':True,'armed':requested,'stop_generation':generation})
             if request_path=='/owner-bind':
-                if p.get('operator_authorized') is not True: raise RelayError('operator_authorization_required')
+                presented=self.headers.get('X-GPT-Windows-Relay-Operator-Token','')
+                if not self.server.operator_token or not secrets.compare_digest(presented,self.server.operator_token): raise RelayError('operator_authorization_required')
                 self.server.state.bind_conversation_owner(p.get('owner'))
                 return self.sendj(200,{'ok':True,'owner_bound':True})
             if request_path=='/browser-event':
@@ -933,7 +942,8 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--config',type=Path,default=cfg_dir()/'bridge.json'); ap.add_argument('--state-dir',type=Path,default=state_dir()); sub=ap.add_subparsers(dest='mode',required=True); sub.add_parser('server'); sub.add_parser('stdin'); a=ap.parse_args(); st=State(a.state_dir/'state.json')
     if a.mode=='stdin': print('GOVERNANCE_BLOCKED: authenticated HTTP transport and operator-bound conversation required'); return 3
-    c=config(a.config); s=Server(('127.0.0.1',c['port']),c['token'],st); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — {"ARMED" if st.armed else "DISARMED"}',flush=True)
+    operator_token=os.environ.get('GPT_WINDOWS_RELAY_OPERATOR_BIND_TOKEN','').strip() or None
+    c=config(a.config); s=Server(('127.0.0.1',c['port']),c['token'],st,operator_token); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — {"ARMED" if st.armed else "DISARMED"}',flush=True)
     try: s.serve_forever(.25)
     except KeyboardInterrupt: pass
     finally: s.server_close()

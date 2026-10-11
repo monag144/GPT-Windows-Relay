@@ -32,4 +32,18 @@ class CandidateIntegration(unittest.TestCase):
    with urllib.request.urlopen(req) as r: self.assertEqual(r.status,200)
    self.assertEqual(self.calls,['PCE16.041'])
   finally: srv.shutdown(); srv.server_close()
+ def test_owner_bind_requires_separate_operator_secret(self):
+  token='t'*40; operator='o'*40; srv=M.Server(('127.0.0.1',0),token,self.s,operator); thread=threading.Thread(target=srv.serve_forever,daemon=True); thread.start()
+  try:
+   body=json.dumps({'operator_authorized':True,'owner':OWNER}).encode(); url='http://127.0.0.1:%d/owner-bind'%srv.server_address[1]
+   ordinary=urllib.request.Request(url,data=body,method='POST',headers={'Content-Type':'application/json','X-GPT-Windows-Relay-Token':token})
+   with self.assertRaises(urllib.error.HTTPError): urllib.request.urlopen(ordinary)
+   approved=urllib.request.Request(url,data=body,method='POST',headers={'Content-Type':'application/json','X-GPT-Windows-Relay-Token':token,'X-GPT-Windows-Relay-Operator-Token':operator})
+   with urllib.request.urlopen(approved) as r: self.assertEqual(r.status,200)
+   self.assertEqual(self.s.data['conversation_owner']['conversation_key'],OWNER['conversation_key'])
+  finally: srv.shutdown(); srv.server_close()
+ def test_owner_bind_rolls_back_on_persistence_failure(self):
+  old=dict(self.s.data); original=self.s.save; self.s.save=lambda: (_ for _ in ()).throw(OSError('disk'))
+  with self.assertRaises(OSError): self.s.bind_conversation_owner({'conversation_key':'https://chatgpt.com/c/new','session':'pce16.041','tab_id':8})
+  self.assertEqual(self.s.data,old); self.s.save=original
 if __name__=='__main__': unittest.main()
