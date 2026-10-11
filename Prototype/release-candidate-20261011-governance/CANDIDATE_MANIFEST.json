@@ -1,0 +1,31 @@
+{
+  "label": "Windows Relay governance release candidate",
+  "status": "STAGED_ONLY",
+  "installed_runtime_replacement": "windows-relay/runtime/windows_relay.py",
+  "components": [
+    "windows_relay.py",
+    "candidate_governance.py",
+    "governance_evidence.py",
+    "governance_dispatch_adapter.py"
+  ],
+  "governance": {
+    "audit_commit": "fd0c1ba93fb219a6d399435da19896fdda1052a2",
+    "audit_blob": "1235f2af0c1fcac6efc6a6a3d2c04f3486f2afb4",
+    "review_blob": "0f6143d09dfd16364a6233050a746eb1dfe3634e",
+    "next_ordinal": "PCE16.041",
+    "ledger_required": "PCE16.000-PCE16.040"
+  },
+  "extension": {
+    "id": "gpt-windows-relay@local",
+    "version": "0.3.17",
+    "path": "extension-persistent",
+    "files": {
+      "manifest.json": "85418070F6C0CF3249844A88E868B3BB79F31F1D9077EC39D024AC3503585073",
+      "service_worker.js": "38F02BEB11354F01DB6DCB46398BF8DFB60A77BEA781B85078F7C85C117CC57D",
+      "content.js": "5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A",
+      "popup.html": "0CC43EECACA320AE4E100BBC3A4CD72CF8C04B776183AE8CFECCA5B25E3B77DA",
+      "popup.js": "41F217ADB067482E5B2572CDB68C233AF4596AB54AB7EDC10224415A0F0FD415"
+    }
+  },
+  "activation": "Requires separate review; no deployment or restart performed"
+}

@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "GPT Windows Relay",
+  "version": "0.3.17",
+  "description": "Bridges explicit ChatGPT Windows action packets to the local Windows relay.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8766/*",
+    "https://chatgpt.com/*",
+    "http://127.0.0.1:8767/*"
+  ],
+  "background": {
+    "scripts": [
+      "service_worker.js"
+    ],
+    "service_worker": "service_worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "GPT Windows Relay",
+    "default_popup": "popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "gpt-windows-relay@local",
+      "strict_min_version": "128.0"
+    }
+  }
+}
