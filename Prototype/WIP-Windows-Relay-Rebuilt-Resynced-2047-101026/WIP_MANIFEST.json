@@ -1,0 +1,89 @@
+﻿{
+    "label":  "Windows Relay — Rebuilt and Resynced — 2047 101026",
+    "status":  "WIP",
+    "base_commit":  "728295f72f5c3463a8abf86a36c07be9f7418734",
+    "source":  "monag144/GPT-Windows-Relay/main",
+    "extension_version":  "0.3.17",
+    "gecko_id":  "gpt-windows-relay@local",
+    "deployment_status":  "not deployed",
+    "files":  {
+                  "client/firefox_adapter.py":  {
+                                                    "sha256":  "DC2C64C7A17B2E3D18DA2385C77FFB1ED4ACBF55D87ABDBF0E5E8668797CF8FD",
+                                                    "bytes":  12186
+                                                },
+                  "client/firefox_tab_adapter.ps1":  {
+                                                         "sha256":  "348A8AE41A2FBFD77BC7E1E7C33DF5560F915EFBA52712C9880BFEE9D14A9FD4",
+                                                         "bytes":  33182
+                                                     },
+                  "client/hud.py":  {
+                                        "sha256":  "363C3D55446DF3E850CE53DC1C4DEF6CCAA1FF665126A5A41FF1D93B24CBC44E",
+                                        "bytes":  19714
+                                    },
+                  "client/relay-control.ps1":  {
+                                                   "sha256":  "79264E06AE53F54BFE5F43CAC6664F967C32244FFC1201F46F280A4D6E9850FC",
+                                                   "bytes":  8519
+                                               },
+                  "client/relay-watchdog-loop.ps1":  {
+                                                         "sha256":  "38B5FE08D8230658C9153925FB7D4F8CC3AF846CB2AA447CF6837B850B748DDE",
+                                                         "bytes":  2696
+                                                     },
+                  "client/relay-watchdog.ps1":  {
+                                                    "sha256":  "CD9DE18293C02D70E4B21FEC97B3465C0E1C3A2169F71CA0A76D67444A90D3D0",
+                                                    "bytes":  940
+                                                },
+                  "client/resume_profile.py":  {
+                                                   "sha256":  "9E89EFD7407BBA479557FFCCB09B3C1232666FEB8A518AF2DF88153233989BAE",
+                                                   "bytes":  6596
+                                               },
+                  "client/run-control.ps1":  {
+                                                 "sha256":  "A5CC84EF78D03CBF87A5C5CDAE3800788DFD9347650FCE1799764C4DC7512970",
+                                                 "bytes":  2025
+                                             },
+                  "client/run.ps1":  {
+                                         "sha256":  "5C60C17A7869C1534CA33087EF58FD8FC8F1F7C2629D21F7ECBC71C2FEC40A0A",
+                                         "bytes":  2024
+                                     },
+                  "client/windows_outbound_worker.py":  {
+                                                            "sha256":  "1B73664C03F956EAEA5EDF875C477C2F10898A4C13F2CE95596805FA240DC347",
+                                                            "bytes":  4963
+                                                        },
+                  "client/windows_relay.py":  {
+                                                  "sha256":  "3AD004FDF3D22AA9B4927B369D17A5313E27D3FB29D40000805CA3860372B1DA",
+                                                  "bytes":  51148
+                                              },
+                  "client/windows_tools.py":  {
+                                                  "sha256":  "82F6E317E9E4C1D85A62D82C0150434E26A9C55E941ECE7535353DC3D8D7DDA1",
+                                                  "bytes":  22508
+                                              },
+                  "client/windows_workflow.py":  {
+                                                     "sha256":  "08AE202058745FC37573628DA38B102E3D8C4F7D73184D793FE4E523D7FF0C3B",
+                                                     "bytes":  8153
+                                                 },
+                  "extension-persistent/content.js":  {
+                                                          "sha256":  "5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A",
+                                                          "bytes":  90753
+                                                      },
+                  "extension-persistent/manifest.json":  {
+                                                             "sha256":  "85418070F6C0CF3249844A88E868B3BB79F31F1D9077EC39D024AC3503585073",
+                                                             "bytes":  937
+                                                         },
+                  "extension-persistent/popup.html":  {
+                                                          "sha256":  "0CC43EECACA320AE4E100BBC3A4CD72CF8C04B776183AE8CFECCA5B25E3B77DA",
+                                                          "bytes":  867
+                                                      },
+                  "extension-persistent/popup.js":  {
+                                                        "sha256":  "41F217ADB067482E5B2572CDB68C233AF4596AB54AB7EDC10224415A0F0FD415",
+                                                        "bytes":  1088
+                                                    },
+                  "extension-persistent/service_worker.js":  {
+                                                                 "sha256":  "DF5943F14A2B808A0FD73AFF001EAAF4361D1167D590D83584F13FB402611555",
+                                                                 "bytes":  16837
+                                                             }
+              },
+    "limitations":  [
+                        "Snapshot preserves installed Client source and five-button HUD components.",
+                        "Runtime identity is disk-verified only; in-memory identity is not asserted.",
+                        "PCE16.035 and PCE16.036 are not replayed.",
+                        "Not a proven stable production release."
+                    ]
+}

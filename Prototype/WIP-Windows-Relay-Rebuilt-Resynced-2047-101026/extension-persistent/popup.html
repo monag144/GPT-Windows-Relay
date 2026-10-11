@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body{font:14px system-ui;min-width:290px;padding:14px;background:#111;color:#eee}
+h3{margin:0 0 12px}button,input{box-sizing:border-box;width:100%;padding:9px;margin-top:9px}
+#s{padding:10px;border-radius:8px;background:#222}small{color:#aaa}#pairing{margin-top:12px;padding-top:8px;border-top:1px solid #333}
+</style></head><body>
+<h3>GPT Windows Relay</h3><div id="s">Checking...</div>
+<button id="b" disabled>Arm relay</button>
+<div id="pairing"><input id="token" type="password" autocomplete="off" placeholder="Relay pairing token">
+<button id="pair">Save pairing token</button><button id="unpair">Clear pairing</button></div>
+<p><small>Server starts ARMED and returns ARMED after recovery. Use Disarm relay to pause command execution.</small></p>
+<script src="popup.js"></script></body></html>
