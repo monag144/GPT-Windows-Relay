@@ -90,3 +90,29 @@ Codex identified authoritative existing development Git checkout `C:\Users\Craig
 Other paths: working live Client `C:\Users\Craig Morgan\Downloads\Dev\GPT\Client\Relay` (untouched), offline packages under checkout `bin/`, and pre-existing `C:\Users\Craig Morgan\Downloads\Dev\GPT-Windows-Relay-Consolidation-2026-10-10` with **access denied**. Do not move, merge, overwrite, take ownership of, or delete inaccessible directory on assumption; earlier PCE16 offline artifacts may be inside. Codex did not relocate checkout, recreate Git repo, copy candidates, or alter live service. In-place consolidation under existing checkout versus an approved relocation to a workspace root with sibling `Main-Build/`, `Prototype/`, `Backup/` must be decided before moving anything. Prefer no new top-level build directories and no parallel Git checkouts; keep live Client outside workspace. `100` isolated contract tests and JS syntax passes were Codex-reported and are **not** loaded-runtime acceptance.
 
 **Remaining gates unchanged:** verify actual loaded Firefox extension version/ID/runtime bytes, test scanner and result recognition in isolated Firefox runtime with durable no-replay/no-STOP-bypass policy, separately approve any working Client activation; maintain PCE16.035 without native receipt on hold. Resolve read-only FETCH_HEAD through a non-destructive read-only attribute/ACL diagnosis before modifying Git metadata; no `git reset --hard`, forced pull, cleaning untracked files, or speculative access-control fixes.
+
+## Firefox about:debugging live observation: two temporary consumer extensions — 2026-10-10
+
+**Evidence source:** Operator provided **two contemporaneous screenshots** of Firefox `about:debugging#/runtime/this-firefox` (Firefox 157.0.1) and the exact JSON from the **lower extension's own Manifest URL**. This is direct UI/runtime-registry evidence, unlike previous disk-only inspections. It does not establish running JavaScript byte hashes. The prior deduced absence of a visible add-on in on-disk Firefox profile is unsurprising because these add-ons are temporary/debug instances.
+
+### Simultaneously loaded temporary extensions
+
+| Screenshot entry | Firefox temporary source location shown | Manifest/identity observed | Background state |
+| --- | --- | --- | --- |
+| Upper | `C:/Users/Craig%20Morgan/Downloads/Dev/GPT/Client/Relay/extension/` | **GPT One-Click Go Relay**, unknown upper version; temporary ID ending `@temporary-addon` (first reported prefix `af75f123...`) | **Running** |
+| Lower | `C:/Users/Craig%20Morgan/Downloads/Dev/GPT-Windows-Relay-Main-Build/windows-relay/exte...` | **GPT One-Click Go Relay**, verified lower manifest `version:1.1.0` and script paths `content.js` and `service_worker.js`; temporary ID ending `@temporary-addon` (prefix `ff61994b...`) | **Running** |
+
+The operator opened the lower instance's `moz-extension://...` manifest. It contains `name: GPT One-Click Go Relay`, `version: 1.1.0`, host permissions localhost 8766/8767 and `chatgpt.com`, content script `content.js`, background service worker `service_worker.js`, action popup. It is precisely the consumer `windows-relay/extension/` **manifest flavor**, not the `extension-persistent/` manifest. **Neither of the two visible temporary addon entries is the intended `GPT Windows Relay` v0.3.17 with Gecko ID `gpt-windows-relay@local`.** Not yet proven whether any separate non-temporary installed extension exists elsewhere in Firefox, though previous profile inventory found none.
+
+Operator's HUD at observation: **STOPPED — operator requested stop**, `Firefox ACTIVE / content_script_started` recently, last native action `WINDOWS-GOVERNANCE-VERIFIED-AUDIT-SYNC-030-034-20261010 / OK`. Treat STOP as authoritative; do not assume stopped UI means unloaded background scripts, nor running backgrounds mean authorized shell execution.
+
+**Interpretation:** Two independent extension instances with content-script matches on the same ChatGPT origin and access to the same localhost relay *can plausibly duplicate discovery/result delivery and interfere with owner/acknowledgment handling*. This is a strong configuration concern, **not yet demonstrated as the sole root cause** of earlier result-turn watchdog misses. The upper version and both exact loaded JS bytes remain unverified.
+
+### Correct production target and gated remediation
+
+- **Primary engineering product:** `GPT Windows Relay`; candidate variant `windows-relay/extension-persistent` v0.3.17, Gecko ID `gpt-windows-relay@local`. Its five files are source-equivalent to canonical GitHub main after accounting for Windows CRLF, with Codex reported offline 100/100 isolated tests.
+- **Future consumer product:** `GPT One-Click Go Relay` v1.1.0, not the primary runtime and not approved for release.
+- **Plan only:** capture both temporary identities/version/locations, exact add-on ownership and which scripts are active; inventory browser/backend delivery ledger/owner and ensure STOP, then prepare a reversible, one-owner **two-to-one extension cutover** (both consumer temporary entries must be prevented from polling ChatGPT before the primary persistent version begins). Consider existing Firefox temporary-add-on lifecycle, Gecko ID collision and restart limitations. Do not silently remove one while leaving another overlapping.
+- **Required before any activation:** user approves distinct steps for browser extension disable/remove and new candidate install, rollback captures, acceptance tests for result-turn recognition, scanner reacquire, zero duplicate action execution, STOP, conversation owner and PCE16.035 no-replay. No state clearing, retry, or PCE16.035 reuse.
+
+No GitHub source, installed Client, Firefox or backend altered by this incident recording. **Codex task is to produce the controlled cutover plan, not execute it.**
