@@ -41,3 +41,28 @@ Operator requested logging and waiting for **Codex's next return**. A follow-up 
 
 **HOLD:** no Client mutation, extension reload, Firefox navigation, backend/HUD restart, queue/durable-ledger reset, STOP override, delivery resend, PCE16.035 reissue, production promotion or new PCE ordinal in this logging step. The running Client may continue in its last verified state; no background monitoring or autonomous Codex continuation has been initiated by this record. Await actual subsequent Codex result, then assess candidate evidence and approval gate.
 
+## Codex follow-up: offline five-file candidate, 100 tests and canonical GitHub mismatch — 2026-10-10
+
+**Provenance split:** The operator pasted the next Codex CLI report. Codex asserted candidate creation and local isolated test results; *we have not read candidate bytes or its absolute location directly*. Separately, GitHub connector fetched exact `monag144/GPT-Windows-Relay/main` at commit `6292e12f2cd7b6803e1d79a25d02eb8238a88f75` and independently computed SHA-256 over the fetched UTF-8 source content (hash implementation passed SHA-256 `abc` test vector). GitHub blob IDs are included below; avoid conflating the two sources.
+
+**Codex report:** Offline directory `gpt-windows-relay-extension-candidate-20261010` contains a five-file copy from the local development checkout. No backend/Client/Firefox/HUD changes, state clearing, re-sends or deployment reported. `node --check` passed on candidate content and worker. After adjusting `PYTHONPATH=windows-relay`, **100 isolated Python tests in 4.123 seconds returned OK** (prior two import errors were harness configuration, not product-test failures). A loaded Firefox extension ID, XPI, profile and active source hash remain **UNKNOWN**. Development root, extension and persistent content.js reportedly match each other; the *worker and manifest* in temporary and persistent variants do not match, and the installed Client has its own older set. The current candidate resembles the temporary `extension/` variant, **not** a verified persistent Firefox release.
+
+### Canonical GitHub versus Codex-provided candidate hashes
+
+| Component (temporary `windows-relay/extension/`) | Canonical GitHub-main SHA-256 calculated from fetched text | Canonical Git blob | Codex-reported local candidate SHA-256 | Result |
+| --- | --- | --- | --- | --- |
+| `content.js` | `df85c7bc440242e7595062ea0e640fcb4c369d3f6fe52128d614f92a2d83a12a` | `c057848e8be532e4eee505b53f059a702ad73175` | `5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A` (90,753 B) | **DIFFERENT** |
+| `service_worker.js` | `3c49e1bbeac09b2e805eda6e997b7a365366d4c217b98fa830db9048c84ce26e` | `cc73d77dafdcaa2b2c5e2c097a2b6aada0c75ae5` | `AE154F88074A4747E1F0A61D7D0D1E1DD6206D9B3B16FDD19C95E15886DC76A5` (20,626 B) | **DIFFERENT** |
+| `manifest.json` | `79cb218cdcb9f8cdc4a6395f31ba3bfbb5667b0a02574e26c8f26f822b8110cf` | `5fcca1ff1bb5f75acb7351724e307c487e848789` | `C7CCF32333A8D62BF56A421C6392F139A4B32E678BA072B1CFBBAE92F74719DE` (833 B) | **DIFFERENT** |
+| `popup.js` | `648b7f51c56579902ec4a2cfdf43cbea1874bb9b54f1896f47e5b15fecf98c18` | `7e859605c319606125c023c9a419d79589031f80` | `0C7F97350BCEB92DC27A7B0748AE5155A0AA4E06DE69BD5CDC1F6E682F69E7F5` (513 B) | **DIFFERENT** |
+| `popup.html` | `47f01c17fed5b3d932d49ff624dbb0f97b21c110b4f9821eac7cd816932de18e` | `e9f5231580805dde899a8bea994a152b43374e2a` | `46B38EA815FDD89952134F89C1928A272D7998D5057F2DE11134A05BAC974B7A` (571 B) | **DIFFERENT** |
+
+The hash differences establish **non-parity**, not which checkout is more correct. The candidate's local SHA-256 values and file sizes are **Codex reports**, not direct candidate reads. GitHub main was independently read for all five files; the text-based comparison is at GitHub commit `6292e12`, not a speculative latest release.
+
+**Important flavor mismatch:** GitHub `windows-relay/extension/manifest.json` is `GPT One-Click Go Relay` version `1.1.0`, using `alarms` permission and no explicit `browser_specific_settings.gecko.id`. The distinct `extension-persistent/manifest.json` is `GPT Windows Relay` version `0.3.17`, with Gecko ID `gpt-windows-relay@local`, and uses a different worker/popup. These are **distinct application variants**, not five interchangeable files. Review the actual Firefox deployment target and exact manifest before selecting source artifacts. Do not automatically substitute the temporary extension for the persistent one.
+
+### Release gate and next Codex instruction
+
+**Candidate status: OFFLINE EXPERIMENT ONLY / RELEASE BLOCKED.** No authorization for Client copy, current Firefox activation/reload, persistent addon identity change, STOP state changes, backend or HUD restart, queue/result deletion, PCE16.035 reissue or automatic recovery.
+
+Codex must now (a) obtain a **fresh pinned GitHub main** tree or compare against the independently established GitHub SHA-256/blob table, (b) produce an exact semantic diff of all five candidate files and identify changes that are intentional vs stale or divergent, (c) choose and explain temporary versus persistent Firefox extension flavor and compatible manifest/worker/popup, (d) demonstrate packaged artifact reproducibility and target extension identity in an isolated profile (without touching real runtime), (e) test against actual ChatGPT DOM variants without recording user chat contents, and (f) report loaded Firefox identity proof, safe rollback and remaining blockers. Treat 100 offline test passes as preparatory, not production acceptance. Do not consume PCE16.035 or any successor ordinal in this incident-log update.
