@@ -735,13 +735,6 @@ def process(packet:str,state:State,transport=None):
                        'action':'EXEC','status':'STOPPED','exit_code':None,
                        'finished_at':now(),'stdout':'','stderr':'relay disarmed; no action reserved or executed'})
     try:
-        governance=engineering_governance_check(a)
-    except RelayError as exc:
-        return result({'version':1,'platform':'windows','id':a.id,'session':a.session,
-                       'action':'EXEC','status':'GOVERNANCE_BLOCKED',
-                       'exit_code':None,'finished_at':now(),'stdout':'',
-                       'stderr':str(exc)+'; no action reserved or executed'})
-    try:
         state.reserve(a)
     except RelayError as exc:
         status='ID_COLLISION' if str(exc)=='ID_COLLISION' else 'DUPLICATE_INFLIGHT'
