@@ -12,7 +12,6 @@ class CandidateIntegration(unittest.TestCase):
   self.d=pathlib.Path(tempfile.mkdtemp()); self.s=M.State(self.d/'state.json'); self.s.set_armed(True); self.s.bind_conversation_owner(OWNER); self.calls=[]
   self.issuance={'id':'PCE16.041','session':'pce16.041','packet_hash':hashlib.sha256(PACKET.encode()).hexdigest(),'provenance':'persistent-content-port'}
   self.old=M.execute; M.execute=lambda a:self.calls.append(a.id) or {'version':1,'platform':'windows','id':a.id,'session':a.session,'action':'EXEC','shell':a.shell,'status':'OK','exit_code':0,'cwd':'.','started_at':M.now(),'finished_at':M.now(),'duration_ms':0,'stdout':'mock','stderr':''}
-  M._candidate_governance.preflight=lambda n:{'ok':True,'next_ordinal':n}
  def tearDown(self): M.execute=self.old
  def test_authenticated_issuance_owner_and_exact_once(self):
   self.assertTrue(M.validate_transport_identity(PACKET,self.issuance,OWNER,self.s)); transport={'issuance':self.issuance,'owner':OWNER}; M.process(PACKET,self.s,transport); M.process(PACKET,self.s,transport)

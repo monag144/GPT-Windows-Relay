@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse, base64, binascii, copy, hashlib, json, os, re, secrets, shutil, subprocess, sys, tempfile, threading, time, xml.etree.ElementTree as ET
-import importlib.util
-try:
-    import candidate_governance as _candidate_governance
-except ImportError:
-    _candidate_governance = None
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,11 +12,6 @@ VERSION=1
 OPEN='[GPT_WINDOWS_ACTION]'; CLOSE='[/GPT_WINDOWS_ACTION]'
 RO='[GPT_WINDOWS_RESULT]'; RC='[/GPT_WINDOWS_RESULT]'
 SANDWICH_REMINDER='Reply to this with the sandwich technique'
-TURN_DISCIPLINE_REMINDER='MANDATORY NEXT TURN: READ current canonical consumer/control_harness.py; READ windows-relay/TASKS.md; READ docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md; READ docs/windows-relay-mission-and-roadmap.md; READ docs/relay-sandwich-procedure.md; record SHA256 proof, run engineering_preflight for next ordinal, verify all Windows Relay mutation targets monag144/GPT-Windows-Relay; USE one durable FINAL bare-fence sandwich for every relay action; if harness hole, repair and test before risky mutation.'
-FIVE_TURN_AUDIT_REMINDER='FIVE-TURN AUDIT DUE NOW: audit the preceding five engineering turns/operations for harness compliance, incidents/user rescues, repeated or disproven approaches, repository destination, test evidence, rollback discipline, and roadmap drift before continuing.'
-TWENTY_TURN_REVIEW_REMINDER='TWENTY-OPERATION REVIEW DUE BEFORE THE NEXT OPERATION: reconcile the preceding twenty attempted slots and all four five-operation audits; record a source-backed review under docs/reviews and run governance preflight before continuing. The next review after PCE10.020 is PCE10.040.'
-CONTINUE_AUTONOMOUSLY_REMINDER='KEEP GOING AUTONOMOUSLY after a delivered result: read five controls and checkpoints, choose the next safe operation, do not ask for routine continue. STOP/operator pause or uncertain side effect overrides autonomy; never blindly replay.'
-OPERATION_DISCIPLINE_REMINDER='Before the next operation: read the canonical source-of-truth index, control harness, TODO list, roadmap, established facts, and relevant incident/handoff records; prove net-new progress; log failures/manual rescues; preserve rollback before mutation; enforce the active PCE series budget (000 through 100 inclusive) and rotate before 101; do not repeat a disproven approach.'
 ID_RE=re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 BROWSER_ID_RE=re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 PACKET_RE=re.compile(re.escape(OPEN)+r'\s*(\{.*?\})\s*'+re.escape(CLOSE),re.DOTALL)
@@ -599,39 +589,12 @@ def present_result_mode(result_mode:str,r:dict[str,Any],saved_path:str)->dict[st
 def present_result(a:Action,r:dict[str,Any],saved_path:str)->dict[str,Any]:
     return present_result_mode(a.result_mode,r,saved_path)
 
-def engineering_operation_ordinal(action_id:Any)->int|None:
-    text=str(action_id or '')
-    m=re.match(r'^PCE\d+\.(\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
-    if not m:
-        m=re.match(r'^PCE\d+(?:[-.]BOOT)?[-.]?OP(\d+)(?:[A-Za-z]*)?(?:[-.]|$)',text,re.I)
-    if not m:
-        return None
-    value=int(m.group(1))
-    return value if 0<=value<=100 else None
-
-def _turn_discipline_lines(action_id:Any=None)->list[str]:
-    lines=[OPERATION_DISCIPLINE_REMINDER,TURN_DISCIPLINE_REMINDER]
-    ordinal=engineering_operation_ordinal(action_id)
-    # The result of .024 is the LAST safe chance to require the .020-.024
-    # audit BEFORE dispatching .025. The old implementation warned after .025.
-    next_ordinal=ordinal+1 if ordinal is not None else None
-    if next_ordinal is not None and next_ordinal>0 and next_ordinal%5==0:
-        lines.append(FIVE_TURN_AUDIT_REMINDER)
-    else:
-        lines.append('FIVE-TURN AUDIT CADENCE: complete the previous five-operation audit BEFORE PCE ordinals divisible by five.')
-    if next_ordinal is not None and next_ordinal>0 and next_ordinal%20==0:
-        lines.append(TWENTY_TURN_REVIEW_REMINDER)
-    else:
-        lines.append('TWENTY-TURN REVIEW CADENCE: review every twenty attempted operations; PCE10.040 is the next review after .020.')
-    lines.append(CONTINUE_AUTONOMOUSLY_REMINDER)
-    return lines
-
 def _with_sandwich_reminder(value:Any,action_id:Any=None)->str:
     text=str(value or '').rstrip()
     if text.endswith(SANDWICH_REMINDER):
         return text
     prefix=(text+'\n' if text else '')
-    return prefix+'\n'.join(_turn_discipline_lines(action_id))+'\n'+SANDWICH_REMINDER
+    return prefix+SANDWICH_REMINDER
 
 def result(r):
     presented=dict(r)
@@ -661,59 +624,6 @@ def replay_saved_result(a:Action,prior:dict[str,Any])->str|None:
     presented=present_result(a,raw,str(path.resolve()))
     presented['replayed']=True
     return result(presented)
-
-def engineering_governance_check(a:Action, repo_root:Path|None=None)->dict|None:
-    """Hard pre-dispatch control gate; user STOP/exact-once remain independent.
-
-    The Windows runtime locates its canonical source clone, not arbitrary
-    historical Termux files. A missing or stale checkpoint denies new PCE
-    execution without reserving an action id.
-    """
-    ordinal=engineering_operation_ordinal(a.id)
-    if ordinal is None:
-        return None
-    if _candidate_governance is None:
-        raise RelayError('GOVERNANCE_DISPATCH_ADAPTER_UNAVAILABLE')
-    if ordinal != 41:
-        raise RelayError('GOVERNANCE_HISTORICAL_ORDINAL_REQUIRES_RECONCILIATION')
-    try:
-        return _candidate_governance.preflight(ordinal)
-    except Exception as exc:
-        raise RelayError('GOVERNANCE_CHECKPOINT_BLOCKED: '+str(exc)[:350]) from exc
-    # Legacy direct harness path retained below only as source reference.
-    if repo_root:
-        root=Path(repo_root).resolve()
-    else:
-        configured=os.environ.get("GPT_WINDOWS_RELAY_REPO_ROOT","").strip()
-        candidates=[]
-        if configured:
-            candidates.append(Path(configured).expanduser())
-        here=Path(__file__).resolve()
-        candidates.extend(here.parents)
-        root=next((candidate.resolve() for candidate in candidates
-                   if (candidate/"consumer"/"control_harness.py").is_file()),
-                  (Path.home()/"Downloads"/"Dev"/"GPT"/"GPT-Windows-Relay").resolve())
-    harness=root/"consumer"/"control_harness.py"
-    if not harness.is_file():
-        raise RelayError("GOVERNANCE_CANONICAL_HARNESS_UNAVAILABLE")
-    try:
-        spec=importlib.util.spec_from_file_location("_windows_relay_governance",harness)
-        if spec is None or spec.loader is None:
-            raise RelayError("GOVERNANCE_HARNESS_IMPORT_UNAVAILABLE")
-        module=importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        match=re.match(r"^PCE(\d+)",a.id,re.I)
-        series=int(match.group(1)) if match else 10
-        evidence=module.engineering_preflight(f"PCE{series}",ordinal)
-        if evidence.get("ok") is not True:
-            blockers=evidence.get("blockers",[])
-            detail=",".join(str(item) for item in blockers) if isinstance(blockers,list) else "canonical_preflight_not_ok"
-            raise RelayError("GOVERNANCE_CHECKPOINT_BLOCKED: "+detail)
-        return evidence
-    except RelayError:
-        raise
-    except Exception as exc:
-        raise RelayError("GOVERNANCE_CHECKPOINT_BLOCKED: "+str(exc)[:350]) from exc
 
 def process(packet:str,state:State,transport=None):
     if transport is None:

@@ -1,30 +1,17 @@
 {
-  "label": "Windows Relay governance release candidate",
+  "label": "Windows Relay communication and execution release candidate",
   "status": "STAGED_ONLY",
   "installed_runtime_replacement": "windows-relay/runtime/windows_relay.py",
   "components": [
-    "windows_relay.py",
-    "candidate_governance.py",
-    "governance_evidence.py",
-    "governance_dispatch_adapter.py"
+    "windows_relay.py"
   ],
   "hashes": {
-    "windows_relay.py": "0CF81E5625906A2CC8EA7F9C7A38D28086BF064F7713E3F1C1CD762BE728E178",
-    "candidate_governance.py": "95CC93905125F4BE74810BE28ACD4D52BFC7DD548711A69E3A04C51E07397E5F",
-    "governance_evidence.py": "5FF9279522A5C021BF97CE908D00760F8E58FB5B6F8A2E72C6BF732EAF462F26",
-    "governance_dispatch_adapter.py": "BD6F014C75534318984FA855B376EA63BAE21DFE4DA4F166E0980E626DE52AD8",
+    "windows_relay.py": "BA29B6BFAAA453BE6669C47D5B5C4E8A9F36A07AAB9FAB046849CD93EC39F002",
     "extension-persistent/service_worker.js": "39EC372C577272957B1940343B5A5F8E8C5AB124CB4FBA12F942A871E04B6C3D",
     "extension-persistent/content.js": "5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A",
     "extension-persistent/manifest.json": "85418070F6C0CF3249844A88E868B3BB79F31F1D9077EC39D024AC3503585073",
     "extension-persistent/popup.html": "0CC43EECACA320AE4E100BBC3A4CD72CF8C04B776183AE8CFECCA5B25E3B77DA",
     "extension-persistent/popup.js": "41F217ADB067482E5B2572CDB68C233AF4596AB54AB7EDC10224415A0F0FD415"
-  },
-  "governance": {
-    "audit_commit": "fd0c1ba93fb219a6d399435da19896fdda1052a2",
-    "audit_blob": "1235f2af0c1fcac6efc6a6a3d2c04f3486f2afb4",
-    "review_blob": "0f6143d09dfd16364a6233050a746eb1dfe3634e",
-    "next_ordinal": "PCE16.041",
-    "ledger_required": "PCE16.000-PCE16.040"
   },
   "extension": {
     "id": "gpt-windows-relay@local",
