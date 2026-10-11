@@ -173,6 +173,12 @@ class State:
                 self.data['armed']=v; self.data['updated_at']=now()
             self._mutate_and_save(mutate)
             return generation
+    def bind_conversation_owner(self, owner):
+        if not isinstance(owner,dict) or not isinstance(owner.get('conversation_key'),str) or not isinstance(owner.get('session'),str):
+            raise RelayError('conversation_owner_invalid')
+        with self.lock:
+            self.data['conversation_owner']={'conversation_key':owner['conversation_key'],'session':owner['session'],'tab_id':owner.get('tab_id'),'bound_at':now(),'authorization':'operator'}
+            self.save()
 
     def ack_browser_quiesced(self,generation):
         if type(generation) is not int or generation<=0: return False
@@ -701,7 +707,10 @@ def engineering_governance_check(a:Action, repo_root:Path|None=None)->dict|None:
     except Exception as exc:
         raise RelayError("GOVERNANCE_CHECKPOINT_BLOCKED: "+str(exc)[:350]) from exc
 
-def process(packet:str,state:State):
+def process(packet:str,state:State,transport=None):
+    if transport is None:
+        raise RelayError('authenticated_transport_required')
+    validate_transport_identity(packet,transport.get('issuance'),transport.get('owner'),state)
     a=extract(packet); prior=state.lookup(a.id)
     if prior:
         same=prior.get('payload_hash')==a.hash
@@ -746,7 +755,8 @@ def validate_transport_identity(packet:str, issuance, owner, state:State):
     key=owner.get('conversation_key'); session=owner.get('session')
     if not isinstance(key,str) or not key.startswith('https://chatgpt.com/') or not isinstance(session,str) or not session: raise RelayError('conversation_owner_invalid')
     bound=state.data.get('conversation_owner')
-    if not isinstance(bound,dict) or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
+    if not isinstance(bound,dict) or bound.get('authorization')!='operator' or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
+    if issuance.get('session')!=session or a.session!=session: raise RelayError('session_mismatch')
     journal=state.path.with_name('issuance-journal.jsonl')
     row={**issuance,'conversation_key':key,'session':session,'backend_observed_at':now(),'backend_phase':'accepted'}
     with state.lock:
@@ -872,6 +882,10 @@ class Handler(BaseHTTPRequestHandler):
                 requested=p['armed']
                 print(f'ARM_STATE_CHANGE requested={requested} origin={self.headers.get("Origin","")[:120]} user_agent={self.headers.get("User-Agent","")[:160]}',flush=True)
                 generation=self.server.state.set_armed(requested); return self.sendj(200,{'ok':True,'armed':requested,'stop_generation':generation})
+            if request_path=='/owner-bind':
+                if p.get('operator_authorized') is not True: raise RelayError('operator_authorization_required')
+                self.server.state.bind_conversation_owner(p.get('owner'))
+                return self.sendj(200,{'ok':True,'owner_bound':True})
             if request_path=='/browser-event':
                 event=p.get('event')
                 detail=p.get('detail')
@@ -911,14 +925,14 @@ class Handler(BaseHTTPRequestHandler):
             if not self.server.state.armed: return self.sendj(423,{'ok':False,'error':'relay_disarmed'})
             packet=p.get('packet')
             if not isinstance(packet,str): raise RelayError('packet required')
-            validate_transport_identity(packet,p.get('issuance'),p.get('owner'),self.server.state)
-            return self.sendj(200,{'ok':True,'result':process(packet,self.server.state)})
+            transport={'issuance':p.get('issuance'),'owner':p.get('owner')}
+            return self.sendj(200,{'ok':True,'result':process(packet,self.server.state,transport)})
         except PacketError as e: self.sendj(400,{'ok':False,'error':'packet_rejected','detail':str(e)})
         except Exception as e: self.sendj(400,{'ok':False,'error':type(e).__name__,'detail':str(e)[:500]})
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--config',type=Path,default=cfg_dir()/'bridge.json'); ap.add_argument('--state-dir',type=Path,default=state_dir()); sub=ap.add_subparsers(dest='mode',required=True); sub.add_parser('server'); sub.add_parser('stdin'); a=ap.parse_args(); st=State(a.state_dir/'state.json')
-    if a.mode=='stdin': print(process(sys.stdin.read(),st)); return 0
+    if a.mode=='stdin': print('GOVERNANCE_BLOCKED: authenticated HTTP transport and operator-bound conversation required'); return 3
     c=config(a.config); s=Server(('127.0.0.1',c['port']),c['token'],st); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — {"ARMED" if st.armed else "DISARMED"}',flush=True)
     try: s.serve_forever(.25)
     except KeyboardInterrupt: pass

@@ -131,7 +131,7 @@ function extensionStorageGet(key){
   return new Promise(resolve=>{try{chrome.storage.local.get(key,v=>resolve(v||{}));}catch{resolve({});}});
 }
 function extensionStorageSet(value){
-  return new Promise(resolve=>{try{chrome.storage.local.set(value,()=>resolve());}catch{resolve();}});
+  return new Promise((resolve,reject)=>{try{chrome.storage.local.set(value,()=>{if(chrome.runtime?.lastError)reject(new Error('issuance_journal_persist_failed'));else resolve();});}catch{reject(new Error('issuance_journal_persist_failed'));}});
 }
 
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
@@ -230,8 +230,7 @@ function checkAndClaimRelayOwner(port,message,meta){
     const incomingVersion=relaySessionVersion(session);
     const ownerVersion=relaySessionVersion(owner.session);
     const newer=!!incomingVersion&&!!ownerVersion&&compareSessionVersion(incomingVersion,ownerVersion)>0;
-    if(session===owner.session&&!meta?.owner_claim)return {ok:false,error:'relay_owner_same_session_different_conversation',owner};
-    if(!meta?.owner_claim&&!newer&&owner.session!=='default')return {ok:false,error:'relay_owner_transfer_requires_claim',owner};
+    return {ok:false,error:'relay_owner_transfer_requires_operator_claim',owner};
     const next={conversation_key:conversationKey,session,tab_id:tabId,updated_at:new Date().toISOString(),previous_conversation_key:owner.conversation_key,previous_session:owner.session};
     await extensionStorageSet({[RELAY_OWNER_KEY]:next});
     return {ok:true,claimed:false,transferred:true,owner:next,previous:owner};
