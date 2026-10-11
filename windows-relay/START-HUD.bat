@@ -1,3 +1,3 @@
 @echo off
-cd /d "%~dp0"
-start "" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0hud.py"
+call "%~dp0START-GPT-WINDOWS-RELAY.bat"
+exit /b %ERRORLEVEL%

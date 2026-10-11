@@ -6,4 +6,6 @@ This README filename is a compatibility entry point. The maintained dated [proje
 
 **Agent switching:** automatic new-chat rotation is on hold; the user-requested existing `Run-Copy-Contents.cmd` is the only approved handoff route. Preserve the engineering operation cap without silently rotating.
 
+**Canonical build layout:** `windows_relay.py`, `hud.py`, `START-GPT-WINDOWS-RELAY.bat`, and `extension-persistent/` are the sole release-candidate source paths. The sibling `extension/` tree and historical Prototype snapshots are retained for provenance only and are not packaging or deployment inputs.
+
 Original extensive README is preserved [at this Git commit](https://github.com/monag144/GPT-Windows-Relay/blob/24d4c2bad800f689ae4ad4d9c67b54e6c50e73e8/windows-relay/README.md).

@@ -2,10 +2,12 @@
 setlocal
 cd /d "%~dp0"
 
-echo Starting GPT Windows Relay...
+echo Starting or reconnecting to GPT Windows Relay...
 echo.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1"
+rem relay-control.ps1 and the watchdog use singleton locks; repeated launches reconnect.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0relay-control.ps1" start
 set "RC=%ERRORLEVEL%"
+if "%RC%"=="0" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0relay-control.ps1" status
 echo.
 if not "%RC%"=="0" (
     echo GPT Windows Relay exited with code %RC%.

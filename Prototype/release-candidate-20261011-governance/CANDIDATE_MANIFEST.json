@@ -1,6 +1,7 @@
 {
   "label": "Windows Relay communication and execution release candidate",
-  "status": "STAGED_ONLY",
+  "status": "HISTORICAL_SOURCE_SNAPSHOT",
+  "deployment_role": "retained for provenance; canonical source is windows-relay",
   "installed_runtime_replacement": "windows-relay/runtime/windows_relay.py",
   "components": [
     "windows_relay.py"

@@ -12,7 +12,6 @@ VERSION=1
 OPEN='[GPT_WINDOWS_ACTION]'; CLOSE='[/GPT_WINDOWS_ACTION]'
 RO='[GPT_WINDOWS_RESULT]'; RC='[/GPT_WINDOWS_RESULT]'
 SANDWICH_REMINDER='Reply to this with the sandwich technique'
-OPERATION_DISCIPLINE_REMINDER='Before the next operation: read roadmap, established facts, incident logs, and engineering log; prove net-new progress; log failures/manual rescues; update the development log; preserve rollback before mutation; check the PCE8 operation budget and PCE9 rotation; do not repeat a disproven approach.'
 ID_RE=re.compile(r'^[A-Za-z0-9._:-]{1,128}$')
 BROWSER_ID_RE=re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 PACKET_RE=re.compile(re.escape(OPEN)+r'\s*(\{.*?\})\s*'+re.escape(CLOSE),re.DOTALL)
@@ -107,7 +106,7 @@ def extract(text:str)->Action:
 
 class State:
     def __init__(self,path:Path):
-        self.path=path; self.lock=threading.Lock(); self.browser_seen={}; self.browser_integration={}; self.mission_journal_path=path.with_name('consumer-mission-journal.jsonl'); self.mission_journal_lock=threading.Lock(); self.data={'version':1,'armed':True,'processed':{},'missions':[],'active_action':None,'last_action':None,'updated_at':now()}; self.load()
+        self.path=path; self.lock=threading.Lock(); self.browser_seen={}; self.browser_integration={}; self.mission_journal_path=path.with_name('consumer-mission-journal.jsonl'); self.mission_journal_lock=threading.Lock(); self.data={'version':1,'armed':False,'processed':{},'missions':[],'active_action':None,'last_action':None,'updated_at':now()}; self.load()
     def load(self):
         if self.path.exists():
             self.data=json.loads(self.path.read_text(encoding='utf-8'))
@@ -138,7 +137,8 @@ class State:
                 delivery['updated_at']=now()
                 delivery['restart_recovery']='interrupted_while_submitting'
         self.data['active_action']=None
-        self.data['armed']=True; self.save()
+        # Preserve persisted STOP/disarmed state across restart; never arm implicitly.
+        self.data.setdefault('armed',False); self.save()
     def save(self): atomic_json(self.path,self.data)
     def _mutate_and_save(self,mutate):
         before=copy.deepcopy(self.data)
@@ -163,6 +163,20 @@ class State:
                 self.data['armed']=v; self.data['updated_at']=now()
             self._mutate_and_save(mutate)
             return generation
+    def bind_conversation_owner(self, owner):
+        if (not isinstance(owner,dict) or not isinstance(owner.get('conversation_key'),str)
+            or not owner['conversation_key'].startswith('https://chatgpt.com/')
+            or not isinstance(owner.get('session'),str) or not owner['session']
+            or type(owner.get('tab_id')) is not int or owner['tab_id']<=0):
+            raise RelayError('conversation_owner_invalid')
+        with self.lock:
+            before=copy.deepcopy(self.data)
+            try:
+                self.data['conversation_owner']={'conversation_key':owner['conversation_key'],'session':owner['session'],'tab_id':owner['tab_id'],'bound_at':now(),'authorization':'operator'}
+                self.save()
+            except Exception:
+                self.data=before
+                raise
 
     def ack_browser_quiesced(self,generation):
         if type(generation) is not int or generation<=0: return False
@@ -182,6 +196,35 @@ class State:
         v=self.data['processed'].get(aid); return v if isinstance(v,dict) else None
     def outbound_lookup(self,aid):
         v=self.data.get('outbound_deliveries',{}).get(aid); return copy.deepcopy(v) if isinstance(v,dict) else None
+    def packet_execution_status(self,aid):
+        """Return packet-specific durable state without reconstructing or replaying it.
+
+        The browser supervisor uses this before reloading a stuck scanner.  A
+        missing record is the only state that proves the backend has not
+        reserved or completed this exact packet.  Everything else is retained
+        as execution/delivery evidence and blocks browser-side recovery.
+        """
+        with self.lock:
+            processed=self.data.get('processed',{}).get(aid)
+            delivery=self.data.get('outbound_deliveries',{}).get(aid)
+            if not isinstance(processed,dict):
+                return {'id':aid,'state':'NO_EXECUTION','replay_allowed':False}
+            status=str(processed.get('status') or 'UNKNOWN')
+            identity={
+                'id':aid,
+                'payload_hash':processed.get('payload_hash'),
+                'status':status,
+                'saved_result_path':processed.get('saved_result_path'),
+            }
+            if isinstance(delivery,dict):
+                identity['delivery_phase']=delivery.get('phase')
+                identity['wire_result_path']=delivery.get('wire_result_path')
+            return {
+                'id':aid,
+                'state':'EXECUTING' if status=='INFLIGHT' else 'EXECUTION_CONFIRMED',
+                'replay_allowed':False,
+                'identity':identity,
+            }
     def list_claimable_outbound_ids(self):
         # Read-only discovery for the dormant Windows outbound worker.
         # Persisted JSON key order is not a delivery ordering contract, so
@@ -199,6 +242,10 @@ class State:
             return [aid for _,aid in eligible]
     def reserve(self,a:Action):
         with self.lock:
+            existing=self.data['processed'].get(a.id)
+            if isinstance(existing,dict):
+                if existing.get('payload_hash')!=a.hash: raise RelayError('ID_COLLISION')
+                raise RelayError('ACTION_ALREADY_CLAIMED')
             def mutate():
                 started=now()
                 self.data['processed'][a.id]={'payload_hash':a.hash,'session':a.session,'status':'INFLIGHT','started_at':started}
@@ -542,15 +589,16 @@ def present_result_mode(result_mode:str,r:dict[str,Any],saved_path:str)->dict[st
 def present_result(a:Action,r:dict[str,Any],saved_path:str)->dict[str,Any]:
     return present_result_mode(a.result_mode,r,saved_path)
 
-def _with_sandwich_reminder(value:Any)->str:
+def _with_sandwich_reminder(value:Any,action_id:Any=None)->str:
     text=str(value or '').rstrip()
     if text.endswith(SANDWICH_REMINDER):
         return text
-    return (text+'\n' if text else '')+OPERATION_DISCIPLINE_REMINDER+'\n'+SANDWICH_REMINDER
+    prefix=(text+'\n' if text else '')
+    return prefix+SANDWICH_REMINDER
 
 def result(r):
     presented=dict(r)
-    presented['stdout']=_with_sandwich_reminder(presented.get('stdout',''))
+    presented['stdout']=_with_sandwich_reminder(presented.get('stdout',''),presented.get('id'))
     return RO+'\n'+json.dumps(presented,indent=2,ensure_ascii=False)+'\n'+RC
 
 def materialize_outbound_result_file(state:State,aid:str)->dict[str,Any]:
@@ -577,7 +625,10 @@ def replay_saved_result(a:Action,prior:dict[str,Any])->str|None:
     presented['replayed']=True
     return result(presented)
 
-def process(packet:str,state:State):
+def process(packet:str,state:State,transport=None):
+    if transport is None:
+        raise RelayError('authenticated_transport_required')
+    validate_transport_identity(packet,transport.get('issuance'),transport.get('owner'),state)
     a=extract(packet); prior=state.lookup(a.id)
     if prior:
         same=prior.get('payload_hash')==a.hash
@@ -589,12 +640,49 @@ def process(packet:str,state:State):
         if replayed is not None:
             return replayed
         return result({'version':1,'platform':'windows','id':a.id,'session':a.session,'action':'EXEC','status':prior.get('status','DUPLICATE_IGNORED'),'exit_code':prior.get('exit_code'),'finished_at':prior.get('finished_at',now()),'stdout':'','stderr':'The command was previously processed, but its saved result is unavailable; it was not executed again.','prior':prior})
-    state.reserve(a)
+    if not state.armed:
+        return result({'version':1,'platform':'windows','id':a.id,'session':a.session,
+                       'action':'EXEC','status':'STOPPED','exit_code':None,
+                       'finished_at':now(),'stdout':'','stderr':'relay disarmed; no action reserved or executed'})
+    try:
+        state.reserve(a)
+    except RelayError as exc:
+        status='ID_COLLISION' if str(exc)=='ID_COLLISION' else 'DUPLICATE_INFLIGHT'
+        return result({'version':1,'platform':'windows','id':a.id,'session':a.session,
+                       'action':'EXEC','status':status,'exit_code':None,
+                       'finished_at':now(),'stdout':'','stderr':str(exc)})
     r=execute(a)
     saved_path=save_full_result(state,r)
     presented=present_result(a,r,saved_path)
     state.mark(a,presented)
     return read_outbound_wire_result(state,a.id)
+
+def validate_transport_identity(packet:str, issuance, owner, state:State):
+    """Validate extension-supplied transport metadata separately from packet JSON."""
+    if not isinstance(issuance,dict) or not isinstance(owner,dict): raise RelayError('transport_identity_missing')
+    a=extract(packet)
+    expected=hashlib.sha256(packet.encode()).hexdigest()
+    if issuance.get('id')!=a.id or issuance.get('packet_hash')!=expected: raise RelayError('issuance_packet_mismatch')
+    key=owner.get('conversation_key'); session=owner.get('session')
+    if not isinstance(key,str) or not key.startswith('https://chatgpt.com/') or not isinstance(session,str) or not session: raise RelayError('conversation_owner_invalid')
+    bound=state.data.get('conversation_owner')
+    if not isinstance(bound,dict) or bound.get('authorization')!='operator' or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
+    if issuance.get('session')!=session or a.session!=session: raise RelayError('session_mismatch')
+    journal=state.path.with_name('issuance-journal.jsonl')
+    row={**issuance,'conversation_key':key,'session':session,'backend_observed_at':now(),'backend_phase':'accepted'}
+    with state.lock:
+        journal.parent.mkdir(parents=True,exist_ok=True)
+        prior=[]
+        if journal.exists():
+            for line in journal.read_text(encoding='utf-8').splitlines():
+                try: prior.append(json.loads(line))
+                except Exception: raise RelayError('issuance_journal_corrupt')
+        for old in prior:
+            if old.get('id')==a.id and (old.get('packet_hash')!=expected or old.get('session')!=session): raise RelayError('issuance_identity_conflict')
+        if not any(old.get('id')==a.id for old in prior):
+            with journal.open('a',encoding='utf-8') as jf:
+                jf.write(json.dumps(row,separators=(',',':'))+'\n'); jf.flush(); os.fsync(jf.fileno())
+    return True
 
 def config(path:Path):
     if not path.exists(): atomic_json(path,{'version':1,'host':'127.0.0.1','port':DEFAULT_PORT,'token':secrets.token_urlsafe(32)})
@@ -604,7 +692,7 @@ def config(path:Path):
 
 class Server(ThreadingHTTPServer):
     daemon_threads=True
-    def __init__(self,addr,token,state): super().__init__(addr,Handler); self.token=token; self.state=state
+    def __init__(self,addr,token,state,operator_token=None): super().__init__(addr,Handler); self.token=token; self.operator_token=operator_token; self.state=state
     def handle_error(self,request,client_address):
         et,ev,_=sys.exc_info()
         if isinstance(ev,(BrokenPipeError,ConnectionResetError,ConnectionAbortedError,OSError)):
@@ -666,6 +754,11 @@ class Handler(BaseHTTPRequestHandler):
         if request_path=='/status':
             stop=self.server.state.operator_stop_status()
             return self.sendj(200,{'ok':True,'version':1,'platform':'windows','armed':self.server.state.armed,'outbound_owner':self.server.state.outbound_owner,'pid':os.getpid(),'pending_missions':self.server.state.pending_mission_count(),**stop})
+        if request_path=='/packet-status':
+            aid=parse_qs(parts.query).get('id',[None])[0]
+            if not isinstance(aid,str) or not ID_RE.fullmatch(aid):
+                return self.sendj(400,{'ok':False,'error':'invalid_action_id'})
+            return self.sendj(200,{'ok':True,**self.server.state.packet_execution_status(aid)})
         if request_path in ('/browser-heartbeat','/browser-status'):
             query=parse_qs(parts.query); browser_id=query.get('browser_id',[None])[0]
             try:
@@ -700,6 +793,11 @@ class Handler(BaseHTTPRequestHandler):
                 requested=p['armed']
                 print(f'ARM_STATE_CHANGE requested={requested} origin={self.headers.get("Origin","")[:120]} user_agent={self.headers.get("User-Agent","")[:160]}',flush=True)
                 generation=self.server.state.set_armed(requested); return self.sendj(200,{'ok':True,'armed':requested,'stop_generation':generation})
+            if request_path=='/owner-bind':
+                presented=self.headers.get('X-GPT-Windows-Relay-Operator-Token','')
+                if not self.server.operator_token or not secrets.compare_digest(presented,self.server.operator_token): raise RelayError('operator_authorization_required')
+                self.server.state.bind_conversation_owner(p.get('owner'))
+                return self.sendj(200,{'ok':True,'owner_bound':True})
             if request_path=='/browser-event':
                 event=p.get('event')
                 detail=p.get('detail')
@@ -739,14 +837,16 @@ class Handler(BaseHTTPRequestHandler):
             if not self.server.state.armed: return self.sendj(423,{'ok':False,'error':'relay_disarmed'})
             packet=p.get('packet')
             if not isinstance(packet,str): raise RelayError('packet required')
-            return self.sendj(200,{'ok':True,'result':process(packet,self.server.state)})
+            transport={'issuance':p.get('issuance'),'owner':p.get('owner')}
+            return self.sendj(200,{'ok':True,'result':process(packet,self.server.state,transport)})
         except PacketError as e: self.sendj(400,{'ok':False,'error':'packet_rejected','detail':str(e)})
         except Exception as e: self.sendj(400,{'ok':False,'error':type(e).__name__,'detail':str(e)[:500]})
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--config',type=Path,default=cfg_dir()/'bridge.json'); ap.add_argument('--state-dir',type=Path,default=state_dir()); sub=ap.add_subparsers(dest='mode',required=True); sub.add_parser('server'); sub.add_parser('stdin'); a=ap.parse_args(); st=State(a.state_dir/'state.json')
-    if a.mode=='stdin': st.set_armed(True); print(process(sys.stdin.read(),st)); return 0
-    c=config(a.config); st.set_armed(True); s=Server(('127.0.0.1',c['port']),c['token'],st); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — ARMED',flush=True)
+    if a.mode=='stdin': print('GOVERNANCE_BLOCKED: authenticated HTTP transport and operator-bound conversation required'); return 3
+    operator_token=os.environ.get('GPT_WINDOWS_RELAY_OPERATOR_BIND_TOKEN','').strip() or None
+    c=config(a.config); s=Server(('127.0.0.1',c['port']),c['token'],st,operator_token); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — {"ARMED" if st.armed else "DISARMED"}',flush=True)
     try: s.serve_forever(.25)
     except KeyboardInterrupt: pass
     finally: s.server_close()
