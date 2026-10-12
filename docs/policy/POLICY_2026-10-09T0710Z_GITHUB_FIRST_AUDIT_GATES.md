@@ -1,34 +1,7 @@
-# GitHub-first PCE checkpoint audit policy — 2026-10-09T0710Z
+# Revoked historical audit-gate policy — 2026-10-09
 
-## Authority and zero-CI-credit routing
+**REVOKED. NOT AN OPERATIONAL REQUIREMENT.** This document previously mandated a GitHub audit receipt every five commands. The user has explicitly prohibited governance as a Windows Relay execution prerequisite.
 
-Canonical GitHub destination: `monag144/GPT-Windows-Relay/main`. Use the **connected GitHub connector** for repository reads, audit creation, subsequent commits, pull requests, merges, and readback. This requires **no GitHub Actions workflow** and consumes no CI run credits. Do not issue a Windows Relay command merely to persist an audit or push a Git commit. The retired Termux repository is never a Windows source or fallback.
+Read the current policy instead: [Windows Relay execution without governance — 2026-10-11](WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md).
 
-## Strict five-operation cadence
-
-Before attempting `PCE<n>.005`, commit the audit of `.000–.004`. Before `.010`, audit `.005–.009`; continue at every multiple of five through `.100`. A blocked attempt is documented as **attempted**, never retroactively marked as executed, and consumes its ordinal. Every emitted packet reserves exactly one new ordinal: after a blocked `.005`, the next packet MUST be `.006`, not another `.005`. Never replay an issued ordinal, even after governance rejection, timeout, lost result, or unknown outcome. Treat any missing operation receipt as **UNKNOWN**, not a fictitious success. Do not advance past `.100` within one series.
-
-For series PCE12 and checkpoint .005 the canonical audit is:
-
-`docs/audits/AUDIT_2026-10-09T0710Z_PCE12_000_004_CHECKPOINT.md`
-
-Future audits follow `docs/audits/AUDIT_YYYY-MM-DDTHHMMZ_PCE<n>_SSS_EEE_CHECKPOINT.md`, with three-digit inclusive operation ordinals. Store small bounded records, ideally under 10 KiB.
-
-## Procedure: GitHub only until live machine work is necessary
-
-1. Read the source-of-truth index, actual Windows `consumer/control_harness.py`, backlog, roadmap, and current incident/handoff records via GitHub. Never substitute an obsolete local Termux checkout.
-2. Check whether the audit already exists and whether the exact range has previously been committed; never blindly create another audit for the same range. Record evidence (each action, outcome, incidents/manual rescues, repeated approaches, tests, rollback, roadmap, operation budget and uncertain side effects).
-3. Use the GitHub connector to commit the audit in a Windows-only branch, review it, and merge it into `main`. Preserve the base commit for rollback and do not rewrite historical evidence.
-4. Read the audit file **from `main`** via GitHub and independently read `main` head SHA. Pass the resulting receipt to `engineering_preflight(series, next_ordinal, github_audit_receipt=...)` before constructing a Windows command. Required fields: `repository`, `branch="main"`, `source="github_connector"`, `path`, `start`, `end`, `commit_sha` (the verified main commit), `file_sha` (the blob SHA), `readback_verified=True`, and `url` in canonical commit-blob form.
-5. **Fail closed** if the GitHub audit is absent, cannot be read back, the metadata/range is inconsistent, or the preflight returns `ok=False`. The Python function checks **metadata**, not GitHub server authentication: it must only consume evidence obtained and verified via the actual connected GitHub tool.
-6. Use Windows Relay only when a step intrinsically requires local Windows runtime observation or mutation. GitHub-side documentation, audit recording, branch/PR management and GitHub code changes are not such steps.
-
-## CI and runtime caveats
-
-GitHub Actions credits are exhausted: do **not** dispatch, rerun or depend on GitHub Actions workflows. Pure static reviews and locally run tests outside Actions are permitted, but never claim that a test ran when only source review occurred.
-
-Merging a harness change to GitHub does not automatically update a running Windows relay or its older governance gate. To clear a local `GOVERNANCE_BLOCKED` state, the installed gate must consume the verified GitHub receipt or receive a reviewed sync; do not circumvent or disable the checkpoint.
-
-## Provenance
-
-PCE12.005 was refused because the preceding five-operation audit was not yet persisted. The audit was subsequently created directly through the GitHub connector with .000 marked unknown and .001 navigation unverified. The original audited operations made no repository mutations.
+The former requirement is retained only in immutable [commit 7ce220e](https://github.com/monag144/GPT-Windows-Relay/commit/7ce220ef9e7149a9849079464c1d539242d5cad3) for root-cause evidence. Neither tests, runtime, control harness nor agent instructions may revive it.
