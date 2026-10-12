@@ -272,6 +272,17 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "codex": "Escalate major breakage/heavy engineering, preferably through a working authorized relay; use explicit operator-local fallback if offline.",
             "non_governance": "This contract is process guidance, never a command admission gate or browser owner binding.",
         },
+        "local_backup_policy": {
+            "mode": "NO_ON_DEVICE_BACKUPS",
+            "effective_date": "2026-10-12",
+            "canonical_source": "GPT-Windows-Relay-Main-Build/windows-relay",
+            "remote_archive_branch": "archive/preconsolidation-source-2026-10-12",
+            "rule": "Never create on-device source backup, snapshot, rollback clone, migration copy, backup ZIP, or a second runtime tree.",
+            "history": "Use verified GitHub commits or an explicit remote archive branch for non-sensitive source only.",
+            "irreplaceable_data": "Unique untracked source, credentials, profiles, pairing and operational state require separate operator disposition before deletion; never publish secrets.",
+            "allowed": "Canonical active source and necessary runtime state, transient cleaned-up atomic writes and isolated self-cleaning test fixtures are not persistent backups.",
+            "execution_policy": "Developer workflow directive, never a relay action authorization or GitHub audit gate.",
+        },
         "engineering_notes": {
             "required_every_issued_pce_operation": False,
             "rule": "Engineering reads, tests, reviews and benchmarks are optional; never prerequisites for authenticated relay actions.",
@@ -281,7 +292,7 @@ def build_control_harness_contract(mission_id: str) -> dict:
             "threshold": "Major/high-complexity failure, unsafe-to-solve-locally issue, or tool-limited task; six repeated failures is only an optional diagnostic signal, never a mandatory threshold.",
             "model": "gpt-5.6-terra",
             "reasoning_effort": "medium",
-            "safety": "Do not disable controls; use bounded workspace diagnostics, rollback and tests.",
+            "safety": "Do not disable controls; use bounded diagnostics and tests, GitHub source history, and NO local backup/rollback copies.",
         },
         "execution_policy": {
             "rule": "No GitHub audit, review, governance receipt or periodic checkpoint is a relay execution prerequisite.",
