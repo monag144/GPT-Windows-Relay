@@ -42,6 +42,16 @@ class HudTests(unittest.TestCase):
   x=hud.lifecycle(events,{},now)
   self.assertEqual(x['phase'],'STALLED'); self.assertEqual(x['packet_id'],'op-399'); self.assertIn('not consumed',x['reason'])
 
+ def test_failed_action_result_is_visible_as_failure_not_ready(self):
+  now=datetime(2026,10,11,12,0,tzinfo=timezone.utc)
+  events=[{'time':now.isoformat(),'event':'action_result','detail':{'packet_id':'pce17.999','ok':False,'error':'transport_identity_missing'}}]
+  life=hud.lifecycle(events,{},now)
+  self.assertEqual(life['phase'],'ACTION FAILED')
+  self.assertIn('transport_identity_missing',life['reason'])
+  self.assertEqual(hud.headline(True,life,{'state':'ACTIVE'}),'ACTION FAILED')
+  success=[{'time':now.isoformat(),'event':'action_result','detail':{'packet_id':'pce17.998','ok':True}}]
+  self.assertEqual(hud.lifecycle(success,{},now)['phase'],'RESULT READY')
+
  def test_discovered_headline_uses_dynamic_operation_series(self):
   self.assertEqual(hud.operation_label('PCENG-A6.396-approval-helper-source-map'),'A6.396')
   self.assertEqual(hud.operation_label('PCENG-A7.001-next-agent'),'A7.001')
@@ -85,6 +95,7 @@ class HudTests(unittest.TestCase):
   call='EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1'
   self.assertIn(call,text)
   self.assertLess(text.index(call),text.index('if(Listener)'))
+  self.assertLess(text.index(call),text.index('if(CanonicalListener)'))
 
 
 
