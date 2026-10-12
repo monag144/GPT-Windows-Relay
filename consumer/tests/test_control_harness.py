@@ -66,6 +66,19 @@ class ControlHarnessTests(unittest.TestCase):
         self.assertFalse(c["engineering_notes"]["required_every_issued_pce_operation"])
         self.assertIn("No GitHub audit", c["execution_policy"]["rule"])
 
+    def test_operator_ownership_and_push_before_pull_workflow_is_advisory(self):
+        c=ch.build_control_harness_contract("PCE18")
+        owner=c["engineering_owner"]
+        self.assertEqual(owner["primary"], "ChatGPT")
+        self.assertEqual(owner["repository"], "monag144/GPT-Windows-Relay")
+        self.assertIn("wip/windows-relay-rebuilt-resynced-2047-101026", owner["working_branch"])
+        self.assertIn("pull --ff-only origin", owner["git_pull_cmd"])
+        self.assertIn("verify and push remote commit", owner["delivery_sequence"])
+        self.assertIn("major", owner["codex"].lower())
+        self.assertIn("never a command admission gate", owner["non_governance"])
+        self.assertTrue(ch.engineering_preflight("PCE18", 5)["ok"])
+        self.assertEqual(ch.engineering_preflight("PCE18", 5)["blockers"], [])
+
     def test_contract_contains_required_methods(self):
         c=ch.build_control_harness_contract("consumer-20261004T000000Z-deadbeef")
         self.assertEqual(c["incident_logging"]["method"],"write_incident"); self.assertEqual(c["runtime_gates"]["source_contract_method"],"validate_windows_runtime_contract"); self.assertEqual(c["reflection"]["method"],"append_reflection"); self.assertEqual(c["data_policy"]["method"],"record_once"); self.assertEqual(c["continuous_improvement"]["method"],"evaluate_improvement"); self.assertIn("live-canary",c["continuous_improvement"]["cycle"])
