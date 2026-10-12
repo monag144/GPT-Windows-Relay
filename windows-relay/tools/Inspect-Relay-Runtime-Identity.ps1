@@ -60,6 +60,22 @@ try {
 } catch { Write-Output 'GIT_IDENTITY=UNAVAILABLE' }
 $cfg=Join-Path $env:APPDATA 'GPTWindowsRelay\bridge.json'
 Write-Output ('BRIDGE_CONFIG_EXISTS=' + (Test-Path -LiteralPath $cfg))
+# STOP/OFF markers may explain why a configured watchdog is not recovering.
+foreach($entry in @(
+  @{label='PAUSED'; name='.relay-paused'},
+  @{label='OFF'; name='.relay-off'},
+  @{label='KILL'; name='.relay-kill'},
+  @{label='STARTING'; name='.relay-starting'},
+  @{label='KILL_FAILED'; name='.relay-kill-failed'}
+)){
+  Write-Output ('RELAY_CONTROL_MARKER=' + $entry.label + ' PRESENT=' +
+    (Test-Path -LiteralPath (Join-Path $mainBuild $entry.name) -PathType Leaf))
+}
+# Check available interpreters without launching an installer or changing PATH.
+$pythonExe=Join-Path $mainBuild '.venv\Scripts\python.exe'
+Write-Output ('RELAY_VENV_PYTHON_PRESENT=' + (Test-Path -LiteralPath $pythonExe -PathType Leaf))
+$globalPython=Get-Command python.exe -ErrorAction SilentlyContinue
+Write-Output ('SYSTEM_PYTHON_COMMAND_AVAILABLE=' + [bool]$globalPython)
 # Never read or print pairing credentials.
 $processes=@()
 try { $processes=@(Get-CimInstance Win32_Process -ErrorAction Stop) }
@@ -75,6 +91,17 @@ try {
 } catch {
   Write-Output ('PORT_8766=UNVERIFIED ' + $_.Exception.GetType().Name)
 }
+# The separate One-Click Go consumer can use 8767; keep it distinct from Main-Build.
+try {
+  $consumerListeners=@(Get-NetTCPConnection -LocalPort 8767 -State Listen -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalAddress -eq '127.0.0.1' })
+  if($consumerListeners.Count -eq 0){Write-Output 'PORT_8767_CONSUMER=NOT_LISTENING'}
+  foreach($l in $consumerListeners){
+    $proc=@($processes | Where-Object { $_.ProcessId -eq $l.OwningProcess } | Select-Object -First 1)
+    $cmd=if($proc.Count){[string]$proc[0].CommandLine}else{''}
+    Write-Output ('PORT_8767_CONSUMER=LISTENING PID=' + $l.OwningProcess + ' SOURCE=' + (IdentifySource $cmd))
+  }
+} catch {Write-Output 'PORT_8767_CONSUMER=UNVERIFIED'}
 $relayProcesses=@($processes | Where-Object {
   $_.Name -match '^(pythonw?\.exe|powershell\.exe|pwsh\.exe|cmd\.exe)$' -and
   [string]$_.CommandLine -match 'windows_relay\.py|relay-control|relay-watchdog|hud\.py|GPTWindowsRelay'
@@ -91,7 +118,12 @@ try {
       $command=[string]$a.Execute+' '+[string]$a.Arguments
       if($command -match 'GPTWindowsRelay|GPT-Windows-Relay|windows_relay\.py|relay-watchdog|relay-control|GPT\\Client\\Relay'){
         $found++
-        Write-Output ('RELAY_TASK NAME=' + $t.TaskName + ' SOURCE=' + (IdentifySource $command))
+        $triggerKinds=@($t.Triggers | ForEach-Object { $_.CimClass.CimClassName } | Select-Object -Unique)
+        $actionExe=[IO.Path]::GetFileName(([string]$a.Execute).Trim('"'))
+        $state=if($null -ne $t.State){[string]$t.State}else{'UNKNOWN'}
+        Write-Output ('RELAY_TASK NAME=' + $t.TaskName + ' SOURCE=' + (IdentifySource $command) +
+          ' STATE=' + $state + ' EXE=' + $actionExe +
+          ' TRIGGER_COUNT=' + @($t.Triggers).Count)
       }
     }
   }
@@ -104,7 +136,13 @@ foreach($key in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run','HKLM:\S
       if($prop.Name -match '^PS'){continue}
       $value=[string]$prop.Value
       if($value -match 'GPTWindowsRelay|GPT-Windows-Relay|windows_relay\.py|relay-watchdog|GPT\\Client\\Relay'){
-        Write-Output ('RELAY_STARTUP_ENTRY KEY=' + $key + ' NAME=' + $prop.Name + ' SOURCE=' + (IdentifySource $value))
+        $targetType=if($value -match 'relay-watchdog-loop\.ps1'){'WATCHDOG_LOOP'}
+          elseif($value -match 'relay-control\.ps1'){'CONTROLLER'}
+          elseif($value -match 'run\.ps1'){'SUPERVISOR'}
+          elseif($value -match 'windows_relay\.py'){'BACKEND'}
+          else{'UNIDENTIFIED_RELAY_TARGET'}
+        Write-Output ('RELAY_STARTUP_ENTRY KEY=' + $key + ' NAME=' + $prop.Name +
+          ' SOURCE=' + (IdentifySource $value) + ' TARGET=' + $targetType)
       }
     }
   }catch{}
