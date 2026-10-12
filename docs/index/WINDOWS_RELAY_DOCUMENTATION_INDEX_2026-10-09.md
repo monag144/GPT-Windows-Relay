@@ -9,6 +9,8 @@
 
 ## Current disk cleanup directive (2026-10-12)
 
+- **[No on-device backups — 2026-10-12](../policy/WINDOWS_RELAY_NO_ON_DEVICE_BACKUPS_2026-10-12.md)**: authoritative operator rule; GitHub is the source-only version archive, no persistent local backup/snapshot/rollback folders. Pinned remote archive `archive/preconsolidation-source-2026-10-12`; local backup copies are removed from the WIP branch.
+
 - [Multiple-build disk audit — 2026-10-12](../reviews/WINDOWS_RELAY_MULTIBUILD_DISK_AUDIT_2026-10-12.md): 23 backends, 26 HUDs, competing untracked nested runtime/Prototype/backups and operator's one-runtime/no-local-backups target. Disk findings are operator-provided; GitHub alone cannot establish loaded/runtime state.
 - [Codex cleanup issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30): classify and choose the actual newest functional runtime, reconcile useful untracked code, physically remove proven redundant files without generating new backups, and preserve sensitive untracked data until explicit disposition.
 - **Warning:** `tools/Launch-Codex-CLI.bat` still selects an outdated checkout and falls back to the user home directory; use a verified Main-Build Codex launch until repaired (issue #30).
