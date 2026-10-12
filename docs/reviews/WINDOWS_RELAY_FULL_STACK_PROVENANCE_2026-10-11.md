@@ -47,3 +47,19 @@ STOP, pairing, operator authorization, conversation ownership, atomic action cla
 Other Firefox behavior: the content script includes a narrowly matched GitHub `Always allow` automation. Its code and operator-source history are documented in `docs/facts/WINDOWS_RELAY_GITHUB_APPROVAL_BEHAVIOR_2026-10-11.md`; its *loaded Firefox state* cannot be inferred merely from the repository.
 
 **Verification status:** GitHub source provenance reviewed; real Windows process and loaded Firefox add-on comparison awaits read-only inspector output and Firefox about:debugging observation. No actual old-client-running claim has been proven.
+
+## Windows operator observation — 2026-10-12 Pacific (read-only)
+
+The operator ran the corrected native diagnostic after a successful fast-forward to commit `b63909bf265f513447aa9461f2bc7baeabba2b01`. The focused unittest suite passed **4/4**, including the PowerShell native AST parse test. The diagnostic completed without source, process or browser changes.
+
+- Correct Main-Build checkout/branch and backend source present; legacy `GPT\Client\Relay` path absent at the expected former location. This supports removal of that path, not a guarantee that no other legacy copy exists.
+- `PORT_8766=NOT_LISTENING`; `RELAY_PROCESS_CANDIDATES=0`: **no live Windows Relay backend or recognized watchdog/HUD processes** at observation time. This excludes a currently running old backend at the inspected port, not a historical shortcut or future scheduled startup.
+- The user-startup registry entry named `GPTWindowsRelayWatchdog` resolves to `MAIN_BUILD`. Startup configuration is **not process-execution evidence**; the reason the watchdog was absent remains unknown.
+- Fourteen legacy-labeled scheduled-task actions appeared, but the tool classified each `SOURCE=NOT_RELAY`, which means the textual path classifier did not match Main-Build/old-Client signatures. It **does not** prove the tasks are safe, inactive or irrelevant.
+- `FIREFOX_MATCHING_ADDON_REGISTRATIONS=0` under the script's inspected profile metadata; 40 Firefox processes existed. The extension loaded in the active tab is still **UNKNOWN**, not proven absent.
+- `GIT_DIRTY_ENTRY_COUNT=22`; preserve all uncommitted/untracked work. No reset or forced checkout.
+
+The inspector was extended to report Main-Build `.relay-paused`/`.relay-off` and related status markers, Python interpreter availability, port 8767 consumer status, scheduled-task enabled/current state and executable basename, and whether the watchdog startup entry actually targets the expected script. These additions require a new Windows native AST test run after pulling; no PASS is claimed in advance.
+
+**Source-level product defect remains separate:** the current Firefox persistent worker sends only `{packet}`, while backend `/action` requires authenticated issuance, owner and a prior operator binding. Starting a valid Main-Build listener alone will not complete the browser action path.
+
