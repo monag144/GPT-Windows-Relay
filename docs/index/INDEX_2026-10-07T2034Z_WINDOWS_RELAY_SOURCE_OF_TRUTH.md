@@ -15,7 +15,7 @@
 1. This index.
 2. `docs/policy/POLICY_2026-10-07T2034Z_DOCUMENTATION_STRUCTURE.md`.
 3. `docs/RELAY_OPERATIONAL_RULES.md`.
-   - For five-operation checkpoints: `docs/policy/POLICY_2026-10-09T0710Z_GITHUB_FIRST_AUDIT_GATES.md`.
+   - **Superseding current rule:** `docs/policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md`. No audit or review admission checks.
    - **User-directed agent-switching hold (2026-10-10):** `docs/policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md`. It supersedes legacy automatic-chat-rotation instructions until explicitly lifted. Verified one-shot method: `docs/handoffs/HANDOFF_2026-10-10T0331Z_ONE_SHOT_WINDOWS_SCRIPT_AGENT_TRANSFER.md`.
 4. `docs/windows-relay-established-facts.md`.
 5. `windows-relay/TASKS.md`.
@@ -24,7 +24,7 @@
 
 Do not start by rereading the giant historical engineering log. Use it only when the compact index/facts do not answer the question.
 
-If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout or the missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, treat it as stale guidance—not authority. Verify Windows repository files on `main` instead. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`. The original v2 harness lacked `engineering_preflight`; the PCE12 GitHub-first audit change adds that API. Read back its current signature before use.
+If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout or the missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, treat it as stale guidance—not authority. Verify Windows repository files on `main` instead. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`. The October 9 audit-preflight addition has been revoked; its remaining compatibility entry point never gates relay execution. No local/GitHub checkpoint readback is needed to issue a command.
 
 ## Historical migration reconciliation snapshot (2026-10-07)
 
