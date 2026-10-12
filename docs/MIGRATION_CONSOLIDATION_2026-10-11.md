@@ -29,6 +29,26 @@ The supplied inventory indexed 5,289 files across the relevant roots. Its
 reports remain local at the checkout root; they are not committed because
 `file-metadata.csv` contains a machine-wide personal path inventory.
 
+## Git checkout audit
+
+The only checkout used for ongoing Windows Relay development is this
+Main-Build checkout. The following Git directories were found elsewhere and
+were left untouched because they are historical snapshots or the protected
+installed runtime's rollback material:
+
+| Location | HEAD | Remote | Disposition |
+|---|---:|---|---|
+| `GPT/Client/Relay/builds/ONE_CLICK_GO_R28_d5b9db7ad785` | `d5b9db7` | `monag144/GPT-Termux-Relay` | Historical consumer snapshot. |
+| `GPT/Client/Relay/builds/RELAY_PCE8_V16_694d47ab8959` | `694d47a` | `monag144/GPT-Termux-Relay` | Historical rollback snapshot. |
+| `Legacy/GPT/GPT-Termux-Relay` | `18d5944` | `monag144/GPT-Termux-Relay` | Retired Termux repository; not an engineering destination. |
+| `Legacy/GPT/GPT-Termux-Relay-consumer` | `249e3bb` | `monag144/GPT-Termux-Relay` | Retired consumer snapshot. |
+| `Legacy/GPT/GPT-Windows-Relay` | `a431cb6` | `monag144/GPT-Windows-Relay` | Historical Windows checkout. |
+| `Legacy/GPT/GPT-Windows-Relay-pce8-reconcile` | `8ef01a9` | `monag144/GPT-Windows-Relay` | Historical reconciliation checkout. |
+
+No unique commit was deleted, and no legacy checkout was moved while its
+runtime references were uncertain. These paths are now explicitly archival;
+future source work belongs in Main-Build.
+
 ## Hash comparison of critical components
 
 These SHA-256 values were computed from the files on disk during this review:
