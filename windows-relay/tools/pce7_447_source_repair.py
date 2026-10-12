@@ -131,6 +131,10 @@ def patch_sources():
 
 
 def main():
+    # Retired 2026-10-12: local rollback/source backup generation prohibited.
+    # Historical PCE7 utility remains in Git history for provenance.
+    raise SystemExit("RETIRED_NO_LOCAL_BACKUPS: historical PCE7 script creates local rollback copies; use reviewed GitHub-first engineering.")
+
     require_clean()
     rb = backup()
     try:
