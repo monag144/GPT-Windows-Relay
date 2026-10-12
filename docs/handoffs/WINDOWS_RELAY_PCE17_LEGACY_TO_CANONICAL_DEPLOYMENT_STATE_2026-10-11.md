@@ -15,9 +15,11 @@
 - PCE17.010: stale legacy runtime blocked a read-only identity operation with `github_checkpoint_audit_missing` despite committed main audit. No execution, ordinal consumed; incident is filed. PCE17.011 succeeded and identified actual legacy processes.
 - Required five-operation audits through .009 committed and read back on GitHub main. Next five-op audit due **before .015**. Do not repeat blocked .010.
 
-## Outstanding operation: PCE17.012
-- `PCE17.012-independent-cutover-worker-probe` was issued as a scheduled task probe. **Its native result is not yet in the conversation**. Do not claim success, do not reissue its unique ID, and do not perform an irreversible cutover before reviewing its exact result.
-- Probe design is independent of the running relay, but the currently issued operation itself uses legacy relay transport to schedule and verify a harmless temporary task. No backend shutdown is authorized as part of .012.
+## Scheduler probe status through PCE17.013
+- `PCE17.012-independent-cutover-worker-probe` was issued. Its original full native receipt remains unavailable in this conversation, but **PCE17.013 inspected the persisted state** on 2026-10-12 01:47:16–01:47:17 UTC and reported `PRIOR_PCE17_012_STATUS=OK`. The unique `.012` identity was executed and is **not eligible for replay**. An `OK` status alone does not establish the scheduler-specific stdout markers.
+- `PCE17.013-independent-worker-probe-with-prior-status-check` returned `OK`, `PENDING_MISSIONS=0`, and `SECOND_PROBE_SKIPPED=True`. This is correct de-duplication and a successful relay receipt, not confirmation that an independent worker started. No new scheduler task was created in `.013`.
+- Next unique ordinal **PCE17.014** should read the saved `.012` result and explicitly verify `INDEPENDENT_TASK_EXECUTED=True` and `TEMPORARY_TASK_REMOVED=True`, plus current process identities, before staging any independently scheduled cutover. Do not confuse source hashes with loaded runtime.
+- User also reports that reprinting a stuck action might wake the scanner; repair is a P0 item in the dated task backlog, not an approved duplicate execution workaround.
 
 ## Operator experience and deployment restrictions
 - User's interactive PowerShell paste can reverse/mangle code. **Prefer the authenticated relay tool; for self-terminating operations use an independently executed .cmd/.bat or proven task-scheduler worker**, not paste into PowerShell console.
