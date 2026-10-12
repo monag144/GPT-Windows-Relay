@@ -3,6 +3,9 @@ param(
 )
 
 $ErrorActionPreference='Stop'
+# Retired: this script targets the former Client and writes backups/browser-fix-*.
+# Do not modify either Firefox extension variant with this obsolete workflow.
+throw 'RETIRED_NO_LOCAL_BACKUPS: old browser-fix installer creates local backup trees and targets the removed Client.'
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 $bundleRoot=Split-Path -Parent $MyInvocation.MyCommand.Path
 $fixedContent=Join-Path $bundleRoot 'content.js'
