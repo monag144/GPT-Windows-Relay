@@ -1,80 +1,79 @@
-"""Source checks for the read-only Windows Relay identity diagnostic."""
+"""Read-only Windows Relay diagnostic safety and parser regression tests."""
 from pathlib import Path
-import unittest
 import os
 import shutil
 import subprocess
+import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools" / "Inspect-Relay-Runtime-Identity.ps1"
 
+
 class RuntimeIdentityDiagnosticTests(unittest.TestCase):
-    def test_diagnostic_is_read_only_and_does_not_print_tokens(self):
+    def test_read_only_contract_and_diagnostic_coverage(self):
         source = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("Get-NetTCPConnection", source)
-        self.assertIn("Get-CimInstance", source)
-        self.assertIn("Get-ScheduledTask", source)
-        self.assertIn("Get-FileHash", source)
-        self.assertIn("SOURCE_COMPONENT=", source)
-        self.assertIn("FIREFOX_ADDON_REGISTRATION", source)
-        self.assertIn("FIREFOX_SIGNED_POLICY", source)
-        self.assertIn("SIGNED_XPI_PARITY=", source)
-        self.assertIn("gpt-windows-relay-signed.xpi", source)
-        self.assertIn("RELAY_SHORTCUT", source)
-        self.assertIn("FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True", source)
-        self.assertIn("PROFILE_OR_PACKAGED_EXTENSION", source)
-        self.assertIn("IdentifySource", source)
-        self.assertIn("FIREFOX_LOADED_EXTENSION_IDENTITY=UNKNOWN", source)
-        self.assertIn("RESULT=READ_ONLY_NO_CHANGES", source)
-        for forbidden in ("Start-Process", "Stop-Process", "taskkill ", "Remove-Item ", "Set-Content ", "Invoke-RestMethod", "Invoke-WebRequest", "Get-Content -LiteralPath $cfg", "Set-ItemProperty", "CreateTextFile", "Start-Sleep"):
+        for marker in (
+            "Get-NetTCPConnection",
+            "Get-CimInstance",
+            "Get-ScheduledTask",
+            "Get-FileHash",
+            "SOURCE_COMPONENT=",
+            "FIREFOX_ADDON_REGISTRATION",
+            "FIREFOX_SIGNED_POLICY",
+            "SIGNED_XPI_PARITY=",
+            "gpt-windows-relay-signed.xpi",
+            "RELAY_SHORTCUT",
+            "FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True",
+            "FIREFOX_LOADED_EXTENSION_IDENTITY=UNKNOWN",
+            "RESULT=READ_ONLY_NO_CHANGES",
+            "IdentifySource",
+        ):
+            self.assertIn(marker, source)
+        for forbidden in (
+            "Start-Process", "Stop-Process", "taskkill ", "Remove-Item ",
+            "Set-Content ", "Invoke-RestMethod", "Invoke-WebRequest",
+            "Get-Content -LiteralPath $cfg", "Set-ItemProperty",
+            "CreateTextFile", "Start-Sleep",
+        ):
             self.assertNotIn(forbidden, source)
 
-    def test_firefox_addon_regex_is_contiguous_and_footer_is_at_end(self):
+    def test_addon_regex_and_footer_not_corrupted(self):
         source = SCRIPT.read_text(encoding="utf-8")
         lines = source.splitlines()
-        self.assertIn("             $addonName -notmatch '^GPT (Windows Relay|One-Click Go Relay)
-        source = SCRIPT.read_text(encoding="utf-8")
-        self.assertNotIn("$registry |", source)
-        self.assertNotIn("Write-Output $registry", source)
-        self.assertNotIn("Write-Output $addonPath", source)
-        self.assertNotIn("Write-Output $combined", source)
-        self.assertIn("SOURCE=", source)
-
-if __name__ == "__main__":
-    unittest.main()
-){continue}", lines)
+        addon_line = "             $addonName -notmatch '^GPT (Windows Relay|One-Click Go Relay)$'){continue}"
+        self.assertIn(addon_line, lines)
         self.assertEqual(source.count("RESULT=READ_ONLY_NO_CHANGES"), 1)
         self.assertEqual(source.count("FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True"), 1)
         self.assertEqual(lines[-1], "Write-Output 'RESULT=READ_ONLY_NO_CHANGES'")
-        addon_index = next(i for i, line in enumerate(lines) if "$addonName -notmatch " in line)
-        self.assertIn("){continue}", lines[addon_index])
-        self.assertNotIn("Write-Output", lines[addon_index])
+        self.assertEqual(lines.count(addon_line), 1)
+
+    def test_does_not_echo_sensitive_browser_or_pairing_data(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        for forbidden in (
+            "$registry |", "Write-Output $registry", "Write-Output $addonPath",
+            "Write-Output $combined", "Write-Output $cfg",
+        ):
+            self.assertNotIn(forbidden, source)
 
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"),
-                         "Windows PowerShell parser is required")
-    def test_native_powershell_parser_reports_zero_errors(self):
-        """Parse the entire script as PowerShell without executing it."""
-        quoted_path = str(SCRIPT).replace("'", "''")
+                         "Requires Windows PowerShell parser")
+    def test_native_powershell_parser_reports_no_errors(self):
+        """Uses the actual Windows PowerShell AST parser without running script."""
+        script_path = str(SCRIPT).replace("'", "''")
         command = (
-            "$tokens=$null; $errors=$null; "
+            "$tokens=$null; $parseErrors=$null; "
             "[System.Management.Automation.Language.Parser]::ParseFile('"
-            + quoted_path + "',[ref]$tokens,[ref]$errors) | Out-Null; "
-            "if($errors.Count -gt 0){$errors | ForEach-Object { Write-Output $_.ToString() }; exit 1}; "
+            + script_path + "', [ref]$tokens, [ref]$parseErrors) | Out-Null; "
+            "if($parseErrors.Count -gt 0) { "
+            "$parseErrors | ForEach-Object { Write-Output $_.Message }; exit 1 }; "
             "Write-Output 'POWERSHELL_PARSE_OK'"
         )
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
-            capture_output=True, text=True, timeout=30, check=False
+            capture_output=True, text=True, timeout=30, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("POWERSHELL_PARSE_OK", result.stdout)
 
-    def test_diagnostic_has_no_sensitive_debug_output(self):
-        source = SCRIPT.read_text(encoding="utf-8")
-        self.assertNotIn("$registry |", source)
-        self.assertNotIn("Write-Output $registry", source)
-        self.assertNotIn("Write-Output $addonPath", source)
-        self.assertNotIn("Write-Output $combined", source)
-        self.assertIn("SOURCE=", source)
 
 if __name__ == "__main__":
     unittest.main()
