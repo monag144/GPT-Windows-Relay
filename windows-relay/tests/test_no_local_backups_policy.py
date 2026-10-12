@@ -18,7 +18,7 @@ class NoLocalBackupsPolicyTests(unittest.TestCase):
         self.assertIn("irreplaceable", content.lower())
 
     def test_legacy_mutating_entrypoints_refuse_to_run(self):
-        for filename in ("sync-live.py", "safe_live_cutover.py"):
+        for filename in ("sync-live.py", "safe_live_cutover.py", "tools/pce7_446_live_cutover.py", "tools/pce7_447_source_repair.py"):
             with self.subTest(filename=filename):
                 script = WIN / filename
                 completed = subprocess.run(
