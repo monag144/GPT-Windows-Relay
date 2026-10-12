@@ -1,0 +1,17 @@
+# PCE17.022 — Browser reported ACTION_FAILED for Codex launch — 2026-10-11 (PDT)
+
+## Observed feedback and exact-once handling
+- User-provided `[GPT_WINDOWS_FEEDBACK]`: `{"version":1,"type":"RELAY_DIAGNOSTIC","source":"windows_browser_bridge","state":"ACTION_FAILED","packet_id":"PCE17.022-launch-codex-independent-single-build-cutover-engineering","detail":"RelayError"}`.
+- **No native `[GPT_WINDOWS_RESULT]` for .022 has been shown in this conversation.** The diagnostic is a browser bridge failure, not confirmation that the Windows command was executed nor proof that it was never executed.
+- .022 is an attempted/consumed unique ID. Do not replay .022 or launch another Codex worker until its persisted `state.json` `processed` record, saved result, process PID and `GPTWindowsRelayDeployBackups/PCE17-022-CodexCutover` log/status files are independently checked.
+- The user has launched a HUD from the root unified development directory, and says the Firefox extension was already loaded from there, but positive backend PID/script path and loaded extension code hash are **not established**. Re-pairing/new token need not be assumed; determine whether running listener and browser token agree before rotating secret. Do not paste tokens in chat or logs.
+
+## Source-level protocol mismatch requiring investigation before cutover
+- Verified WIP commit `a35d325ce9a666a372e2a88bc7b60704bdf785f9` (prior to separate added regression test). Root `windows-relay/windows_relay.py` `Handler.do_POST /action` (lines 836–843) extracts `issuance` and `owner` from request JSON, passes to `process`, and requires `validate_transport_identity`. That function rejects absent dicts as `RelayError('transport_identity_missing')` and requires a backend operator-bound matching owner. The server responds with JSON `error=RelayError` and a more specific `detail`.
+- In the matching WIP `windows-relay/extension-persistent/service_worker.js`, `callAction(packet)` (lines 30–45) sends `JSON.stringify({packet})` to POST /action — **no issuance/owner metadata** — even though extension-side local owner gating exists. The extension catch path reports only `e.code` (`RelayError`) to the content script, and the content script `[GPT_WINDOWS_FEEDBACK]` prints `r.error` rather than the HTTP error detail. This makes a candidate/backend protocol mismatch plausible if canonical root backend is listening. This source mismatch is **verified**; whether it explains the current live feedback requires PID and log evidence. Do not bypass ownership or authentication to make it work.
+- Both old and new backend builds may respond `RelayError` for other reasons. Never infer the exact live cause from the generic feedback alone.
+
+## Next step
+- Use an entirely **read-only, unique** PCE17.023 check only after considering current browser pairing and response path. Confirm whether .022 was processed and if the Codex runner exists; inspect listener script path, backend operational state, extension/binding errors, without printing credentials. If relay remains blocked, use minimal CMD/local check instead of submitting further side-effectful packets.
+- Repair canonical root's extension↔backend authenticated identity contract and add tests prior to any live cutover, preserving legitimate owner binding and exact-once. Ensure test source and deployed Firefox loaded bits match.
+- The independent scheduler probe from .012/.014 and hash-verified 2,628-file rollback PCE17.006 remain available. PCE17.022 did NOT authorize live cutover; its Codex prompt was staging/testing only.
