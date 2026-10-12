@@ -1,0 +1,24 @@
+feature,source_path,implementation_state,test_state,live_proof,deficiency,evidence
+backend packet parsing,windows-relay/windows_relay.py:extract,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,extract/process definitions
+HTTP status and packet status,windows-relay/windows_relay.py:Handler.do_GET,PRESENT AND WIRED,TESTED OFFLINE,NOT PROVEN,no listener observed,/status and /packet-status routes
+HTTP bearer authentication,windows-relay/windows_relay.py:Handler.auth,PRESENT AND WIRED,TESTED OFFLINE,NOT PROVEN,no listener observed,X-GPT-Windows-Relay-Token
+action reservation,windows-relay/windows_relay.py:State.reserve,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,durable INFLIGHT record and collision check
+saved result journal,windows-relay/windows_relay.py:save_full_result;save_outbound_wire_result,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,requires runtime state path,atomic result files
+restart no-replay,windows-relay/windows_relay.py:State.load,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,INTERRUPTED_RESTART and SUBMIT_UNCERTAIN handling
+STOP/disarmed persistence,windows-relay/windows_relay.py:State.set_armed;Handler /arm,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,armed false persists across load
+browser quiescence,windows-relay/windows_relay.py:ack_browser_quiesced;service_worker.js,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,live browser acknowledgement not observed
+operator owner bind,windows-relay/windows_relay.py:Handler /owner-bind;State.bind_conversation_owner,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,requires separate operator token
+conversation owner enforcement,windows-relay/windows_relay.py:validate_transport_identity,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,requires owner metadata and persisted binding
+persistent Firefox manifest,windows-relay/extension-persistent/manifest.json,PRESENT AND WIRED,STATIC VERIFIED,UNKNOWN,loaded Firefox identity unavailable,v0.3.17 gecko ID gpt-windows-relay@local
+Firefox scanner,windows-relay/extension-persistent/content.js, PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,requires loaded ChatGPT tab,selectors and scanner functions
+result-turn recognition,windows-relay/extension-persistent/content.js,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,requires live DOM,wrapper fallback and user-result confirmation
+extension action transport,windows-relay/extension-persistent/service_worker.js,BROKEN / UNWIRED,STATIC FAILURE,UNKNOWN,callAction sends only packet while backend requires issuance and owner,callAction body vs process transport requirement
+extension storage failure handling,windows-relay/extension-persistent/service_worker.js,PRESENT BUT UNSAFE,NOT RUN,UNKNOWN,storage write errors swallowed,extensionStorageSet
+HUD five controls,windows-relay/hud.py,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,HUD process not observed,START STOP RESTART OFF KILL bindings
+controller lifecycle,windows-relay/relay-control.ps1,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,port absent,foreign listener and canonical process checks
+watchdog singleton,windows-relay/relay-watchdog-loop.ps1,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,watchdog not observed,mutex and canonical path checks
+one-click consumer,consumer/bootstrap.ps1;consumer/GO.bat,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,not a Windows Relay backend,consumer runtime preparation
+managed screenshots,windows-relay/windows_relay.py;extension-persistent/service_worker.js,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,no runtime proof,managed screenshot routes and attachment hydration
+UIA helpers,windows-relay/uia_control_action.ps1;uia_text_entry.ps1,PRESENT,NOT RUN,UNKNOWN,,source files present
+job application helpers,windows-relay/job_application_*_v2.py,PRESENT AND WIRED,TESTED OFFLINE,UNKNOWN,,source modules and tests present
+benchmark harness,windows-relay;consumer;docs,UNKNOWN,NOT RUN,UNKNOWN,no benchmark artifact located,benchmark-only work not authorized
