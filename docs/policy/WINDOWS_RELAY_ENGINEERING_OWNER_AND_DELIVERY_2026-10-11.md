@@ -16,6 +16,8 @@ No force pushes, hard resets, silent stashes, checkout replacement, dropped unco
 
 **Role separation:** ChatGPT owns GitHub source engineering; the human operator owns Windows permissions, consequential actions and deployment approval; the authenticated runtime conversation owner identifies the legitimate ChatGPT tab/session and must not be silently re-bound by an engineering policy. STOP, pairing, owner binding and durable action identity are still security protections.
 
+**No on-device backups (2026-10-12):** [Current operator rule](WINDOWS_RELAY_NO_ON_DEVICE_BACKUPS_2026-10-12.md) supersedes old advice to create rollback directories, pre-migration copies, snapshots and ZIP archives on Windows. Preserve non-sensitive source using verified GitHub history and remote branches; identify unique private data before deleting it. Routine GitHub-first engineering must not recreate `STUPID BACKUPS DO NOT USE` or a nested runtime build.
+
 **No execution governance.** Engineering documentation, reviews, audit receipts or operation counts never gate Windows command execution. Historical six-failure Codex escalation recommendations are optional heuristics, not requirements. Codex is used based on severity and practical engineering needs.
 
 **Source evidence:** Main-Build launcher/controller/supervisor are self-relative; historical `install-browser-fix.ps1` still defaults to `GPT\Client\Relay`, and `install.ps1` still targets the sibling extension tree. Codex Issue #28 observed no listener on localhost:8766 and could not verify the loaded Firefox extension, so a running old backend has not been proven. Issue #27 tracks the independent browser-to-backend identity protocol mismatch.
