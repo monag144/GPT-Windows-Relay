@@ -335,6 +335,10 @@ def restore_old_hud():
 
 
 def main():
+    # Retired 2026-10-12: local rollback/source backup generation prohibited.
+    # Historical PCE7 utility remains in Git history for provenance.
+    raise SystemExit("RETIRED_NO_LOCAL_BACKUPS: historical PCE7 script creates local rollback copies; use reviewed GitHub-first engineering.")
+
     verify_source()
 
     # The pre-cutover contract is the intentional STOPPED state. Do not overwrite
