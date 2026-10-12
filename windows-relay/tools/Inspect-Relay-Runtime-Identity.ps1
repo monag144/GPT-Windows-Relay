@@ -126,11 +126,7 @@ if(Test-Path -LiteralPath $ffProfiles){
           $addonId=[string]$addon.id
           $addonName=[string]$addon.defaultLocale.name
           if($addonId -ne 'gpt-windows-relay@local' -and
-             $addonName -notmatch '^GPT (Windows Relay|One-Click Go Relay)
-Write-Output 'FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True'
-Write-Output 'FIREFOX_NEXT_CHECK=about:debugging#/runtime/this-firefox'
-Write-Output 'RESULT=READ_ONLY_NO_CHANGES'
-){continue}
+             $addonName -notmatch '^GPT (Windows Relay|One-Click Go Relay)$'){continue}
           $matchingAddonRecords++
           $addonPath=[string]$addon.path
           if(-not $addonPath){$addonPath=[string]$addon.rootURI}
@@ -200,5 +196,6 @@ try {
 } catch {Write-Output 'RELAY_SHORTCUT_SCAN=UNAVAILABLE'}
 Write-Output ('RELAY_SHORTCUT_COUNT=' + $shortcuts)
 Write-Output 'FIREFOX_LOADED_EXTENSION_IDENTITY=UNKNOWN_FROM_PROCESS_INSPECTION'
+Write-Output 'FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True'
 Write-Output 'FIREFOX_NEXT_CHECK=about:debugging#/runtime/this-firefox'
 Write-Output 'RESULT=READ_ONLY_NO_CHANGES'
