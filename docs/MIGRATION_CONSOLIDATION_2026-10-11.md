@@ -1,5 +1,8 @@
 # Windows Relay migration and redundancy review — 2026-10-11
 
+> **2026-10-12 evidence update:** This is a historical consolidation snapshot, **not** a current guarantee of one physical runtime/build. A new local audit found the untracked 3,280-file `windows-relay/runtime/` and multiple competing Prototype/backup copies. The operator has superseded the local-backup-retention preference and directed a GitHub-first **one-runtime/no-local-backups** cleanup. See [multiple-build disk audit](reviews/WINDOWS_RELAY_MULTIBUILD_DISK_AUDIT_2026-10-12.md) and [Codex issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30). Historical facts below are retained for provenance; they must not override newer measured evidence.
+
+
 ## Result
 
 `GPT-Windows-Relay-Main-Build` is the single development checkout for the
