@@ -1,4 +1,4 @@
-"""Regression: GitHub engineering audit policy cannot block runtime dispatch.
+"""Regression: No governance policy may block runtime command dispatch.
 
 The legacy nested runtime incorrectly called engineering_preflight(series, ordinal)
 without a github_audit_receipt and blocked every fifth PCE operation.  GitHub
@@ -21,10 +21,11 @@ class RuntimeAuditIsolationTests(unittest.TestCase):
         cls.tree = ast.parse(cls.source, filename=str(BACKEND))
 
     def test_no_engineering_audit_receipt_or_preflight_in_backend(self):
-        # Does not prohibit separate assistant-side consumer/control_harness.py.
+        # The legacy consumer helper is nonblocking, not a dispatcher dependency.
         self.assertNotIn("engineering_preflight", self.source)
         self.assertNotIn("github_audit_receipt", self.source)
         self.assertNotIn("GOVERNANCE_CHECKPOINT_BLOCKED", self.source)
+        self.assertNotIn("GOVERNANCE_BLOCKED", self.source)
         self.assertNotIn("github_checkpoint_audit_missing", self.source)
 
     def test_dispatcher_keeps_operator_security_gates(self):
