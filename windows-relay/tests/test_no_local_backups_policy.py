@@ -33,6 +33,20 @@ class NoLocalBackupsPolicyTests(unittest.TestCase):
                     completed.stdout + completed.stderr,
                 )
 
+    def test_browser_fix_installer_is_retired(self):
+        source = (WIN / "install-browser-fix.ps1").read_text(encoding="utf-8")
+        stop = source.index("throw 'RETIRED_NO_LOCAL_BACKUPS")
+        creation = source.index("New-Item -ItemType Directory -Force -Path $backupRoot")
+        self.assertLess(stop, creation)
+
+    def test_signed_extension_policy_installer_creates_no_backup_copy(self):
+        source = (WIN / "install-signed-extension-policy.ps1").read_text(encoding="utf-8")
+        self.assertIn("LOCAL_POLICY_BACKUP_CREATED=False", source)
+        self.assertNotIn("POLICY_BACKUP=", source)
+        self.assertNotIn("$backup=", source)
+        self.assertNotIn(".bak-", source)
+        self.assertIn("Get-Content -LiteralPath $pol -Raw", source)
+
     def test_archive_not_tracked_on_current_working_branch(self):
         completed = subprocess.run(
             ["git", "ls-files", "--", "STUPID BACKUPS DO NOT USE"],
