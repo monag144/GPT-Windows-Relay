@@ -15,6 +15,14 @@ class RuntimeIdentityDiagnosticTests(unittest.TestCase):
             "Get-NetTCPConnection",
             "Get-CimInstance",
             "Get-ScheduledTask",
+            "RELAY_CONTROL_MARKER=",
+            "RELAY_VENV_PYTHON_PRESENT=",
+            "SYSTEM_PYTHON_COMMAND_AVAILABLE=",
+            "PORT_8767_CONSUMER=",
+            "TRIGGER_COUNT=",
+            "RELAY_STARTUP_ENTRY KEY=",
+            "TARGET=' + $targetType",
+
             "Get-FileHash",
             "SOURCE_COMPONENT=",
             "FIREFOX_ADDON_REGISTRATION",
@@ -35,6 +43,19 @@ class RuntimeIdentityDiagnosticTests(unittest.TestCase):
             "CreateTextFile", "Start-Sleep",
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_offline_startup_observability_is_read_only(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("Get-NetTCPConnection -LocalPort 8766", source)
+        self.assertIn("Get-NetTCPConnection -LocalPort 8767", source)
+        self.assertIn("RELAY_CONTROL_MARKER=", source)
+        self.assertIn("RELAY_TASK NAME=", source)
+        self.assertIn(" STATE=' + $state", source)
+        self.assertIn(" TARGET=' + $targetType", source)
+        self.assertIn("RELAY_PROCESS_CANDIDATES=", source)
+        self.assertNotIn("Register-ScheduledTask", source)
+        self.assertNotIn("Unregister-ScheduledTask", source)
+        self.assertNotIn("Disable-ScheduledTask", source)
 
     def test_addon_regex_and_footer_not_corrupted(self):
         source = SCRIPT.read_text(encoding="utf-8")
