@@ -18,11 +18,10 @@ $installUrl=([Uri]$dest).AbsoluteUri
 $dist=Join-Path $FirefoxRoot 'distribution'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $pol=Join-Path $dist 'policies.json'
-$backup=$null
-
+# Operator rule (2026-10-12): no on-device backup copies.
+# Preserve existing Firefox policy fields in memory; installation explicitly
+# updates this policy file in place without creating a .bak snapshot.
 if(Test-Path -LiteralPath $pol){
-  $backup=$pol+'.bak-'+(Get-Date -Format yyyyMMddHHmmss)
-  Copy-Item -LiteralPath $pol -Destination $backup -Force
   $doc=Get-Content -LiteralPath $pol -Raw | ConvertFrom-Json
 }else{
   $doc=[pscustomobject]@{}
@@ -57,7 +56,7 @@ if([string]$v.installation_mode -ne 'force_installed'){throw 'Policy verificatio
 if([string]$v.install_url -ne $installUrl){throw 'Policy verification failed: install_url mismatch'}
 
 Write-Output ('POLICY_INSTALLED='+$pol)
-if($backup){Write-Output ('POLICY_BACKUP='+$backup)}
+Write-Output 'LOCAL_POLICY_BACKUP_CREATED=False'
 Write-Output ('EXTENSION_ID='+$extensionId)
 Write-Output ('INSTALLATION_MODE='+$v.installation_mode)
 Write-Output ('INSTALL_URL='+$v.install_url)
