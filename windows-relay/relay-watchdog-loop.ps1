@@ -42,9 +42,9 @@ try {
   Log ('WATCHDOG_START pid='+$PID)
   while($true){
     if(Test-Path -LiteralPath $pause){Start-Sleep -Seconds 10;continue}
+    EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1
     if(CanonicalListener){Start-Sleep -Seconds 10;continue}
     if(Listener){Log 'FOREIGN_LISTENER not touching existing backend';Start-Sleep -Seconds 10;continue}
-    EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1
     $sup=GenuineSupervisors
     if($sup.Count -eq 0){
       Log 'NO_LISTENER_NO_SUPERVISOR starting VISIBLE supervisor'
