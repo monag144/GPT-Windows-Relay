@@ -39,7 +39,7 @@ $processes=@()
 try { $processes=@(Get-CimInstance Win32_Process -ErrorAction Stop) }
 catch { Write-Output 'PROCESS_ENUMERATION=UNAVAILABLE' }
 try {
-  $listeners=@(Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction Stop | Where-Object { $_.LocalAddress -eq '127.0.0.1' })
+  $listeners=@(Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -eq '127.0.0.1' })
   if($listeners.Count -eq 0){Write-Output 'PORT_8766=NOT_LISTENING'}
   foreach($l in $listeners){
     $proc=@($processes | Where-Object { $_.ProcessId -eq $l.OwningProcess } | Select-Object -First 1)
