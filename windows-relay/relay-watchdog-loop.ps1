@@ -5,8 +5,8 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log=Join-Path $logDir 'watchdog.log'
 $pause=Join-Path $root '.relay-paused'
 $run=Join-Path $root 'run.ps1'
-$hudPy=Join-Path $root '.venv\Scripts\pythonw.exe'
 $hud=Join-Path $root 'hud.py'
+if(Test-Path (Join-Path $root '.venv\Scripts\pythonw.exe')){$hudPy=Join-Path $root '.venv\Scripts\pythonw.exe'}else{$hudPy=(Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source;if([string]::IsNullOrWhiteSpace($hudPy)){$hudPy=(Get-Command python.exe -ErrorAction SilentlyContinue).Source}}
 # GPT_RELAY_WATCHDOG_HUD_RECONCILIATION_V1
 function Log([string]$m){Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' '+$m)}
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}

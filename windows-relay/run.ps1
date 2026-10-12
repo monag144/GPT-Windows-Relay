@@ -4,8 +4,14 @@ $logDir=Join-Path $PSScriptRoot 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log=Join-Path $logDir 'supervisor.log'
 $pause=Join-Path $PSScriptRoot '.relay-paused'
-$py=Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 $server=Join-Path $PSScriptRoot 'windows_relay.py'
+if(Test-Path (Join-Path $PSScriptRoot '.venv\Scripts\python.exe')){
+  $py=Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+}else{
+  $py=(Get-Command python.exe -ErrorAction SilentlyContinue).Source
+  if([string]::IsNullOrWhiteSpace($py)){$py=(Get-Command py.exe -ErrorAction SilentlyContinue).Source}
+  if([string]::IsNullOrWhiteSpace($py)){throw 'Canonical Python interpreter not found; create windows-relay/.venv or install Python.'}
+}
 function Log([string]$m){Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' '+$m)}
 $created=$false
 $mutex=[System.Threading.Mutex]::new($true,'Local\GPTWindowsRelaySupervisor',[ref]$created)
