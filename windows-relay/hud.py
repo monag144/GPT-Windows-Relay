@@ -105,6 +105,11 @@ def lifecycle(events,state,now=None):
     relevant=[e for e in events if e.get("event") in PHASES]
     if not relevant:return {"phase":"READY","reason":"no active relay operation","packet_id":None,"age":None,"event":"none"}
     e=relevant[-1]; phase,reason=PHASES[e.get("event")]
+    if e.get("event")=="action_result":
+        detail=e.get("detail") if isinstance(e.get("detail"),dict) else {}
+        if detail.get("ok") is False:
+            phase="ACTION FAILED"
+            reason="extension action failed: " + str(detail.get("error") or "unspecified")[:100]
     if e.get("event")=="chatgpt_tool_approval_prompt_detected":
         d=e.get("detail") if isinstance(e.get("detail"),dict) else {}
         reason=f"ChatGPT tool approval • {d.get('provider') or 'unknown app'}"
