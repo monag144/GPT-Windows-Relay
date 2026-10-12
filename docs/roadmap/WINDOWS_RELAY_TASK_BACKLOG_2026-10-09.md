@@ -8,10 +8,11 @@
 - [ ] Preserve the **existing operator controls START / STOP / RESTART / OFF / KILL** and conversation ownership. **ARM is not a HUD button.** Keep its authenticated backend permission/quiescence mechanism under STOP/START to avoid a safety regression. PCE15.050 cross-conversation rejection was protective; do not bypass.
 - [ ] Confirm authenticated localhost 8766 normal same-chat packet -> exactly-one Windows execution -> exact saved result -> one delivered visible reply, including failure/recovery. No GUI handoff automation necessary.
 
-## P0 — remove periodic GitHub audit governance from live dispatcher (root cause confirmed)
-- [ ] **Live defect confirmed at PCE17.021:** nested legacy `windows-relay/runtime/windows_relay.py` calls `module.engineering_preflight(f"PCE{series}",ordinal)` with **no `github_audit_receipt`**. Local harness requires a receipt at PCE ordinals divisible by five, so .005/.010/.015/.020 rejected despite audited GitHub files. No user-side audit is missing. See `docs/incidents/WINDOWS_RELAY_PCE17_PERIODIC_GOVERNANCE_BLOCK_ROOT_CAUSE_2026-10-11.md`.
-- [ ] **Canonical source already removes the runtime checkpoint gate:** staged root `windows-relay/windows_relay.py` has no dispatcher `engineering_preflight` call. Regression `windows-relay/tests/test_dispatcher_no_audit_gate.py` committed on unified development WIP branch `b85e26678065795338c2676cbe526dec0c75bb83`; test execution and live activation **still required**. Do not patch a second legacy build or claim resolved while nested legacy owns port 8766. Keep the assistant-side GitHub audit discipline, authenticated transport, operator ownership, STOP and exact-once controls.
-- [ ] **Live acceptance:** after single-build controlled cutover, prove an independently issued fifth-slot action is accepted without a GitHub receipt being passed to the Windows backend. Verify one authenticated execution/visible result, rollback and no duplicate/unsafe resend.
+## P0 — prevent governance reintroduction into runtime
+
+- [x] Proven PCE17.021 legacy code defect: the dispatcher called an incompatible audit-receipt preflight; .005/.010/.015/.020 were rejected despite existing GitHub audits.
+- [x] Current GitHub execution policy abolishes operational governance and makes the compatibility helper nonblocking; current root backend has no checkpoint preflight.
+- [ ] Run source regression and prove a safe live authenticated fifth-slot command without any audit receipt after approved local deployment. STOP/owner/token/dedup protections remain mandatory.
 
 ## P0 — canonical extension/backend transport contract mismatch (PCE17.022)
 - [ ] `PCE17.022-launch-codex-independent-single-build-cutover-engineering` returned browser `ACTION_FAILED` with generic `RelayError`, **not** a native receipt. Treat Codex launch as **uncertain** until saved result, processed-ID state, worker PID and `PCE17-022-CodexCutover` logs are checked. Do not reissue .022 or start another Codex run blindly. See `docs/incidents/WINDOWS_RELAY_PCE17_022_CODEX_LAUNCH_ACTION_FAILED_2026-10-11.md`.
@@ -45,9 +46,11 @@
 
 ## P2 — operator experience and optional features
 - [ ] Improve HUD clarity, incident/screenshot visibility, and user-facing diagnostics without changing functioning controls.
-- [ ] Continue consumer one-click installation, governed source/Client sync, update safety and downstream user-requested workflows (e.g. job applications) as separately scoped projects.
+- [ ] Continue consumer one-click installation, controlled source/Client sync, update safety and downstream user-requested workflows (e.g. job applications) as separately scoped projects.
 
-## Governance and evidence
-- **Before each PCE operation**, reread canonical GitHub `consumer/control_harness.py` and current dated roadmap, and compare the actual installed files when relevant. Preserve GitHub-first five-operation audits, drift-focused twenty-operation reviews, issued-ID consumption, and unique PCE ordinals. PCE16.000–.003 completed OK in read-only mode; PCE16.004 is next. Before .005, commit and read back the .000–.004 audit on `main`. `PCE15.050` was emitted and rejected, **not free to retry**. No GitHub Actions usage while credits unavailable.
-- **Permanent retirement:** Do not implement/test operation-count rotation, extension-driven new-agent navigation, UIA fallback transfers, scheduled agent watchers or the replacement switching project. Existing UIA/clipboard/tab tools are temporarily suspended **for agent switching only**, not removed from normal relay execution or recovery. Reference the dated policy `docs/policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md`.
-- Last verified product grade **F / BLOCKED**, 11/28; G16 unknown, G26 0/60, G27 0/2. New grades require new real evidence.
+## Engineering evidence; NEVER runtime governance
+
+- No five-operation audit, twenty-operation review, checkpoint receipt, per-operation GitHub source reread or benchmark is required to execute a Windows command.
+- Maintain historical action-ID records and technical test/benchmark evidence when useful; they never authorize execution. Backend identity, STOP, token, owner and durable deduplication provide runtime safety.
+- Operator-controlled one-shot handoff only; no autonomous switching or hidden rotation. Historical incidents are evidence, not operating instructions.
+- The prior strict F / 11-of-28 benchmark and real-message/endurance gaps concern release acceptance, not governance.
