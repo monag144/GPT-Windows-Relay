@@ -23,6 +23,29 @@ $sourceFile=Join-Path $relayRoot 'windows_relay.py'
 if(Test-Path -LiteralPath $sourceFile){
   Write-Output ('MAIN_SOURCE_SHA256=' + (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash)
 }
+# Compare every critical source element with the old installation, not just the launcher.
+# Source hashes prove disk differences; they do not prove which binary Firefox loaded.
+$components=@(
+  'windows_relay.py','run.ps1','relay-control.ps1','relay-watchdog-loop.ps1',
+  'hud.py','START-GPT-WINDOWS-RELAY.bat',
+  'extension-persistent/manifest.json','extension-persistent/content.js',
+  'extension-persistent/service_worker.js','extension-persistent/popup.js'
+)
+foreach($relative in $components){
+  $mainItem=Join-Path $mainBuild $relative
+  $oldItem=Join-Path $legacy $relative
+  $mainPresent=Test-Path -LiteralPath $mainItem -PathType Leaf
+  $oldPresent=Test-Path -LiteralPath $oldItem -PathType Leaf
+  $same='UNVERIFIED'
+  if($mainPresent -and $oldPresent){
+    $mainHash=(Get-FileHash -LiteralPath $mainItem -Algorithm SHA256).Hash
+    $oldHash=(Get-FileHash -LiteralPath $oldItem -Algorithm SHA256).Hash
+    $same=if($mainHash -eq $oldHash){'IDENTICAL'}else{'DIFFERENT'}
+  }elseif(-not $oldPresent){$same='OLD_MISSING'}
+  elseif(-not $mainPresent){$same='MAIN_MISSING'}
+  Write-Output ('SOURCE_COMPONENT=' + $relative + ' MAIN_PRESENT=' + $mainPresent + ' OLD_PRESENT=' + $oldPresent + ' COMPARISON=' + $same)
+}
+
 try {
   $git = Get-Command git.exe -ErrorAction Stop
   $head=(& $git.Source -C $checkout rev-parse HEAD 2>$null)
@@ -91,8 +114,8 @@ $ffProfiles=Join-Path $env:APPDATA 'Mozilla\Firefox\Profiles'
 $matchingAddonRecords=0
 if(Test-Path -LiteralPath $ffProfiles){
   try {
-    foreach($profile in @(Get-ChildItem -LiteralPath $ffProfiles -Directory -ErrorAction Stop)){
-      $extRegistry=Join-Path $profile.FullName 'extensions.json'
+    foreach($ffProfileEntry in @(Get-ChildItem -LiteralPath $ffProfiles -Directory -ErrorAction Stop)){
+      $extRegistry=Join-Path $ffProfileEntry.FullName 'extensions.json'
       if(-not (Test-Path -LiteralPath $extRegistry)){continue}
       try {
         $registry=Get-Content -LiteralPath $extRegistry -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
