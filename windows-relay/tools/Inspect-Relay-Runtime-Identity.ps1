@@ -118,7 +118,6 @@ try {
       $command=[string]$a.Execute+' '+[string]$a.Arguments
       if($command -match 'GPTWindowsRelay|GPT-Windows-Relay|windows_relay\.py|relay-watchdog|relay-control|GPT\\Client\\Relay'){
         $found++
-        $triggerKinds=@($t.Triggers | ForEach-Object { $_.CimClass.CimClassName } | Select-Object -Unique)
         $actionExe=[IO.Path]::GetFileName(([string]$a.Execute).Trim('"'))
         $state=if($null -ne $t.State){[string]$t.State}else{'UNKNOWN'}
         Write-Output ('RELAY_TASK NAME=' + $t.TaskName + ' SOURCE=' + (IdentifySource $command) +
