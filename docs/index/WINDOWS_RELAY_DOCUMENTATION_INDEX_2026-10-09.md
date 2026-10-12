@@ -12,6 +12,7 @@
 - [Engineering ownership and GitHub-push → relay-pull workflow](../policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md): ChatGPT leads routine engineering, Codex handles major escalations, runtime owner security stays separate.
 - [GitHub permission-prompt automation evidence](../facts/WINDOWS_RELAY_GITHUB_APPROVAL_BEHAVIOR_2026-10-11.md): source markers, test limitations and loaded-extension uncertainty; not proof of live authorization.
 - [Read-only Windows runtime identity inspector](../../windows-relay/tools/Inspect-Relay-Runtime-Identity.ps1): backend listener, PID, scheduled-task and old-Client path evidence, no state changes.
+- [Full-stack Main-Build provenance — 2026-10-11](../reviews/WINDOWS_RELAY_FULL_STACK_PROVENANCE_2026-10-11.md): launcher, backend, HUD, watchdog, pairing, Firefox policy/profile and content-script path checks.
 
 ## Dated, maintained reading order
 
