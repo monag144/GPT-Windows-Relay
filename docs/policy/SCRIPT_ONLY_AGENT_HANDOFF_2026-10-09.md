@@ -8,7 +8,7 @@ The source engineer need not independently select or hardcode the next engineer 
 
 **Retire and prohibit use as handoff routes:** relay operation-count/scheduled rotation, Firefox content-script navigation/rename and send, watchdog/supervisor-driven fresh chats, alternate out-of-band UIA/clipboard/tab agent-transfer controllers (excluding the already approved one-shot launcher), headless/browser test fallback rotations, and the experimental replacement-switching architecture. Existing shared UIA/clipboard/tab tools are only *suspended for switching*; do not rip them out of necessary ordinary same-chat relay operations, STOP, or recovery.
 
-No automatic switching at ordinal 100. `consumer/control_harness.py` retains strict finite series limits, documented attempts, audit cadence, safety gates, and requires explicit one-shot manual handoff after exhaustion. Do not bypass a cross-conversation owner guard or relaunch an uncertain older packet.
+No automatic switching at ordinal 100. The former GitHub audit cadence and checkpoint requirements are **revoked** and never gate relay execution. PCE series/issued-ID history is archival engineering accounting, not runtime permission. An explicit user-requested handoff remains separate from ordinary GitHub source delivery. Do not bypass a cross-conversation owner guard or relaunch an uncertain older packet. See `docs/policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md` for the superseding ChatGPT engineering-owner and pull workflow.
 
 **Archive:** `windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md` documents retired approaches, concrete source at pre-retirement SHA `77bee0a6b24e9bc7360f4a09505da4d6d1e8047c`, incidents, and retained/shared implementation boundaries.
 
