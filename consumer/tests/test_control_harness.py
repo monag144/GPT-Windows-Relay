@@ -51,6 +51,18 @@ class ControlHarnessTests(unittest.TestCase):
         with self.assertRaises(ch.ControlHarnessError):
             ch.assess_engineering_operation_budget(101)
 
+    def test_no_local_backup_rule_is_advisory_and_explicit(self):
+        c = ch.build_control_harness_contract("PCE19")
+        policy = c["local_backup_policy"]
+        self.assertEqual(policy["mode"], "NO_ON_DEVICE_BACKUPS")
+        self.assertEqual(policy["effective_date"], "2026-10-12")
+        self.assertIn("Never create on-device", policy["rule"])
+        self.assertIn("GitHub", policy["history"])
+        self.assertIn("operator disposition", policy["irreplaceable_data"])
+        self.assertIn("never a relay action authorization", policy["execution_policy"])
+        self.assertNotIn("local_backup_policy", c["execution_policy"])
+        self.assertTrue(ch.engineering_preflight("PCE19", 5)["ok"])
+
     def test_contract_uses_only_approved_script_for_handoff(self):
         c=ch.build_control_harness_contract("PCE16")
         self.assertEqual(c["agent_handoff"]["mode"],"user_requested_one_shot_only")
