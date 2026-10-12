@@ -2,6 +2,8 @@
 
 **Current operator rule, effective immediately.** Windows Relay engineering, consolidation, deployment, Codex work and tests MUST NOT create, retain as new artifacts, or automatically regenerate local backup copies of source or builds.
 
+**No new local backup folders, ever.** Irreplaceable private runtime data is not magically recoverable from GitHub; handle any existing unique state by explicit user decision, not by making another local safety copy.
+
 The only active Windows Relay source is the Git-tracked `GPT-Windows-Relay-Main-Build/windows-relay/`; its Firefox release source is `extension-persistent/`. One-Click Go's distinct `extension/` remains a separate consumer product, not a duplicate Windows Relay release.
 
 ## Required engineering behavior
