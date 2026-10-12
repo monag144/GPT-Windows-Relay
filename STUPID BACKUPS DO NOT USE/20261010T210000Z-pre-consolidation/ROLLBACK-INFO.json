@@ -1,0 +1,12 @@
+﻿{
+    "copied_at":  "2026-10-10T21:00:00-07:00",
+    "source_hashes":  {
+                          "content.js":  "5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A",
+                          "service_worker.js":  "DF5943F14A2B808A0FD73AFF001EAAF4361D1167D590D83584F13FB402611555",
+                          "manifest.json":  "85418070F6C0CF3249844A88E868B3BB79F31F1D9077EC39D024AC3503585073",
+                          "popup.html":  "0CC43EECACA320AE4E100BBC3A4CD72CF8C04B776183AE8CFECCA5B25E3B77DA",
+                          "popup.js":  "41F217ADB067482E5B2572CDB68C233AF4596AB54AB7EDC10224415A0F0FD415"
+                      },
+    "source":  "gpt-windows-relay-firefox-reconciled-20261010",
+    "rollback":  "Remove only Prototype/Firefox-Candidates and Backup snapshot after review; originals remain in place"
+}

@@ -1,0 +1,28 @@
+{
+  "product": "GPT Windows Relay",
+  "workspace_role": "authoritative development build",
+  "repository": "monag144/GPT-Windows-Relay",
+  "branch": "main",
+  "git": {
+    "local_head": "16856b6ebffc8430c430c01b2b5aed05b3dbd7dc",
+    "verified_cached_origin_main": "53e713a0fee619f772c2c4143e9e9fe2369b54d1",
+    "local_head_is_ancestor_of_cached_origin_main": true,
+    "fetch_status": "not refreshed: .git/FETCH_HEAD permission denied"
+  },
+  "extension": {
+    "variant": "extension-persistent",
+    "version": "0.3.17",
+    "gecko_id": "gpt-windows-relay@local",
+    "files": {
+      "content.js": {"sha256": "5169E84985E9452E9E55EA29D5BCD56F4484E0B02EE7853C21D8CBE2BC3C151A", "bytes": 90753},
+      "service_worker.js": {"sha256": "DF5943F14A2B808A0FD73AFF001EAAF4361D1167D590D83584F13FB402611555", "bytes": 16837},
+      "manifest.json": {"sha256": "85418070F6C0CF3249844A88E868B3BB79F31F1D9077EC39D024AC3503585073", "bytes": 937},
+      "popup.js": {"sha256": "41F217ADB067482E5B2572CDB68C233AF4596AB54AB7EDC10224415A0F0FD415", "bytes": 1088},
+      "popup.html": {"sha256": "0CC43EECACA320AE4E100BBC3A4CD72CF8C04B776183AE8CFECCA5B25E3B77DA", "bytes": 867}
+    }
+  },
+  "build_status": {"source_hashes_verified": true, "javascript_syntax_checks": "passed", "isolated_tests": {"count": 100, "result": "passed"}, "candidate_package": "gpt-windows-relay-firefox-reconciled-20261010", "status": "offline candidate verified"},
+  "deployment_status": {"client_modified": false, "firefox_modified": false, "relay_restarted": false, "deployed": false, "approval_required": true, "pce16_035_resent": false},
+  "generated": "2026-10-10",
+  "notes": ["GPT One-Click Go Relay artifacts are excluded.", "Running Firefox extension identity remains unverified.", "No live deployment or runtime mutation was performed."]
+}
