@@ -6,6 +6,8 @@ Windows Relay engineering belongs exclusively in **`monag144/GPT-Windows-Relay`*
 
 Local source checkout target: `C:\Users\Craig Morgan\Downloads\Dev\GPT-Windows-Relay-Main-Build`. Deployed runtime: `C:\Users\Craig Morgan\Downloads\Dev\GPT\Client\Relay`. The deployed tree remains protected and is not a replacement for the source checkout.
 
+**No local backups:** [2026-10-12 operator policy](docs/policy/WINDOWS_RELAY_NO_ON_DEVICE_BACKUPS_2026-10-12.md) forbids on-device source snapshots and rollback folders. GitHub remote source history is the approved recovery method. A pinned [preconsolidation archive branch](https://github.com/monag144/GPT-Windows-Relay/tree/archive/preconsolidation-source-2026-10-12) preserves previously published legacy files without rechecking them out in Main-Build.
+
 **Working engineer:** [ChatGPT source ownership and push-before-pull delivery — 2026-10-11](docs/policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md). Routine source engineering is done in GitHub first, then a safe relay pull is supplied. Codex is for heavy repair. [Read-only runtime identity diagnostic](windows-relay/tools/Inspect-Relay-Runtime-Identity.ps1) checks old Client versus Main-Build startup references without touching the runtime.
 
 **Execution policy:** [No relay governance or audit preflight](docs/policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md). Tests, benchmarks and reviews are separate from authorized command admission; STOP, token and owner safeguards remain mandatory.
