@@ -8,20 +8,24 @@ $killHud=Join-Path $root '.relay-kill-hud'
 $starting=Join-Path $root '.relay-starting'
 $killFailed=Join-Path $root '.relay-kill-failed'
 $disconnectReason=Join-Path $root '.relay-disconnect-reason'
-$run=Join-Path $root 'run-control.ps1'
+$run=Join-Path $root 'run.ps1'
 $watchdog=Join-Path $root 'relay-watchdog-loop.ps1'
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}
+function ProcessForListener($l){if($l){Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue}}
+function IsCanonicalProcess($proc,[string]$leaf){return $null -ne $proc -and [string]$proc.CommandLine -match [regex]::Escape($root) -and [string]$proc.CommandLine -match ('(?i)'+[regex]::Escape($leaf))}
+function CanonicalListener {$l=Listener;if(-not $l){return $null};$p=ProcessForListener $l;if(IsCanonicalProcess $p 'windows_relay.py'){return $l};return $null}
+function ForeignListener {$l=Listener;if($l -and -not (CanonicalListener)){return $l};return $null}
 function GenuineSupervisors {
-  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^powershell(.exe)?$' -and $_.CommandLine -match '(?i)-File\s+"?[^\"]*\\run\.ps1"?(\s|$)'})
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^powershell(.exe)?$' -and (IsCanonicalProcess $_ 'run.ps1')})
 }
 function GenuineWatchdogs {
-  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^powershell(.exe)?$' -and $_.CommandLine -match '(?i)-File\s+"?[^\"]*\\relay-watchdog-loop\.ps1"?(\s|$)'})
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^powershell(.exe)?$' -and (IsCanonicalProcess $_ 'relay-watchdog-loop.ps1')})
 }
 function GenuineHudProcesses {
-  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^pythonw(.exe)?$' -and $_.CommandLine -match '(?i)(^|\s)"?[^\"]*hud\.py"?(\s|$)'})
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^python(w)?(.exe)?$' -and (IsCanonicalProcess $_ 'hud.py')})
 }
 function GenuineRelayProcesses {
-  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -ieq 'GPTWindowsRelay.exe' -or ($_.CommandLine -and $_.CommandLine -match '(?i)(^|\s)"?[^\"]*windows_relay\.py"?(\s|$)')})
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -ieq 'GPTWindowsRelay.exe' -and (IsCanonicalProcess $_ 'GPTWindowsRelay.exe') -or ($_.CommandLine -and (IsCanonicalProcess $_ 'windows_relay.py'))})
 }
 function KillTree($items){foreach($proc in @($items)){if($proc.ProcessId -and $proc.ProcessId -ne $PID){taskkill /PID $proc.ProcessId /T /F | Out-Null}}}
 function KillHudOnly {foreach($proc in @(GenuineHudProcesses)){if($proc.ProcessId -and $proc.ProcessId -ne $PID){taskkill /PID $proc.ProcessId /F | Out-Null}}}
@@ -64,7 +68,8 @@ function WaitBrowserQuiesced([int]$listenerPort,[long]$generation,[int]$timeoutM
   return $false
 }
 function StartSupervisor {
-  if(-not (Listener)){
+  if(ForeignListener){Write-Output 'FOREIGN_LISTENER canonical supervisor not started';return}
+  if(-not (CanonicalListener)){
     Start-Process powershell.exe -WindowStyle Normal -WorkingDirectory $root -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$run+'"')) | Out-Null
     Start-Sleep -Seconds 2
   }
@@ -77,7 +82,7 @@ function StartWatchdog {
 }
 function StopBackend {
   New-Item -ItemType File -Force -Path $pause | Out-Null
-  $l=Listener
+  $l=CanonicalListener
   if($l){
     $arm=SetBackendArm $false ([int]$l.LocalPort)
     if($null -ne $arm -and [long]$arm.stop_generation -gt 0){[void](WaitBrowserQuiesced ([int]$l.LocalPort) ([long]$arm.stop_generation) 5000)}
@@ -94,13 +99,14 @@ if($Action -eq 'status'){
   if(Test-Path $off){Write-Output 'STATE=OFF';exit}
   if(Test-Path $pause){Write-Output 'STATE=STOPPED';exit}
   if(Test-Path $starting){Write-Output 'STATE=STARTING';exit}
-  if($l){$proc=Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue;Write-Output ('STATE=RUNNING PID='+$l.OwningProcess+' SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}));exit}
+  if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('STATE=RUNNING PID='+$l.OwningProcess+' SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}));exit}
+  if($l){$proc=ProcessForListener $l;Write-Output ('STATE=FOREIGN_LISTENER PID='+$l.OwningProcess+' SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}));exit}
   Write-Output 'STATE=DISCONNECTED REASON=port 8766 not listening';exit
 }
 if($Action -in @('stop','pause')){
   Remove-Item $off,$kill,$killHud,$killFailed,$starting,$disconnectReason -Force -ErrorAction SilentlyContinue
   New-Item -ItemType File -Force -Path $pause | Out-Null
-  $l=Listener
+  $l=CanonicalListener
   $stopGeneration=0
   $verified=$false
   if($l){
@@ -140,7 +146,7 @@ if($Action -eq 'restart'){
   Remove-Item $off,$kill,$killHud,$killFailed,$starting,$disconnectReason -Force -ErrorAction SilentlyContinue
   New-Item -ItemType File -Force -Path $starting | Out-Null
   New-Item -ItemType File -Force -Path $pause | Out-Null
-  $l=Listener
+  $l=CanonicalListener
   if($l){taskkill /PID $l.OwningProcess /T /F | Out-Null}
   Start-Sleep -Seconds 2
   Remove-Item $pause -Force -ErrorAction SilentlyContinue
@@ -154,5 +160,5 @@ if($Action -eq 'restart'){
   StartSupervisor
   Remove-Item $starting -Force -ErrorAction SilentlyContinue
 }
-$l=Listener
-if($l){$proc=Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue;Write-Output ('RUNNING PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}))}else{Write-Output 'STOPPED PAUSED=False'}
+  $l=CanonicalListener
+if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('RUNNING PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}))}elseif($l){$proc=ProcessForListener $l;Write-Output ('FOREIGN_LISTENER PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}))}else{Write-Output 'STOPPED PAUSED=False'}
