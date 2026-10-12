@@ -4,7 +4,7 @@ Canonical repository for the Windows relay, Windows consumer/runtime tooling, an
 
 Windows relay engineering, documentation, testing, issues, and commits belong exclusively in **`monag144/GPT-Windows-Relay`**, branch `main`. Verify that local Git remotes target this repository before changing Windows files.
 
-Local source checkout target: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\GPT-Windows-Relay`. Deployed runtime: `C:\Users\<LOCAL_USER>\Downloads\Dev\GPT\Client\Relay`. The deployed tree is not a replacement for the source checkout.
+Local source checkout target: `C:\Users\Craig Morgan\Downloads\Dev\GPT-Windows-Relay-Main-Build`. Deployed runtime: `C:\Users\Craig Morgan\Downloads\Dev\GPT\Client\Relay`. The deployed tree remains protected and is not a replacement for the source checkout.
 
 **Documentation:** [Windows Relay documentation index — 2026-10-09](docs/index/WINDOWS_RELAY_DOCUMENTATION_INDEX_2026-10-09.md). This is the newer date-only reading directory; earlier timestamped indexes remain historical evidence. Root `README.md` stays as a conventional GitHub navigation alias.
 
