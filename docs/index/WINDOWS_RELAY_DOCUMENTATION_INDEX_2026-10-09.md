@@ -7,6 +7,12 @@
 - [Relay execution without governance — 2026-10-11](../policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md) supersedes old five-operation GitHub audits, preflight receipts and periodic review requirements. Auth/STOP/owner/dedupe remain mandatory runtime security.
 - Past audit and PCE12–PCE17 governance incident files are historical evidence only, not live command admission instructions.
 
+## Current engineering owner and source evidence (2026-10-11)
+
+- [Engineering ownership and GitHub-push → relay-pull workflow](../policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md): ChatGPT leads routine engineering, Codex handles major escalations, runtime owner security stays separate.
+- [GitHub permission-prompt automation evidence](../facts/WINDOWS_RELAY_GITHUB_APPROVAL_BEHAVIOR_2026-10-11.md): source markers, test limitations and loaded-extension uncertainty; not proof of live authorization.
+- [Read-only Windows runtime identity inspector](../../windows-relay/tools/Inspect-Relay-Runtime-Identity.ps1): backend listener, PID, scheduled-task and old-Client path evidence, no state changes.
+
 ## Dated, maintained reading order
 
 1. [Document titles and date precedence](../policy/DOCUMENT_TITLES_AND_DATE_PRECEDENCE_2026-10-09.md) — title-first/date-last filename convention, safe conflict resolution and compatibility aliases.
