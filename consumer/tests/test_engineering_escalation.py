@@ -27,17 +27,17 @@ class EngineeringEscalationTests(unittest.TestCase):
         ):
             self.assertFalse(ch.assess_engineering_rescue(history, 18)["codex_escalation_due"])
 
-    def test_twenty_operation_review_is_advisory(self):
-        result = ch.engineering_preflight("PCE12", 20)
-        self.assertTrue(result["review_due"])
-        self.assertFalse(result["review_hard_gate"])
-        self.assertIn("github_checkpoint_audit_missing", result["blockers"])
-        self.assertFalse(ch.engineering_preflight("PCE12", 19)["review_due"])
-
-    def test_contract_describes_codex_model_and_soft_review(self):
-        c = ch.build_control_harness_contract("PCE12")
+    def test_fifth_and_twentieth_slots_require_no_governance(self):
+        for ordinal in (5, 10, 20, 100):
+            v=ch.engineering_preflight("PCE12", ordinal)
+            self.assertTrue(v["ok"])
+            self.assertFalse(v["audit_required"])
+            self.assertFalse(v["review_due"])
+            self.assertEqual(v["blockers"], [])
+        c=ch.build_control_harness_contract("PCE12")
+        self.assertNotIn("github_audit_checkpoint", c)
+        self.assertNotIn("twenty_operation_review", c)
         self.assertEqual(c["codex_escalation"]["model"], "gpt-5.6-terra")
-        self.assertFalse(c["twenty_operation_review"]["hard_gate"])
 
 
 if __name__ == "__main__":
