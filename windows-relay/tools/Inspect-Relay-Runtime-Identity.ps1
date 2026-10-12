@@ -85,6 +85,83 @@ foreach($key in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run','HKLM:\S
 }
 $firefox=@(Get-Process -Name firefox -ErrorAction SilentlyContinue)
 Write-Output ('FIREFOX_PROCESS_COUNT=' + $firefox.Count)
+# These are on-disk extension registration hints, NOT proof of loaded browser code.
+# Never emit browser profile paths, private addon metadata, or pairing secrets.
+$ffProfiles=Join-Path $env:APPDATA 'Mozilla\Firefox\Profiles'
+$matchingAddonRecords=0
+if(Test-Path -LiteralPath $ffProfiles){
+  try {
+    foreach($profile in @(Get-ChildItem -LiteralPath $ffProfiles -Directory -ErrorAction Stop)){
+      $extRegistry=Join-Path $profile.FullName 'extensions.json'
+      if(-not (Test-Path -LiteralPath $extRegistry)){continue}
+      try {
+        $registry=Get-Content -LiteralPath $extRegistry -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        foreach($addon in @($registry.addons)){
+          $addonId=[string]$addon.id
+          $addonName=[string]$addon.defaultLocale.name
+          if($addonId -ne 'gpt-windows-relay@local' -and
+             $addonName -notmatch '^GPT (Windows Relay|One-Click Go Relay)
+Write-Output 'FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True'
+Write-Output 'FIREFOX_NEXT_CHECK=about:debugging#/runtime/this-firefox'
+Write-Output 'RESULT=READ_ONLY_NO_CHANGES'
+){continue}
+          $matchingAddonRecords++
+          $addonPath=[string]$addon.path
+          if(-not $addonPath){$addonPath=[string]$addon.rootURI}
+          $sourceLabel=IdentifySource $addonPath
+          if($sourceLabel -eq 'NOT_RELAY'){$sourceLabel='PROFILE_OR_PACKAGED_EXTENSION'}
+          Write-Output ('FIREFOX_ADDON_REGISTRATION ID=' + $addonId + ' VERSION=' + [string]$addon.version +
+            ' ACTIVE_IN_REGISTRY=' + [string]$addon.active + ' SOURCE=' + $sourceLabel)
+        }
+      } catch {Write-Output 'FIREFOX_ADDON_REGISTRY_PARSE=UNAVAILABLE'}
+    }
+  } catch {Write-Output 'FIREFOX_ADDON_REGISTRY_SCAN=UNAVAILABLE'}
+}
+Write-Output ('FIREFOX_MATCHING_ADDON_REGISTRATIONS=' + $matchingAddonRecords)
+$firefoxExeCandidates=@('C:\Program Files\Mozilla Firefox','C:\Program Files (x86)\Mozilla Firefox')
+foreach($ffDir in $firefoxExeCandidates){
+  $policyFile=Join-Path $ffDir 'distribution\policies.json'
+  if(-not (Test-Path -LiteralPath $policyFile)){continue}
+  try {
+    $pol=Get-Content -LiteralPath $policyFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    $extSettings=$pol.policies.ExtensionSettings
+    $target=$null
+    if($null -ne $extSettings){
+      $p=$extSettings.PSObject.Properties['gpt-windows-relay@local']
+      if($null -ne $p){$target=$p.Value}
+    }
+    if($null -ne $target){
+      Write-Output ('FIREFOX_SIGNED_POLICY MODE=' + [string]$target.installation_mode +
+        ' INSTALL_SOURCE=' + (IdentifySource ([string]$target.install_url)))
+    }else{Write-Output 'FIREFOX_SIGNED_POLICY=NO_RELAY_ENTRY'}
+  } catch { Write-Output 'FIREFOX_SIGNED_POLICY=UNREADABLE' }
+}
+# Relevant Windows shortcuts can still target an outdated Client even when
+# the checked-in launcher is self-relative. Resolve them without opening them.
+$shortcutGroups=@(
+  @{kind='USER_DESKTOP'; path=[Environment]::GetFolderPath('Desktop')},
+  @{kind='PUBLIC_DESKTOP'; path=[Environment]::GetFolderPath('CommonDesktopDirectory')},
+  @{kind='USER_START_MENU'; path=[Environment]::GetFolderPath('StartMenu')},
+  @{kind='COMMON_START_MENU'; path=[Environment]::GetFolderPath('CommonStartMenu')}
+)
+$shortcuts=0
+try {
+  $shell=New-Object -ComObject WScript.Shell
+  foreach($folder in $shortcutGroups){
+    if(-not $folder.path -or -not (Test-Path -LiteralPath $folder.path)){continue}
+    foreach($file in @(Get-ChildItem -LiteralPath $folder.path -Filter '*.lnk' -File -Recurse -ErrorAction SilentlyContinue)){
+      try {
+        $lnk=$shell.CreateShortcut($file.FullName)
+        $combined=[string]$lnk.TargetPath+' '+[string]$lnk.Arguments
+        if($file.BaseName -notmatch 'GPT.*Relay|Windows.*Relay|Relay.*GPT' -and
+           $combined -notmatch 'GPTWindowsRelay|GPT-Windows-Relay|GPT\\Client\\Relay|windows_relay\.py'){continue}
+        $shortcuts++
+        Write-Output ('RELAY_SHORTCUT LOCATION=' + $folder.kind + ' SOURCE=' + (IdentifySource $combined))
+      } catch {}
+    }
+  }
+} catch {Write-Output 'RELAY_SHORTCUT_SCAN=UNAVAILABLE'}
+Write-Output ('RELAY_SHORTCUT_COUNT=' + $shortcuts)
 Write-Output 'FIREFOX_LOADED_EXTENSION_IDENTITY=UNKNOWN_FROM_PROCESS_INSPECTION'
 Write-Output 'FIREFOX_NEXT_CHECK=about:debugging#/runtime/this-firefox'
 Write-Output 'RESULT=READ_ONLY_NO_CHANGES'
