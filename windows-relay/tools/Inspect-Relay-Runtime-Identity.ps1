@@ -9,9 +9,12 @@ $oldIndicator = 'Downloads\Dev\GPT\Client\Relay'
 $newIndicator = 'Downloads\Dev\GPT-Windows-Relay-Main-Build\windows-relay'
 function IdentifySource([string]$commandLine) {
   if([string]::IsNullOrWhiteSpace($commandLine)){return 'UNKNOWN'}
-  if($commandLine.IndexOf($newIndicator,[StringComparison]::OrdinalIgnoreCase) -ge 0){return 'MAIN_BUILD'}
-  if($commandLine.IndexOf($oldIndicator,[StringComparison]::OrdinalIgnoreCase) -ge 0){return 'OLD_CLIENT'}
-  if($commandLine -match 'windows_relay\.py|relay-watchdog|relay-control|run\.ps1|hud\.py'){return 'OTHER_RELAY_PATH'}
+  # Handles Windows command lines and file:/// extension install URLs alike.
+  try {$normalized=([Uri]::UnescapeDataString($commandLine)).Replace('/','\')}
+  catch {$normalized=$commandLine.Replace('/','\')}
+  if($normalized.IndexOf($newIndicator,[StringComparison]::OrdinalIgnoreCase) -ge 0){return 'MAIN_BUILD'}
+  if($normalized.IndexOf($oldIndicator,[StringComparison]::OrdinalIgnoreCase) -ge 0){return 'OLD_CLIENT'}
+  if($normalized -match 'windows_relay\.py|relay-watchdog|relay-control|run\.ps1|hud\.py'){return 'OTHER_RELAY_PATH'}
   return 'NOT_RELAY'
 }
 Write-Output '=== GPT WINDOWS RELAY READ-ONLY IDENTITY ==='
