@@ -9,3 +9,6 @@ This README filename is a compatibility entry point. The maintained dated [proje
 **Canonical build layout:** `windows_relay.py`, `hud.py`, `START-GPT-WINDOWS-RELAY.bat`, and `extension-persistent/` are the sole release-candidate source paths. The sibling `extension/` tree and historical Prototype snapshots are retained for provenance only and are not packaging or deployment inputs.
 
 Original extensive README is preserved [at this Git commit](https://github.com/monag144/GPT-Windows-Relay/blob/24d4c2bad800f689ae4ad4d9c67b54e6c50e73e8/windows-relay/README.md).
+
+
+**Active engineering ownership (2026-10-11):** ChatGPT performs routine code changes directly in the GitHub WIP development branch, verifies/pushes them, then supplies a safe `git pull --ff-only` command for the Main-Build checkout. Codex is an escalation for major repair. To confirm whether port 8766 or scheduled tasks point to the old Client, run the read-only `tools/Inspect-Relay-Runtime-Identity.ps1` on Windows. This does not identify Firefox's loaded add-on; verify that separately in `about:debugging`. See [current owner policy](../docs/policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md) and [approval automation evidence](../docs/facts/WINDOWS_RELAY_GITHUB_APPROVAL_BEHAVIOR_2026-10-11.md).
