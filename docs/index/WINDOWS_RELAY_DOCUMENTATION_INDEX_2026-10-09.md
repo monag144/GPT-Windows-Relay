@@ -13,6 +13,10 @@
 7. [One-Click Go consumer guide](../guides/ONE_CLICK_GO_CONSUMER_GUIDE_2026-10-09.md) — user setup, with historical Firefox-compatibility inconsistency identified.
 8. [Document authority audit](../audits/WINDOWS_RELAY_DOCUMENT_AUTHORITY_AUDIT_2026-10-09.md) — exactly which misleading legacy documents were superseded and which still need migration.
 
+## Single-build development and release policy (2026-10-11)
+
+- [One integrated Windows Relay development build and later release](../policy/WINDOWS_RELAY_SINGLE_DEVELOPMENT_BUILD_AND_RELEASE_2026-10-11.md) — authoritative directive: one unified backend + HUD + browser integration + One-Click Go; complete development and acceptance, then re-release from that same validated build. Historical runtime/Client copies are rollback only. **As of PCE17.011, the legacy nested runtime is still live; the canonical integrated build is not yet proved deployed.**
+
 ## HUD feature design (proposed, not shipped)
 
 - [Windows Relay HUD conversation controls — 2026-10-10](../design/WINDOWS_RELAY_HUD_CONVERSATION_CONTROLS_2026-10-10.md) — user-requested exact-conversation **FOCUS CHAT**, **SELECT CHAT / CLAIM–CONNECT** and visible **FORCE** button; requires STOP/owner/dedup gates, preserves five working Client buttons and prohibits automatic handoff. **Design only; no live Client changes.**
