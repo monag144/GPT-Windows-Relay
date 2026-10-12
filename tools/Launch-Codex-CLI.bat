@@ -4,8 +4,8 @@ title Codex CLI - GPT Windows Relay
 
 rem PCE12: stand-alone, double-click Codex CLI launcher.
 rem No Termux fallback. No GitHub Actions dependency.
-set "WORKSPACE=%USERPROFILE%\Downloads\Dev\GPT\GPT-Windows-Relay"
-set "START_DIR=%USERPROFILE%"
+set "WORKSPACE=%USERPROFILE%\Downloads\Dev\GPT-Windows-Relay-Main-Build"
+set "START_DIR=%WORKSPACE%"
 set "EXPECTED_HTTPS=https://github.com/monag144/GPT-Windows-Relay"
 set "EXPECTED_SSH=git@github.com:monag144/GPT-Windows-Relay"
 
@@ -32,7 +32,8 @@ if exist "%WORKSPACE%\.git" (
 ) else (
   echo Canonical Windows checkout not found at:
   echo   %WORKSPACE%
-  echo No fallback to the retired Termux repository.
+  echo Codex will not launch outside the canonical Main-Build.
+  exit /b 1
 )
 
 echo Starting directory:
