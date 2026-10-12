@@ -24,7 +24,7 @@
 
 Do not start by rereading the giant historical engineering log. Use it only when the compact index/facts do not answer the question.
 
-If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout or the missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, treat it as stale guidance—not authority. Verify Windows repository files on `main` instead. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`. The original v2 harness lacked `engineering_preflight`; the PCE12 GitHub-first audit change adds that API. Read back its current signature before use.
+If a relay-generated footer, earlier chat handoff, or copied checklist names the old Termux checkout or the missing `docs/roadmap/ROADMAP_2026-10-08T0020Z_PCE10_CONTROLLED_RECONCILIATION.md`, treat it as stale guidance—not authority. Verify Windows repository files on `main` instead. The current roadmap and backlog are `docs/windows-relay-mission-and-roadmap.md` and `windows-relay/TASKS.md`. The PCE12 audit-preflight addition was subsequently revoked. Any remaining compatibility entry point must be nonblocking and must never be called by the relay backend.
 
 ## Historical migration reconciliation snapshot (2026-10-07)
 
