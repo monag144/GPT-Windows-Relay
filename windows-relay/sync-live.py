@@ -119,6 +119,15 @@ def restart_backend_under_supervisor(port: int = 8766) -> None:
     print("BACKEND_RESTART=NOT_CONFIRMED")
 
 def main() -> int:
+    # Retired by the operator's 2026-10-12 no-on-device-backups rule.
+    # This legacy utility creates timestamped live/backups/sync-live-* copies
+    # and overwrites a second installed Client tree. It must not be run.
+    raise SystemExit(
+        "RETIRED_NO_LOCAL_BACKUPS: sync-live.py creates local backup copies "
+        "and targets an obsolete Client path. Use the canonical Main-Build "
+        "Git checkout and reviewed deployment procedures instead."
+    )
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", type=Path, default=DEFAULT_LIVE)
     ap.add_argument("--restart-backend", action="store_true")
