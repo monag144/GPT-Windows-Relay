@@ -844,7 +844,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--config',type=Path,default=cfg_dir()/'bridge.json'); ap.add_argument('--state-dir',type=Path,default=state_dir()); sub=ap.add_subparsers(dest='mode',required=True); sub.add_parser('server'); sub.add_parser('stdin'); a=ap.parse_args(); st=State(a.state_dir/'state.json')
-    if a.mode=='stdin': print('GOVERNANCE_BLOCKED: authenticated HTTP transport and operator-bound conversation required'); return 3
+    if a.mode=='stdin': print('AUTHENTICATED_TRANSPORT_REQUIRED: authenticated HTTP transport and operator-bound conversation required'); return 3
     operator_token=os.environ.get('GPT_WINDOWS_RELAY_OPERATOR_BIND_TOKEN','').strip() or None
     c=config(a.config); s=Server(('127.0.0.1',c['port']),c['token'],st,operator_token); print(f'GPT Windows Relay listening on 127.0.0.1:{c["port"]} — {"ARMED" if st.armed else "DISARMED"}',flush=True)
     try: s.serve_forever(.25)
