@@ -183,6 +183,15 @@ def wake(py: Path, live: Path, firefox_pid: int, message: str):
     return data
 
 def main():
+    # Retired by the operator's 2026-10-12 no-on-device-backups rule.
+    # This legacy cutover requires a local --backup snapshot, targets
+    # historical Client/Firefox wiring and can change a running session.
+    # Do not execute it while the single-build process is being repaired.
+    raise SystemExit(
+        "RETIRED_NO_LOCAL_BACKUPS: this historical cutover relies on a "
+        "local backup snapshot. No automatic cutover is authorized."
+    )
+
     ap=argparse.ArgumentParser()
     ap.add_argument('--packet-id',required=True)
     ap.add_argument('--backup',required=True,type=Path)
