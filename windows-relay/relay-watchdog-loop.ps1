@@ -11,17 +11,22 @@ if(Test-Path (Join-Path $root '.venv\Scripts\pythonw.exe')){$hudPy=Join-Path $ro
 function Log([string]$m){Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' '+$m)}
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}
 function ProcessForListener($l){if($l){Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue}}
-function CanonicalListener {$l=Listener;if(-not $l){return $null};$p=ProcessForListener $l;if($p -and [string]$p.CommandLine -match [regex]::Escape($root) -and [string]$p.CommandLine -match '(?i)windows_relay\.py'){return $l};return $null}
+function IsCanonicalProcess($proc,[string]$relative){
+  if($null -eq $proc){return $false}
+  $expected=[IO.Path]::GetFullPath((Join-Path $root $relative)); $quoted='"'+$expected+'"'
+  return ([string]$proc.CommandLine).IndexOf($quoted,[StringComparison]::OrdinalIgnoreCase) -ge 0
+}
+function CanonicalListener {$l=Listener;if(-not $l){return $null};$p=ProcessForListener $l;if(IsCanonicalProcess $p 'windows_relay.py'){return $l};return $null}
 function GenuineSupervisors {
   @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -match '^powershell(.exe)?$' -and
-    [string]$_.CommandLine -match [regex]::Escape($root) -and [string]$_.CommandLine -match '(?i)run\.ps1'
+    (IsCanonicalProcess $_ 'run.ps1')
   })
 }
 function GenuineHudProcesses {
   @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -match '^python(w)?(.exe)?$' -and
-    [string]$_.CommandLine -match [regex]::Escape($root) -and [string]$_.CommandLine -match '(?i)hud\.py'
+    (IsCanonicalProcess $_ 'hud.py')
   })
 }
 function EnsureHud {
@@ -36,10 +41,10 @@ if(-not $created){Log ('WATCHDOG_DUPLICATE_EXIT pid='+$PID);$mutex.Dispose();exi
 try {
   Log ('WATCHDOG_START pid='+$PID)
   while($true){
-    EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1
     if(Test-Path -LiteralPath $pause){Start-Sleep -Seconds 10;continue}
     if(CanonicalListener){Start-Sleep -Seconds 10;continue}
     if(Listener){Log 'FOREIGN_LISTENER not touching existing backend';Start-Sleep -Seconds 10;continue}
+    EnsureHud # GPT_RELAY_WATCHDOG_HUD_RECONCILE_CALL_V1
     $sup=GenuineSupervisors
     if($sup.Count -eq 0){
       Log 'NO_LISTENER_NO_SUPERVISOR starting VISIBLE supervisor'

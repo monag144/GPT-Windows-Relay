@@ -12,7 +12,11 @@ $run=Join-Path $root 'run.ps1'
 $watchdog=Join-Path $root 'relay-watchdog-loop.ps1'
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}
 function ProcessForListener($l){if($l){Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue}}
-function IsCanonicalProcess($proc,[string]$leaf){return $null -ne $proc -and [string]$proc.CommandLine -match [regex]::Escape($root) -and [string]$proc.CommandLine -match ('(?i)'+[regex]::Escape($leaf))}
+function IsCanonicalProcess($proc,[string]$relative){
+  if($null -eq $proc){return $false}
+  $expected=[IO.Path]::GetFullPath((Join-Path $root $relative)); $quoted='"'+$expected+'"'
+  return ([string]$proc.CommandLine).IndexOf($quoted,[StringComparison]::OrdinalIgnoreCase) -ge 0
+}
 function CanonicalListener {$l=Listener;if(-not $l){return $null};$p=ProcessForListener $l;if(IsCanonicalProcess $p 'windows_relay.py'){return $l};return $null}
 function ForeignListener {$l=Listener;if($l -and -not (CanonicalListener)){return $l};return $null}
 function GenuineSupervisors {
@@ -25,7 +29,7 @@ function GenuineHudProcesses {
   @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -match '^python(w)?(.exe)?$' -and (IsCanonicalProcess $_ 'hud.py')})
 }
 function GenuineRelayProcesses {
-  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.Name -ieq 'GPTWindowsRelay.exe' -and (IsCanonicalProcess $_ 'GPTWindowsRelay.exe') -or ($_.CommandLine -and (IsCanonicalProcess $_ 'windows_relay.py'))})
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {$_.CommandLine -and (IsCanonicalProcess $_ 'windows_relay.py')})
 }
 function KillTree($items){foreach($proc in @($items)){if($proc.ProcessId -and $proc.ProcessId -ne $PID){taskkill /PID $proc.ProcessId /T /F | Out-Null}}}
 function KillHudOnly {foreach($proc in @(GenuineHudProcesses)){if($proc.ProcessId -and $proc.ProcessId -ne $PID){taskkill /PID $proc.ProcessId /F | Out-Null}}}
@@ -150,12 +154,14 @@ if($Action -eq 'restart'){
   if($l){taskkill /PID $l.OwningProcess /T /F | Out-Null}
   Start-Sleep -Seconds 2
   Remove-Item $pause -Force -ErrorAction SilentlyContinue
+  if(ForeignListener){Write-Output 'FOREIGN_LISTENER canonical restart refused';exit 17}
   StartWatchdog
   StartSupervisor
   Remove-Item $starting -Force -ErrorAction SilentlyContinue
 } elseif($Action -in @('start','resume')) {
   Remove-Item $pause,$off,$kill,$killHud,$killFailed,$starting,$disconnectReason -Force -ErrorAction SilentlyContinue
   New-Item -ItemType File -Force -Path $starting | Out-Null
+  if(ForeignListener){Write-Output 'FOREIGN_LISTENER canonical start refused';exit 17}
   StartWatchdog
   StartSupervisor
   Remove-Item $starting -Force -ErrorAction SilentlyContinue
