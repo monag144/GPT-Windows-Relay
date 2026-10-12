@@ -14,6 +14,8 @@ class RuntimeIdentityDiagnosticTests(unittest.TestCase):
         self.assertIn("SOURCE_COMPONENT=", source)
         self.assertIn("FIREFOX_ADDON_REGISTRATION", source)
         self.assertIn("FIREFOX_SIGNED_POLICY", source)
+        self.assertIn("SIGNED_XPI_PARITY=", source)
+        self.assertIn("gpt-windows-relay-signed.xpi", source)
         self.assertIn("RELAY_SHORTCUT", source)
         self.assertIn("FIREFOX_REGISTRATION_IS_NOT_LOADED_CODE_PROOF=True", source)
         self.assertIn("PROFILE_OR_PACKAGED_EXTENSION", source)
