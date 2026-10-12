@@ -28,9 +28,11 @@
 
 ## P2 — operator experience and optional features
 - [ ] Improve HUD clarity, incident/screenshot visibility, and user-facing diagnostics without changing functioning controls.
-- [ ] Continue consumer one-click installation, governed source/Client sync, update safety and downstream user-requested workflows (e.g. job applications) as separately scoped projects.
+- [ ] Continue consumer one-click installation, controlled source/Client sync, update safety and downstream user-requested workflows (e.g. job applications) as separately scoped projects.
 
-## Governance and evidence
-- **Before each PCE operation**, reread canonical GitHub `consumer/control_harness.py` and current dated roadmap, and compare the actual installed files when relevant. Preserve GitHub-first five-operation audits, drift-focused twenty-operation reviews, issued-ID consumption, and unique PCE ordinals. PCE16.000–.003 completed OK in read-only mode; PCE16.004 is next. Before .005, commit and read back the .000–.004 audit on `main`. `PCE15.050` was emitted and rejected, **not free to retry**. No GitHub Actions usage while credits unavailable.
-- **Permanent retirement:** Do not implement/test operation-count rotation, extension-driven new-agent navigation, UIA fallback transfers, scheduled agent watchers or the replacement switching project. Existing UIA/clipboard/tab tools are temporarily suspended **for agent switching only**, not removed from normal relay execution or recovery. Reference the dated policy `docs/policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md`.
-- Last verified product grade **F / BLOCKED**, 11/28; G16 unknown, G26 0/60, G27 0/2. New grades require new real evidence.
+## Engineering evidence; NEVER runtime governance
+
+- No five-operation audit, twenty-operation review, checkpoint receipt, per-operation GitHub source reread or benchmark is required to execute a Windows command.
+- Maintain historical action-ID records and technical test/benchmark evidence when useful; they never authorize execution. Backend identity, STOP, token, owner and durable deduplication provide runtime safety.
+- Operator-controlled one-shot handoff only; no autonomous switching or hidden rotation. Historical incidents are evidence, not operating instructions.
+- The prior strict F / 11-of-28 benchmark and real-message/endurance gaps concern release acceptance, not governance.
