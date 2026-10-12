@@ -133,8 +133,19 @@ Write-Output 'RESULT=READ_ONLY_NO_CHANGES'
           if(-not $addonPath){$addonPath=[string]$addon.rootURI}
           $sourceLabel=IdentifySource $addonPath
           if($sourceLabel -eq 'NOT_RELAY'){$sourceLabel='PROFILE_OR_PACKAGED_EXTENSION'}
+          $packageParity='UNKNOWN'
+          $canonicalSigned=Join-Path $mainBuild 'dist\gpt-windows-relay-signed.xpi'
+          if(($addonPath -like '*.xpi') -and (Test-Path -LiteralPath $addonPath -PathType Leaf) -and
+             (Test-Path -LiteralPath $canonicalSigned -PathType Leaf)){
+            try {
+              $installedDigest=(Get-FileHash -LiteralPath $addonPath -Algorithm SHA256).Hash
+              $canonicalDigest=(Get-FileHash -LiteralPath $canonicalSigned -Algorithm SHA256).Hash
+              $packageParity=if($installedDigest -eq $canonicalDigest){'IDENTICAL'}else{'DIFFERENT'}
+            }catch{$packageParity='HASH_UNAVAILABLE'}
+          }
           Write-Output ('FIREFOX_ADDON_REGISTRATION ID=' + $addonId + ' VERSION=' + [string]$addon.version +
-            ' ACTIVE_IN_REGISTRY=' + [string]$addon.active + ' SOURCE=' + $sourceLabel)
+            ' ACTIVE_IN_REGISTRY=' + [string]$addon.active + ' SOURCE=' + $sourceLabel +
+            ' SIGNED_XPI_PARITY=' + $packageParity)
         }
       } catch {Write-Output 'FIREFOX_ADDON_REGISTRY_PARSE=UNAVAILABLE'}
     }
