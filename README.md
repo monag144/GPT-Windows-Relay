@@ -2,9 +2,11 @@
 
 Canonical repository for the Windows relay, Windows consumer/runtime tooling, and reusable job-application automation.
 
-Windows relay engineering, documentation, testing, issues, and commits belong exclusively in **`monag144/GPT-Windows-Relay`**, branch `main`. Verify that local Git remotes target this repository before changing Windows files.
+Windows Relay engineering belongs exclusively in **`monag144/GPT-Windows-Relay`**. The **active integrated development branch** is `wip/windows-relay-rebuilt-resynced-2047-101026`; `main` is the separate stable/reviewed baseline and is not the default delivery target for the current Main-Build work. Verify the remote and branch rather than switching/resetting a dirty checkout.
 
 Local source checkout target: `C:\Users\Craig Morgan\Downloads\Dev\GPT-Windows-Relay-Main-Build`. Deployed runtime: `C:\Users\Craig Morgan\Downloads\Dev\GPT\Client\Relay`. The deployed tree remains protected and is not a replacement for the source checkout.
+
+**Working engineer:** [ChatGPT source ownership and push-before-pull delivery — 2026-10-11](docs/policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md). Routine source engineering is done in GitHub first, then a safe relay pull is supplied. Codex is for heavy repair. [Read-only runtime identity diagnostic](windows-relay/tools/Inspect-Relay-Runtime-Identity.ps1) checks old Client versus Main-Build startup references without touching the runtime.
 
 **Execution policy:** [No relay governance or audit preflight](docs/policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md). Tests, benchmarks and reviews are separate from authorized command admission; STOP, token and owner safeguards remain mandatory.
 
