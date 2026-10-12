@@ -7,6 +7,12 @@
 - [Relay execution without governance — 2026-10-11](../policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md) supersedes old five-operation GitHub audits, preflight receipts and periodic review requirements. Auth/STOP/owner/dedupe remain mandatory runtime security.
 - Past audit and PCE12–PCE17 governance incident files are historical evidence only, not live command admission instructions.
 
+## Current disk cleanup directive (2026-10-12)
+
+- [Multiple-build disk audit — 2026-10-12](../reviews/WINDOWS_RELAY_MULTIBUILD_DISK_AUDIT_2026-10-12.md): 23 backends, 26 HUDs, competing untracked nested runtime/Prototype/backups and operator's one-runtime/no-local-backups target. Disk findings are operator-provided; GitHub alone cannot establish loaded/runtime state.
+- [Codex cleanup issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30): classify and choose the actual newest functional runtime, reconcile useful untracked code, physically remove proven redundant files without generating new backups, and preserve sensitive untracked data until explicit disposition.
+- **Warning:** `tools/Launch-Codex-CLI.bat` still selects an outdated checkout and falls back to the user home directory; use a verified Main-Build Codex launch until repaired (issue #30).
+
 ## Current engineering owner and source evidence (2026-10-11)
 
 - [Engineering ownership and GitHub-push → relay-pull workflow](../policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md): ChatGPT leads routine engineering, Codex handles major escalations, runtime owner security stays separate.
