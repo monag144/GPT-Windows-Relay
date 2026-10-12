@@ -2,6 +2,11 @@
 
 **Repository:** `monag144/GPT-Windows-Relay` only. Do not use the old Termux relay as a Windows development source. The date is **Pacific local**, with **no clock time in filenames or document titles**. This directory index is a documented-navigation snapshot, not an assertion that GitHub or a running agent can never advance afterward.
 
+## Current operator policy — NO runtime governance
+
+- [Relay execution without governance — 2026-10-11](../policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md) supersedes old five-operation GitHub audits, preflight receipts and periodic review requirements. Auth/STOP/owner/dedupe remain mandatory runtime security.
+- Past audit and PCE12–PCE17 governance incident files are historical evidence only, not live command admission instructions.
+
 ## Dated, maintained reading order
 
 1. [Document titles and date precedence](../policy/DOCUMENT_TITLES_AND_DATE_PRECEDENCE_2026-10-09.md) — title-first/date-last filename convention, safe conflict resolution and compatibility aliases.
