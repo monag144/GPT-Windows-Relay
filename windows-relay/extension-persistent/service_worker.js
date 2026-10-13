@@ -14,7 +14,12 @@ async function call(path,init={},timeoutMs=15000){
   const r=await fetch(BASE+path,{...init,headers,signal:AbortSignal.timeout(timeoutMs)});
   let d={};
   try{d=await r.json()}catch{}
-  if(!r.ok||!d.ok){const e=new Error(d.detail||d.error||`HTTP ${r.status}`);e.code=d.error||`http_${r.status}`;throw e;}
+  if(!r.ok||!d.ok){
+    const e=new Error(d.detail||d.error||`HTTP ${r.status}`);
+    // Do not flatten the backend's specific denial into a generic RelayError.
+    e.code=d.error==='RelayError'&&typeof d.detail==='string' ? d.detail : (d.error||`http_${r.status}`);
+    throw e;
+  }
   return d;
 }
 
@@ -27,11 +32,31 @@ function transientActionError(e){
   return code==='TypeError' || code==='AbortError' || code==='NetworkError' ||
     /^http_5\d\d$/.test(code) || /fetch|network|connection|aborted|reset|refused/i.test(msg);
 }
-async function callAction(packet){
+// GPT_WINDOWS_AUTHENTICATED_ISSUANCE_TRANSPORT_V1
+async function actionTransport(packet,owner){
+  const meta=relayPacketMeta(packet);
+  const id=meta?.id, session=meta?.session;
+  const key=normalizeConversationKey(owner?.conversation_key);
+  if(!id||!session||session!==owner?.session||!key||
+     key!==owner?.conversation_key||!Number.isSafeInteger(owner?.tab_id)||owner.tab_id<=0)
+    throw Object.assign(new Error('transport_owner_unavailable'),{code:'transport_owner_unavailable'});
+  // Hash the *exact* packet sent; Python checks SHA-256 over this same UTF-8 text.
+  if(!globalThis.crypto?.subtle||typeof TextEncoder!=='function')
+    throw Object.assign(new Error('crypto_sha256_unavailable'),{code:'crypto_sha256_unavailable'});
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(packet));
+  const packet_hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  return {
+    issuance:{id,session,packet_hash},
+    owner:{conversation_key:key,session,tab_id:owner.tab_id}
+  };
+}
+async function callAction(packet,owner){
+  // Reuse metadata across retry attempts; never change identity mid-flight.
+  const transport=await actionTransport(packet,owner);
   const deadline=Date.now()+ACTION_RETRY_WINDOW_MS;
   while(true){
     try{
-      const d=await call('/action',{method:'POST',body:JSON.stringify({packet})},315000);
+      const d=await call('/action',{method:'POST',body:JSON.stringify({packet,...transport})},315000);
       const body=String(d.result||'');
       if(/\"status\"\s*:\s*\"DUPLICATE_INFLIGHT\"/.test(body) && Date.now()<deadline){
         await sleep(ACTION_RETRY_DELAY_MS);
@@ -52,7 +77,7 @@ function resultAttachments(text){
 function bytesToBase64(bytes){let out='';const step=0x8000;for(let i=0;i<bytes.length;i+=step)out+=String.fromCharCode(...bytes.subarray(i,i+step));return btoa(out);}
 async function fetchManagedAttachment(a){
   if(a?.kind!=='image'||a?.mime!=='image/png'||!/^[A-Za-z0-9._-]+\.png$/.test(String(a.name||'')))throw new Error('invalid_attachment_descriptor');
-  const r=await fetch(BASE+'/managed-screenshot/'+encodeURIComponent(a.name),{signal:AbortSignal.timeout(15000),headers:{'X-GPT-Windows-Relay-Token':RELAY_TOKEN}});
+  const r=await fetch(BASE+'/managed-screenshot/'+encodeURIComponent(a.name),{signal:AbortSignal.timeout(15000),headers:{'X-GPT-Windows-Relay-Token':await getToken()}});
   if(!r.ok)throw new Error('attachment_fetch_http_'+r.status);const ab=await r.arrayBuffer();if(!ab.byteLength||ab.byteLength>12*1024*1024)throw new Error('attachment_size_invalid');
   return {kind:'image',name:a.name,mime:'image/png',base64:bytesToBase64(new Uint8Array(ab)),bytes:ab.byteLength};
 }
@@ -115,10 +140,21 @@ chrome.runtime.onStartup.addListener(badge);
 
 
 function extensionStorageGet(key){
-  return new Promise(resolve=>{try{chrome.storage.local.get(key,v=>resolve(v||{}));}catch{resolve({});}});
+  return new Promise((resolve,reject)=>{
+    try{chrome.storage.local.get(key,v=>{
+      if(chrome.runtime?.lastError)return reject(new Error('relay_storage_read_failed'));
+      if(!v||typeof v!=='object')return reject(new Error('relay_storage_read_invalid'));
+      resolve(v);
+    });}catch{reject(new Error('relay_storage_read_failed'));}
+  });
 }
 function extensionStorageSet(value){
-  return new Promise(resolve=>{try{chrome.storage.local.set(value,()=>resolve());}catch{resolve();}});
+  return new Promise((resolve,reject)=>{
+    try{chrome.storage.local.set(value,()=>{
+      if(chrome.runtime?.lastError)return reject(new Error('relay_storage_write_failed'));
+      resolve();
+    });}catch{reject(new Error('relay_storage_write_failed'));}
+  });
 }
 
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
@@ -295,7 +331,7 @@ chrome.runtime.onConnect.addListener(port=>{
             reply={ok:false,error:'late_packet_suppressed'};
           }else{
             browserEvent('action_received',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:ownerDecision.owner?.conversation_key||null}).catch(()=>{});
-            const d=await callAction(m.packet);
+            const d=await callAction(m.packet,ownerDecision.owner);
             if(/\"status\"\s*:\s*\"DUPLICATE_IGNORED\"/.test(String(d.result||''))){reply={ok:false,error:'duplicate_suppressed'};}
             else{const attachments=await hydratedAttachments(d.result);reply={ok:true,result:d.result,attachments};}
           }
@@ -335,7 +371,7 @@ chrome.runtime.onMessage.addListener((m,_s,reply)=>{
       if(m.type==='unpair'){await chrome.storage.local.remove('relayToken');await badge();return reply({ok:true});}
       if(m.type==='status') return reply({ok:true,data:await call('/status')});
       if(m.type==='arm'){const d=await call('/arm',{method:'POST',body:JSON.stringify({armed:!!m.armed})});await badge();return reply({ok:true,data:d});}
-      if(m.type==='action'){const d=await callAction(m.packet);if(/\"status\"\s*:\s*\"DUPLICATE_IGNORED\"/.test(String(d.result||'')))return reply({ok:false,error:'duplicate_suppressed'});return reply({ok:true,result:d.result});}
+      if(m.type==='action')return reply({ok:false,error:'conversation_owner_required'});
       reply({ok:false,error:'unsupported_message'});
     }catch(e){reply({ok:false,error:e.code||e.message||String(e)});}
   })();
