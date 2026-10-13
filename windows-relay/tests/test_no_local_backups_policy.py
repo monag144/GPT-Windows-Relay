@@ -35,9 +35,11 @@ class NoLocalBackupsPolicyTests(unittest.TestCase):
 
     def test_browser_fix_installer_is_retired(self):
         source = (WIN / "install-browser-fix.ps1").read_text(encoding="utf-8")
-        stop = source.index("throw 'RETIRED_NO_LOCAL_BACKUPS")
-        creation = source.index("New-Item -ItemType Directory -Force -Path $backupRoot")
-        self.assertLess(stop, creation)
+        self.assertIn("throw 'RETIRED_NO_LOCAL_BACKUPS", source)
+        self.assertNotIn("New-Item -ItemType Directory", source)
+        self.assertNotIn("Copy-Item", source)
+        self.assertNotIn("Move-Item", source)
+        self.assertNotIn("Start-Process", source)
 
     def test_signed_extension_policy_installer_creates_no_backup_copy(self):
         source = (WIN / "install-signed-extension-policy.ps1").read_text(encoding="utf-8")
