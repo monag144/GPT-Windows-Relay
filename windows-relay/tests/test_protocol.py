@@ -151,9 +151,9 @@ class Tests(unittest.TestCase):
 
     def test_every_serialized_result_stdout_ends_with_sandwich_reminder(self):
         body=json.loads(wr.result({"status":"OK","stdout":"hello"}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(body["stdout"],"hello\n"+wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
+        self.assertEqual(body["stdout"],"hello\n"+wr.SANDWICH_REMINDER)
         empty=json.loads(wr.result({"status":"COMMAND_FAILED","stdout":""}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
-        self.assertEqual(empty["stdout"],wr.OPERATION_DISCIPLINE_REMINDER+"\n"+wr.SANDWICH_REMINDER)
+        self.assertEqual(empty["stdout"],wr.SANDWICH_REMINDER)
         already=json.loads(wr.result({"status":"OK","stdout":wr.SANDWICH_REMINDER}).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
         self.assertTrue(already["stdout"].endswith(wr.SANDWICH_REMINDER))
 
@@ -284,7 +284,7 @@ class Tests(unittest.TestCase):
 
     def test_claim_and_retry_transition_through_durable_submitting(self):
         with tempfile.TemporaryDirectory() as d:
-            state=wr.State(Path(d)/"state.json"); state.data["outbound_owner"]="windows"; state.save()
+            state=wr.State(Path(d)/"state.json"); state.data["outbound_owner"]="windows"; state.save() ; state.set_armed(True)
             a=wr.extract(pkt(id="claim-retry")); state.reserve(a)
             state.mark(a,{"status":"OK","exit_code":0,"finished_at":"x","saved_result_path":"x.json"})
             first=state.claim_outbound_delivery(a.id)
@@ -300,7 +300,7 @@ class Tests(unittest.TestCase):
     def test_submitting_restart_becomes_terminal_submit_uncertain(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/"state.json"; state=wr.State(path)
-            state.data["outbound_owner"]="windows"; state.save()
+            state.data["outbound_owner"]="windows"; state.save(); state.set_armed(True)
             a=wr.extract(pkt(id="restart-uncertain")); state.reserve(a)
             state.mark(a,{"status":"OK","exit_code":0,"finished_at":"x","saved_result_path":"x.json"})
             state.claim_outbound_delivery(a.id)
@@ -312,7 +312,7 @@ class Tests(unittest.TestCase):
 
     def test_claim_and_finish_persistence_failures_roll_back_phase(self):
         with tempfile.TemporaryDirectory() as d:
-            state=wr.State(Path(d)/"state.json"); state.data["outbound_owner"]="windows"; state.save()
+            state=wr.State(Path(d)/"state.json"); state.data["outbound_owner"]="windows"; state.save() ; state.set_armed(True)
             a=wr.extract(pkt(id="sender-rollback")); state.reserve(a)
             state.mark(a,{"status":"OK","exit_code":0,"finished_at":"x","saved_result_path":"x.json"})
             with mock.patch.object(state,"save",side_effect=PermissionError("locked")):
