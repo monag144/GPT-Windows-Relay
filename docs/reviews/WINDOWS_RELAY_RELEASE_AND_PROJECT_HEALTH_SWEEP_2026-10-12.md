@@ -48,3 +48,20 @@ Static GitHub files were fetched and inspected directly; tracked release/tag tre
 - Broad Python unit tests include legacy archived/cutover fixtures; passing just the 13 focused tests never implied 100% project health.
 - The separate consumer product has its own version/release process and must not be accidentally removed as a duplicate Windows Relay.
 - No automated live replay, STOP toggling, invasive browser performance testing, or source-to-runtime cutover was performed for this sweep.
+
+
+## Native full health sweep receipt — 2026-10-12 Pacific, 2026-10-13 01:12–01:13 UTC
+
+Operator ran `PCE17-HEALTH-SWEEP-20261012-001` (execution completed, shell exit 1 due test/source issues) after clean fast-forward `9cf9d66 → d1330ffc`. Exact machine report:
+
+- Verified Git head `d1330ffc4750d36115d0ccf62aaa857f2f160af6`, WIP branch/origin correct, annotated release tag unchanged at `f00307494a83338d29b4c35dd6264e71fa142dbd`, canonical Firefox extension `0.3.18`.
+- Tracked scope: **322 files**, Python syntax **87/87**, JavaScript syntax **9/9** (Node available), JSON **5/5**, Markdown links **178 documents / zero unresolved**.
+- PowerShell AST: **23 files inspected**, failed solely on retired `install-browser-fix.ps1` line 84 (`IncompleteDollarSubexpressionReference` and `TerminatorExpectedAtEndOfString`), unreachable because script already throws. Repair is a short, structurally parseable fail-closed tombstone with no dangerous legacy body; test now asserts *absence* of mutation code.
+- Physical disk, **untracked**: `STUPID BACKUPS DO NOT USE`, `windows-relay/runtime` remain. Exactly **6 dirty/untracked Git status entries**. Do not infer these six items are backups or automatically remove unique private runtime state.
+- **Windows Relay tests: 434 run, 9 FAIL and 4 ERROR.** Consumer independently **123/123 PASS**. The aggregate health sweep properly returned failure.
+- Defects identified in the 9 failures: one-line content `recommended_action` drift between canonical persistent script and consumer/root copies (3 copy-equality tests), old browser source assertions expecting `callAction(m.packet)` instead of authenticated `callAction(m.packet,ownerDecision.owner)` (2), stale HUD STOP/launcher and unimplemented sixth RETRY expectations (3), outbound test neglecting mandatory explicit ARM (1).
+- The **four errors** align with legacy protocol fixtures that omit ARM in three Windows sender claim tests and expect retired `OPERATION_DISCIPLINE_REMINDER` in the sandwich-only result test; exact individual exception stack traces were **not** present in the returned bounded summary, so they remain hypotheses pending native rerun.
+- Corrections after this receipt, **source-focused and currently not native reverified**: synchronized just one diagnostic feedback line across the three otherwise identical content scripts (do not replace One-Click Go's separate worker); updated browser contract tests for canonical owner-bound dispatch; aligned HUD tests with five-button implementation and delegated startup; positively armed isolated sender fixtures; removed obsolete extra reminder expectations; replaced unreachable PowerShell parse error with fail-closed tombstone; improved retired-installer no-mutation test.
+- Existing accepted live v0.3.18 process and pinned tag remain **untouched**. Source fixes alone do not change a running Firefox/Windows process.
+
+**Next acceptance:** fast-forward WIP and run `python -B windows-relay/tools/relay_project_health_sweep.py` and `python -B windows-relay/tools/relay_project_test_sweep.py`. If any tests still fail, obtain bounded full failure names/messages and fix the real underlying causes; do not declare the project green from predicted outcomes.
