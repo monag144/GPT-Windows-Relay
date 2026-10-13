@@ -12,6 +12,8 @@ Windows Relay engineering belongs exclusively in **`monag144/GPT-Windows-Relay`*
 
 **Execution policy:** [No relay governance or audit preflight](docs/policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md). Tests, benchmarks and reviews are separate from authorized command admission; STOP, token and owner safeguards remain mandatory.
 
+**Health sweep findings:** [Windows Relay release and project health sweep — 2026-10-12](docs/reviews/WINDOWS_RELAY_RELEASE_AND_PROJECT_HEALTH_SWEEP_2026-10-12.md), with source fixes and pending Windows test work.
+
 **Verified build record:** [Windows Relay live execution checkpoint — 2026-10-12](docs/releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md) pins the approved source tag. It is not a certification of the entire test suite.
 
 **Documentation:** [Windows Relay documentation index — 2026-10-09](docs/index/WINDOWS_RELAY_DOCUMENTATION_INDEX_2026-10-09.md). This is the newer date-only reading directory; earlier timestamped indexes remain historical evidence. Root `README.md` stays as a conventional GitHub navigation alias.
