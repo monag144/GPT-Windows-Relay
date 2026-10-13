@@ -99,7 +99,8 @@ class OperatorBindingHTTPTests(unittest.TestCase):
             code2, second = self.post("/action", {"packet": pkt, **m})
         self.assertEqual((code, code2), (200, 200))
         self.assertIn("MOCKED_CANARY_OK", first["result"])
-        self.assertEqual(first["result"], second["result"])
+        self.assertIn("MOCKED_CANARY_OK", second["result"])
+        self.assertIn('"replayed": true', second["result"].lower())
         exec_mock.assert_called_once()
 
     def test_concurrent_operator_prompt_is_refused(self):
