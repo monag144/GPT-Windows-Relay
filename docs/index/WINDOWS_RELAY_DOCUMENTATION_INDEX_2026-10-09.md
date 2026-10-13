@@ -17,6 +17,8 @@
 
 ## Windows Relay live execution checkpoint — 2026-10-12
 
+- [PC Engineer 17 → PC Engineer 18 handoff — 2026-10-12](../handoffs/PC_ENGINEER_17_TO_18_HANDOFF_2026-10-12.md): known-working tag, native full sweep's 13 failed/error cases, after-sweep unverified fixes, no-local-backups and first PCE18 validation steps.
+
 - **[Windows Relay live execution checkpoint — 2026-10-12](../releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md):** verified annotated Git tag, 13/13 focused tests and a real PowerShell canary using Main-Build and Firefox v0.3.18.
 - [Release and project health sweep — 2026-10-12](../reviews/WINDOWS_RELAY_RELEASE_AND_PROJECT_HEALTH_SWEEP_2026-10-12.md): source fixes, pending native broader tests, and unresolved untracked-disk scope.
 - [Legacy browser installer retirement — 2026-10-12](../facts/WINDOWS_RELAY_LEGACY_BROWSER_INSTALLER_RETIREMENT_2026-10-12.md): old README.txt installer guidance is superseded while preserving the operator's modified local text.
