@@ -1,5 +1,7 @@
 # GPT Windows Relay current-build capability audit
 
+**Later evidence (2026-10-12):** The Oct 11 audit was correct for its own observation window. Its assertion that no live end-to-end execution was proven has been superseded by the [October 12 verified canary and Git tag](../releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md). Focused native tests: 13/13. This does not retroactively prove other capabilities or a whole-project green suite.
+
 Audit scope: GitHub Issue #28, read-only inspection of
 `GPT-Windows-Relay-Main-Build`, isolated local tests, and non-mutating Windows
 runtime checks. No source, credentials, browser profile, relay process, or
