@@ -5,7 +5,7 @@ title Codex CLI - GPT Windows Relay
 rem PCE12: stand-alone, double-click Codex CLI launcher.
 rem No Termux fallback. No GitHub Actions dependency.
 set "WORKSPACE=%USERPROFILE%\Downloads\Dev\GPT-Windows-Relay-Main-Build"
-set "START_DIR=%WORKSPACE%"
+set "START_DIR="
 set "EXPECTED_HTTPS=https://github.com/monag144/GPT-Windows-Relay"
 set "EXPECTED_SSH=git@github.com:monag144/GPT-Windows-Relay"
 
@@ -23,16 +23,23 @@ if exist "%WORKSPACE%\.git" (
       set "START_DIR=%WORKSPACE%"
       echo Verified canonical GPT-Windows-Relay checkout.
     ) else (
-      echo WARNING: checkout remote does not match GPT-Windows-Relay.
+      echo ERROR: checkout remote does not match GPT-Windows-Relay.
       echo Codex will NOT run in this unverified project.
+      exit /b 1
     )
   ) else (
-    echo WARNING: cannot verify Windows checkout origin.
+    echo ERROR: cannot verify Windows checkout origin.
+    exit /b 1
   )
 ) else (
   echo Canonical Windows checkout not found at:
   echo   %WORKSPACE%
   echo Codex will not launch outside the canonical Main-Build.
+  exit /b 1
+)
+
+if not defined START_DIR (
+  echo ERROR: canonical Main-Build checkout was not verified.
   exit /b 1
 )
 
