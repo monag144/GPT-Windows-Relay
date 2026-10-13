@@ -53,10 +53,24 @@ async function actionTransport(packet,owner){
 async function callAction(packet,owner){
   // Reuse metadata across retry attempts; never change identity mid-flight.
   const transport=await actionTransport(packet,owner);
+  let ownerPromptRequested=false;
   const deadline=Date.now()+ACTION_RETRY_WINDOW_MS;
   while(true){
     try{
-      const d=await call('/action',{method:'POST',body:JSON.stringify({packet,...transport})},315000);
+      let d;
+      try{
+        d=await call('/action',{method:'POST',body:JSON.stringify({packet,...transport})},315000);
+      }catch(e){
+        if((e?.code==='conversation_owner_mismatch'||e?.code==='conversation_tab_mismatch')&&!ownerPromptRequested){
+          // The backend, not a browser claim or pairing token, obtains the
+          // operator's affirmative YES in a separate native Windows dialog.
+          ownerPromptRequested=true;
+          await call('/owner-bind-request',{
+            method:'POST',body:JSON.stringify({owner:transport.owner})
+          },120000);
+          d=await call('/action',{method:'POST',body:JSON.stringify({packet,...transport})},315000);
+        }else throw e;
+      }
       const body=String(d.result||'');
       if(/\"status\"\s*:\s*\"DUPLICATE_INFLIGHT\"/.test(body) && Date.now()<deadline){
         await sleep(ACTION_RETRY_DELAY_MS);
