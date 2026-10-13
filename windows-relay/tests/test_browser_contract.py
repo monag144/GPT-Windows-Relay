@@ -50,7 +50,11 @@ class BrowserContractTests(unittest.TestCase):
         for src in (self.live_worker,self.persistent_worker):
             self.assertIn("ACTION_RETRY_WINDOW_MS=45000",src)
             self.assertIn("DUPLICATE_INFLIGHT",src)
-            self.assertIn("callAction(m.packet)",src)
+        # The canonical persistent relay must not dispatch without the
+        # separately verified conversation owner and hashed issuance.
+        self.assertIn("callAction(m.packet)",self.live_worker)
+        self.assertIn("callAction(m.packet,ownerDecision.owner)",self.persistent_worker)
+        self.assertIn("JSON.stringify({packet,...transport})",self.persistent_worker)
 
     def test_persistent_worker_keeps_local_pairing_storage(self):
         self.assertIn("chrome.storage.local.get(['relayToken'])",self.persistent_worker)
@@ -78,7 +82,9 @@ class BrowserContractTests(unittest.TestCase):
             self.assertIn("chrome.runtime.onConnect.addListener",src)
             self.assertIn("gpt-windows-relay-content",src)
             self.assertIn("relay_action_result",src)
-            self.assertIn("callAction(m.packet)",src)
+        self.assertIn("callAction(m.packet)",self.live_worker)
+        self.assertIn("callAction(m.packet,ownerDecision.owner)",self.persistent_worker)
+        self.assertIn("const ownerDecision=await checkAndClaimRelayOwner",self.persistent_worker)
 
     def test_stable_main_observer_replaces_computed_conversation_root(self):
         self.assertIn("const next=document.querySelector('main');",self.src)
