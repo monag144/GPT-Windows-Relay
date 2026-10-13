@@ -255,11 +255,20 @@ function checkAndClaimRelayOwner(port,message,meta){
       return {ok:true,claimed:true,transferred:false,owner:next};
     }
     if(owner.conversation_key===conversationKey){
+      if(owner.tab_id!==tabId){
+        // A second tab showing the same URL must not silently impersonate
+        // the tab the local operator authorized. Require focused reapproval.
+        if(!isActive)return {ok:false,error:'relay_owner_tab_not_focused',owner};
+        const next={...owner,tab_id:tabId,session,updated_at:new Date().toISOString()};
+        await extensionStorageSet({[RELAY_OWNER_KEY]:next});
+        return {ok:true,claimed:false,transferred:true,owner:next,previous:owner};
+      }
       if(owner.session==='default'&&session!=='default'){
         const next={...owner,session,tab_id:tabId,updated_at:new Date().toISOString()};
         await extensionStorageSet({[RELAY_OWNER_KEY]:next});
         return {ok:true,claimed:false,transferred:false,upgraded:true,owner:next};
       }
+      if(owner.session!==session)return {ok:false,error:'relay_owner_session_mismatch',owner};
       return {ok:true,claimed:false,transferred:false,owner};
     }
     if(!isActive)return {ok:false,error:'relay_owner_mismatch_inactive_tab',owner};
