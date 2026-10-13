@@ -174,6 +174,7 @@ function extensionStorageSet(value){
 /* GPT_RELAY_LATE_PACKET_CURSOR_V2 */
 const OPERATION_CURSOR_KEY='gptRelayOperationCursorV2';
 const RELAY_OWNER_KEY='gptRelayConversationOwnerV1';
+const RELAY_OWNER_LOCK_EPOCH_KEY='gptRelayConversationLockEpochV1';
 let operationCursorChain=Promise.resolve();
 let relayOwnerChain=Promise.resolve();
 
@@ -241,7 +242,7 @@ async function activeFocusedTabId(){
 // matching ChatGPT conversation URL. It never lets dormant tabs submit actions.
 async function unlockedFocusedConversation(port,message,meta){
   const tabId=port?.sender?.tab?.id;
-  const senderKey=normalizeConversationKey(port?.sender?.tab?.url);
+  const senderKey=normalizeConversationKey(port?.sender?.url||port?.sender?.tab?.url);
   const messageKey=normalizeConversationKey(message?.conversation_key||message?.conversation_href);
   if(!Number.isSafeInteger(tabId)||tabId<=0||!senderKey||
      (messageKey&&messageKey!==senderKey))
@@ -250,6 +251,15 @@ async function unlockedFocusedConversation(port,message,meta){
     return {ok:false,error:'relay_active_tab_required',owner:null};
   return {ok:true,claimed:false,transferred:false,upgraded:false,
     owner:{conversation_key:senderKey,session:String(meta?.session||'default'),tab_id:tabId}};
+}
+async function syncOwnerLockEpoch(epoch){
+  // Each backend owner-lock mode transition invalidates stale extension owners.
+  // Storage errors fail closed; a fresh Windows approval is required when ON.
+  if(!Number.isSafeInteger(epoch)||epoch<0)
+    throw Object.assign(new Error('conversation_lock_epoch_invalid'),{code:'conversation_lock_epoch_invalid'});
+  const stored=await extensionStorageGet(RELAY_OWNER_LOCK_EPOCH_KEY);
+  if(stored?.[RELAY_OWNER_LOCK_EPOCH_KEY]===epoch)return;
+  await extensionStorageSet({[RELAY_OWNER_LOCK_EPOCH_KEY]:epoch,[RELAY_OWNER_KEY]:null});
 }
 function checkAndClaimRelayOwner(port,message,meta){
   const task=relayOwnerChain.then(async()=>{
@@ -359,6 +369,8 @@ chrome.runtime.onConnect.addListener(port=>{
         // Read the backend-controlled mode every time; never trust stale
         // extension-local ownership settings after a HUD toggle.
         const status=await call('/status',{},5000);
+        if(status.conversation_lock_enabled===true)
+          await syncOwnerLockEpoch(status.conversation_lock_epoch);
         const ownerDecision=status.conversation_lock_enabled===true
           ? await checkAndClaimRelayOwner(port,m,meta)
           : await unlockedFocusedConversation(port,m,meta);

@@ -56,7 +56,7 @@ async function fakeFetch(url,opts){
 const sandbox={chrome,crypto:webcrypto,TextEncoder,URL,AbortSignal,fetch:fakeFetch,
                setTimeout,clearTimeout,btoa:global.btoa};
 vm.createContext(sandbox);
-vm.runInContext(workerSource+'\n;globalThis.__test__={actionTransport,callAction,extensionStorageGet,extensionStorageSet,unlockedFocusedConversation};',sandbox);
+vm.runInContext(workerSource+'\n;globalThis.__test__={actionTransport,callAction,extensionStorageGet,extensionStorageSet,unlockedFocusedConversation,syncOwnerLockEpoch};',sandbox);
 const actor=sandbox.__test__;
 (async()=>{
   const meta=await actor.actionTransport(packet,owner);
@@ -89,7 +89,7 @@ const actor=sandbox.__test__;
   await assert.rejects(actor.extensionStorageSet({x:1}),/relay_storage_write_failed/);
 
   // Lock OFF does not rely on stale storage; only the focused sender tab can act.
-  const focused={sender:{tab:{id:37,url:owner.conversation_key}}};
+  const focused={sender:{url:owner.conversation_key,tab:{id:37,url:owner.conversation_key}}};
   const accepted=await actor.unlockedFocusedConversation(focused,{conversation_key:owner.conversation_key},{session:'pce18.1'});
   assert.equal(accepted.ok,true);
   assert.equal(accepted.owner.session,'pce18.1');
@@ -101,6 +101,15 @@ const actor=sandbox.__test__;
   const forged=await actor.unlockedFocusedConversation(
     focused,{conversation_key:'https://chatgpt.com/c/other'},{session:'pce18.1'});
   assert.equal(forged.ok,false);
+  storeFails=false;
+  await actor.syncOwnerLockEpoch(11);
+  assert.equal(storage.gptRelayConversationLockEpochV1,11);
+  assert.equal(storage.gptRelayConversationOwnerV1,null);
+  storage.gptRelayConversationOwnerV1={session:'stale'};
+  await actor.syncOwnerLockEpoch(11);
+  assert.equal(storage.gptRelayConversationOwnerV1.session,'stale');
+  await actor.syncOwnerLockEpoch(12);
+  assert.equal(storage.gptRelayConversationOwnerV1,null);
   assert.ok(directMessageListener);
   console.log('BROWSER_TRANSPORT_MOCK_OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});
