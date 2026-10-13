@@ -1721,7 +1721,7 @@ ${JSON.stringify({
   state:'ACTION_FAILED',
   packet_id:p.id,
   detail:r?.error||'unknown_error',
-  recommended_action:'Before retry: read roadmap/facts/incidents/log; prove net-new progress; log this failure; update development log; preserve rollback; check PCE8/PCE9 budget; then diagnose and reissue with a new unique id.'
+  recommended_action:'Review the exact relay error. Do not replay an uncertain action or bypass STOP, operator owner approval, issuance identity, or pairing. Use GitHub-first engineering and no local backups; run a new unique-ID canary only after the repair is tested.'
 })}
 [/GPT_WINDOWS_FEEDBACK]`);
   }
