@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GPT Windows Relay",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "description": "Bridges explicit ChatGPT Windows action packets to the local Windows relay.",
   "permissions": [
     "storage",
