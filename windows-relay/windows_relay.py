@@ -706,9 +706,9 @@ def confirm_owner_on_windows_desktop(owner):
     if (not isinstance(key,str) or not key.startswith('https://chatgpt.com/')
         or len(key)>1024 or not isinstance(session,str) or not ID_RE.fullmatch(session)
         or type(tab) is not int or tab<=0): raise RelayError('conversation_owner_invalid')
-    prompt=('Authorize this ChatGPT conversation to execute Windows commands?\\n\\n'
-            + 'Conversation: '+key+'\\nSession: '+session+'\\nFirefox tab ID: '+str(tab)
-            + '\\n\\nYES binds this conversation to the relay. NO refuses. '
+    prompt=('Authorize this ChatGPT conversation to execute Windows commands?\n\n'
+            + 'Conversation: '+key+'\nSession: '+session+'\nFirefox tab ID: '+str(tab)
+            + '\n\nYES binds this conversation to the relay. NO refuses. '
             + 'Only approve the ChatGPT tab you intentionally selected.')
     try:
         # Yes/No, warning icon, default NO, topmost user-visible operator prompt.
