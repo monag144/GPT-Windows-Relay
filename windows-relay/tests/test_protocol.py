@@ -1,4 +1,4 @@
-import base64, json, tempfile, unittest
+import base64, json, tempfile, unittest, hashlib
 from unittest import mock
 from pathlib import Path
 import windows_relay as wr
@@ -6,6 +6,24 @@ import windows_relay as wr
 def pkt(id="t1",command="Write-Output hi",**extra):
     p={"version":1,"platform":"windows","action":"EXEC","id":id,"session":"default","shell":"powershell","command":command,"timeout":10};p.update(extra)
     return f"{wr.OPEN}\n{json.dumps(p)}\n{wr.CLOSE}"
+
+def authorized_transport(state, packet):
+    """Real backend precondition: separately approved owner + exact packet issuance."""
+    action = wr.extract(packet)
+    owner = {
+        "conversation_key": "https://chatgpt.com/c/offline-protocol-tests",
+        "session": action.session,
+        "tab_id": 29,
+    }
+    state.bind_conversation_owner(owner)
+    return {
+        "issuance": {
+            "id": action.id,
+            "session": action.session,
+            "packet_hash": hashlib.sha256(packet.encode("utf-8")).hexdigest(),
+        },
+        "owner": owner,
+    }
 
 class Tests(unittest.TestCase):
     def test_parse(self): self.assertEqual(wr.extract(pkt()).id,"t1")
@@ -72,7 +90,7 @@ class Tests(unittest.TestCase):
             saved=wr.save_full_result(state,raw)
             shown=wr.present_result(a,raw,saved)
             state.mark(a,shown)
-            replay=json.loads(wr.process(pkt(id="replay1"),state).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+            replay=json.loads(wr.process(pkt(id="replay1"),state,authorized_transport(state,pkt(id="replay1"))).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
             self.assertEqual(replay["status"],"OK")
             self.assertTrue(replay["stdout"].endswith(wr.SANDWICH_REMINDER))
             self.assertIn("RECOVER_ME",replay["stdout"])
@@ -83,7 +101,7 @@ class Tests(unittest.TestCase):
             state=wr.State(Path(d)/"state.json")
             a=wr.extract(pkt(id="busy1"))
             state.reserve(a)
-            body=json.loads(wr.process(pkt(id="busy1"),state).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
+            body=json.loads(wr.process(pkt(id="busy1"),state,authorized_transport(state,pkt(id="busy1"))).split(wr.RO+"\n",1)[1].rsplit("\n"+wr.RC,1)[0])
             self.assertEqual(body["status"],"DUPLICATE_INFLIGHT")
 
     def test_stale_inflight_becomes_interrupted_on_restart(self):
@@ -186,7 +204,7 @@ class Tests(unittest.TestCase):
             saved=wr.save_full_result(state,raw)
             state.mark(a,wr.present_result(a,raw,saved))
             before=state.outbound_lookup(a.id)
-            replay=wr.process(pkt(id="ready-replay"),state)
+            replay=wr.process(pkt(id="ready-replay"),state,authorized_transport(state,pkt(id="ready-replay")))
             self.assertIn('"replayed": true',replay)
             self.assertEqual(state.outbound_lookup(a.id),before)
 
@@ -319,8 +337,9 @@ class Tests(unittest.TestCase):
             packet=pkt(id="wire-process-exact",result_mode="full")
             a=wr.extract(packet)
             raw={"version":1,"platform":"windows","id":a.id,"session":a.session,"action":"EXEC","shell":a.shell,"status":"OK","exit_code":0,"cwd":str(Path(d)),"started_at":"x","finished_at":"y","duration_ms":1,"stdout":"ORDERED","stderr":""}
+            state.set_armed(True)
             with mock.patch.object(wr,"execute",return_value=raw):
-                returned=wr.process(packet,state)
+                returned=wr.process(packet,state,authorized_transport(state,packet))
             delivery=state.outbound_lookup(a.id)
             wire_path=Path(delivery["wire_result_path"])
             self.assertEqual(delivery["phase"],"READY")
