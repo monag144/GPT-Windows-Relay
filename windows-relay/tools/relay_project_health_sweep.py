@@ -111,16 +111,18 @@ def sweep():
     elif head_tag != PINNED_SHA:
         report["failures"].append("verified Git tag resolves to unexpected commit")
 
-    tracked_text = git("ls-files", "-z")
-    if tracked_text is None:
-        report["failures"].append("git ls-files unavailable")
-        return report
-    # -z records, unlike ordinary text, use null separators.
+    # One raw -z read preserves arbitrary filenames and checks git failure.
     tracked_result = subprocess.run(
         ["git", "ls-files", "-z"], cwd=str(REPO),
         capture_output=True, check=False,
     )
-    names = [name.decode("utf-8", "replace") for name in tracked_result.stdout.split(b"\0") if name]
+    if tracked_result.returncode != 0:
+        report["failures"].append("git ls-files unavailable")
+        return report
+    names = [
+        item.decode("utf-8", "replace")
+        for item in tracked_result.stdout.split(b"\0") if item
+    ]
     tracked = set(names)
     report["checks"]["tracked_files"] = len(names)
     if any(p.startswith(("Prototype/", "STUPID BACKUPS DO NOT USE/", "windows-relay/runtime/")) for p in names):
