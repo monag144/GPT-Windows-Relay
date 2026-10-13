@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, base64, binascii, copy, hashlib, json, os, re, secrets, shutil, subprocess, sys, tempfile, threading, time, xml.etree.ElementTree as ET
+import argparse, base64, binascii, copy, hashlib, json, os, re, secrets, shutil, subprocess, sys, tempfile, threading, time, xml.etree.ElementTree as ET, ctypes
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -694,9 +694,35 @@ def config(path:Path):
     if d.get('host')!='127.0.0.1' or not isinstance(d.get('port'),int) or not isinstance(d.get('token'),str) or len(d['token'])<32: raise RelayError('invalid bridge config')
     return d
 
+# GPT_WINDOWS_OPERATOR_LOCAL_CONFIRM_V1
+# Pairing is transport authentication, not conversation ownership authorization.
+# A separate on-screen Windows YES/NO decision is required to bind a new owner.
+def confirm_owner_on_windows_desktop(owner):
+    if os.name!='nt': raise RelayError('operator_confirmation_unavailable')
+    if not isinstance(owner,dict): raise RelayError('conversation_owner_invalid')
+    key=owner.get('conversation_key')
+    session=owner.get('session')
+    tab=owner.get('tab_id')
+    if (not isinstance(key,str) or not key.startswith('https://chatgpt.com/')
+        or len(key)>1024 or not isinstance(session,str) or not ID_RE.fullmatch(session)
+        or type(tab) is not int or tab<=0): raise RelayError('conversation_owner_invalid')
+    prompt=('Authorize this ChatGPT conversation to execute Windows commands?\\n\\n'
+            + 'Conversation: '+key+'\\nSession: '+session+'\\nFirefox tab ID: '+str(tab)
+            + '\\n\\nYES binds this conversation to the relay. NO refuses. '
+            + 'Only approve the ChatGPT tab you intentionally selected.')
+    try:
+        # Yes/No, warning icon, default NO, topmost user-visible operator prompt.
+        response=ctypes.windll.user32.MessageBoxW(
+            None,prompt,'GPT Windows Relay — OPERATOR OWNER APPROVAL',
+            0x00000004|0x00000030|0x00000100|0x00040000)
+    except Exception as exc:
+        raise RelayError('operator_confirmation_unavailable') from exc
+    return response==6
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads=True
-    def __init__(self,addr,token,state,operator_token=None): super().__init__(addr,Handler); self.token=token; self.operator_token=operator_token; self.state=state
+    def __init__(self,addr,token,state,operator_token=None): super().__init__(addr,Handler); self.token=token; self.operator_token=operator_token; self.state=state; self.operator_prompt_lock=threading.Lock()
     def handle_error(self,request,client_address):
         et,ev,_=sys.exc_info()
         if isinstance(ev,(BrokenPipeError,ConnectionResetError,ConnectionAbortedError,OSError)):
@@ -802,6 +828,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.server.operator_token or not secrets.compare_digest(presented,self.server.operator_token): raise RelayError('operator_authorization_required')
                 self.server.state.bind_conversation_owner(p.get('owner'))
                 return self.sendj(200,{'ok':True,'owner_bound':True})
+            if request_path=='/owner-bind-request':
+                # This is NOT bearer-only auto-binding. The OS desktop must show
+                # a distinct, affirmative operator decision, defaulting to NO.
+                if not self.server.state.armed: raise RelayError('relay_disarmed')
+                if not self.server.operator_prompt_lock.acquire(blocking=False):
+                    raise RelayError('operator_confirmation_busy')
+                try:
+                    owner=p.get('owner')
+                    with self.server.state.lock:
+                        if self.server.state.data.get('active_action'):
+                            raise RelayError('operator_bind_while_action_active')
+                    approved=confirm_owner_on_windows_desktop(owner)
+                    if not approved: raise RelayError('operator_confirmation_declined')
+                    if not self.server.state.armed: raise RelayError('relay_disarmed')
+                    self.server.state.bind_conversation_owner(owner)
+                    print('OPERATOR_OWNER_BOUND_CONFIRMED',flush=True)
+                    return self.sendj(200,{'ok':True,'owner_bound':True,'authorization':'operator'})
+                finally:
+                    self.server.operator_prompt_lock.release()
             if request_path=='/browser-event':
                 event=p.get('event')
                 detail=p.get('detail')
