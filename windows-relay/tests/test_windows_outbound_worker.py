@@ -46,6 +46,8 @@ class DormantWorkerTests(unittest.TestCase):
             before=json.dumps(st.data,sort_keys=True)
             self.assertEqual(st.list_claimable_outbound_ids(),[])
             st.data["outbound_owner"]="windows"
+            self.assertEqual(st.list_claimable_outbound_ids(),[],"STOP/disarm must block even Windows ownership")
+            st.set_armed(True)
             self.assertEqual(st.list_claimable_outbound_ids(),["a","b"])
             self.assertEqual(json.loads(before)["outbound_deliveries"],st.data["outbound_deliveries"])
             st.set_armed(False);self.assertEqual(st.list_claimable_outbound_ids(),[])
