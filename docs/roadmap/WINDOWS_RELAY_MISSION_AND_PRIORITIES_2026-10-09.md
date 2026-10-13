@@ -1,5 +1,7 @@
 # Windows Relay mission and priorities — 2026-10-09
 
+**Later verified evidence (2026-10-12):** This dated roadmap's October 9 release status and Client install references are historical. The operator subsequently validated canonical Main-Build and Firefox v0.3.18 with **13/13 focused tests** and an authenticated live PowerShell result. See [October 12 live execution checkpoint](../releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md). Broad concurrency/replay, STOP, restart/endurance and whole-project tests are not yet certified.
+
 **Mission:** deliver a reliable, auditable ChatGPT ↔ Windows execution bridge that follows through on a requested action, returns its exact result, honors operator STOP and does not duplicate side effects. Project is `monag144/GPT-Windows-Relay` only; live Client is a separate deployment.
 
 ## Strategic cut — no agent-switching development
