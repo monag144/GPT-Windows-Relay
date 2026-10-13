@@ -56,7 +56,7 @@ async function fakeFetch(url,opts){
 const sandbox={chrome,crypto:webcrypto,TextEncoder,URL,AbortSignal,fetch:fakeFetch,
                setTimeout,clearTimeout,btoa:global.btoa};
 vm.createContext(sandbox);
-vm.runInContext(workerSource+'\n;globalThis.__test__={actionTransport,callAction,extensionStorageGet,extensionStorageSet};',sandbox);
+vm.runInContext(workerSource+'\n;globalThis.__test__={actionTransport,callAction,extensionStorageGet,extensionStorageSet,unlockedFocusedConversation};',sandbox);
 const actor=sandbox.__test__;
 (async()=>{
   const meta=await actor.actionTransport(packet,owner);
@@ -88,6 +88,19 @@ const actor=sandbox.__test__;
   await assert.rejects(actor.extensionStorageGet('owner'),/relay_storage_read_failed/);
   await assert.rejects(actor.extensionStorageSet({x:1}),/relay_storage_write_failed/);
 
+  // Lock OFF does not rely on stale storage; only the focused sender tab can act.
+  const focused={sender:{tab:{id:37,url:owner.conversation_key}}};
+  const accepted=await actor.unlockedFocusedConversation(focused,{conversation_key:owner.conversation_key},{session:'pce18.1'});
+  assert.equal(accepted.ok,true);
+  assert.equal(accepted.owner.session,'pce18.1');
+  const backgroundTab=await actor.unlockedFocusedConversation(
+    {sender:{tab:{id:38,url:owner.conversation_key}}},
+    {conversation_key:owner.conversation_key},{session:'pce18.1'});
+  assert.equal(backgroundTab.ok,false);
+  assert.equal(backgroundTab.error,'relay_active_tab_required');
+  const forged=await actor.unlockedFocusedConversation(
+    focused,{conversation_key:'https://chatgpt.com/c/other'},{session:'pce18.1'});
+  assert.equal(forged.ok,false);
   assert.ok(directMessageListener);
   console.log('BROWSER_TRANSPORT_MOCK_OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});

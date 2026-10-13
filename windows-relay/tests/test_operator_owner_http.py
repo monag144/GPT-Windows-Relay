@@ -38,6 +38,7 @@ class OperatorBindingHTTPTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.state = wr.State(Path(self.temp.name) / "state.json")
         self.state.set_armed(True)
+        self.state.set_conversation_lock(True)  # Existing owner tests exercise LOCK ON.
         self.server = wr.Server(("127.0.0.1", 0), "test-only-bearer", self.state)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -102,6 +103,26 @@ class OperatorBindingHTTPTests(unittest.TestCase):
         self.assertIn("MOCKED_CANARY_OK", second["result"])
         self.assertIn('"replayed": true', second["result"].lower())
         exec_mock.assert_called_once()
+
+    def test_lock_toggle_requires_local_yes_and_preserves_arming(self):
+        with mock.patch.object(wr,"confirm_conversation_lock_change_on_windows_desktop",return_value=False):
+            code,denied=self.post("/conversation-lock",{"enabled":False})
+        self.assertEqual((code,denied["detail"]),(400,"operator_confirmation_declined"))
+        self.assertTrue(self.state.conversation_lock_enabled)
+        with mock.patch.object(wr,"confirm_conversation_lock_change_on_windows_desktop",return_value=True):
+            code,changed=self.post("/conversation-lock",{"enabled":False})
+        self.assertEqual(code,200,changed)
+        self.assertFalse(changed["conversation_lock_enabled"])
+        self.assertTrue(self.state.armed)
+        self.assertFalse(self.state.conversation_lock_enabled)
+        reloaded=wr.State(Path(self.temp.name)/"state.json")
+        self.assertFalse(reloaded.conversation_lock_enabled)
+
+    def test_lock_toggle_invalid_payload_does_not_open_prompt(self):
+        with mock.patch.object(wr,"confirm_conversation_lock_change_on_windows_desktop",
+                               side_effect=AssertionError("must not prompt")):
+            code,response=self.post("/conversation-lock",{"enabled":"no"})
+        self.assertEqual((code,response["detail"]),(400,"conversation_lock_setting_invalid"))
 
     def test_concurrent_operator_prompt_is_refused(self):
         self.server.operator_prompt_lock.acquire()

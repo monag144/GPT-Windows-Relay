@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request
+import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -150,6 +150,19 @@ def request(path,timeout=.65):
     q=urllib.request.Request(f"http://127.0.0.1:{port}{path}",headers={"X-GPT-Windows-Relay-Token":str(token)})
     with urllib.request.urlopen(q,timeout=timeout) as r:return json.loads(r.read().decode())
 
+def set_conversation_lock(enabled):
+    if type(enabled) is not bool:raise ValueError("lock setting must be boolean")
+    c=cfg(); token=c.get("token"); port=int(c.get("port",8766))
+    if not token:raise RuntimeError("pairing unavailable")
+    body=json.dumps({"enabled":enabled}).encode("utf-8")
+    req=urllib.request.Request(
+        f"http://127.0.0.1:{port}/conversation-lock",data=body,method="POST",
+        headers={"Content-Type":"application/json","X-GPT-Windows-Relay-Token":str(token)})
+    with urllib.request.urlopen(req,timeout=125) as response:
+        result=json.loads(response.read().decode("utf-8"))
+    if result.get("ok") is not True:raise RuntimeError("owner lock change declined")
+    return result
+
 def control_state(root=None):
     root=Path(root) if root is not None else Path(__file__).resolve().parent
     if (root/".relay-kill-failed").exists():return "KILL FAILED"
@@ -181,8 +194,10 @@ def headline(online,life,browser):
 def snapshot():
     state=read_json(L/"state.json",{"processed":{}})
     events=recent_events()
+    owner_lock=None
     try:
         status=request("/status"); online=bool(status.get("ok")); armed=bool(status.get("armed"))
+        owner_lock=status.get("conversation_lock_enabled") if type(status.get("conversation_lock_enabled")) is bool else None
         pending=int(status.get("pending_missions",0))
         backend=f"Relay {'ONLINE' if online else 'OFFLINE'} • {'ARMED' if armed else 'DISARMED'} • pending {pending}"
     except Exception:
@@ -233,7 +248,7 @@ def snapshot():
         exact=f"ID: {packet_id}\n\nExact command is not available until the packet reaches the Windows relay."
     return {
         "online":online,"title":title,"title_phase":title_phase,"backend":backend,"browser":browser_line,
-        "phase":phase_line,"action":action_line,"preview":preview,"exact":exact,
+        "phase":phase_line,"action":action_line,"preview":preview,"exact":exact,"conversation_lock_enabled":owner_lock,
     }
 
 def acquire_mutex():
@@ -266,6 +281,11 @@ def run_ui():
     toggle=tk.Button(top,text="▾",font=("Segoe UI",9,"bold"),bg=PANEL,fg=MUTED,activebackground="#303134",
                      activeforeground=FG,bd=0,highlightthickness=0,padx=5,pady=0,cursor="hand2")
     toggle.pack(side="right")
+    # Separate optional protection from START / STOP / RESTART / OFF / KILL.
+    owner_lock_btn=tk.Button(top,text="OWNER LOCK: ?",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,
+                             activebackground="#5f6368",activeforeground=FG,bd=0,
+                             highlightthickness=0,padx=7,pady=1,cursor="hand2")
+    owner_lock_btn.pack(side="right",padx=(0,5))
     min_btn=tk.Button(top,text="—",font=("Segoe UI",9,"bold"),bg=PANEL,fg=MUTED,activebackground="#303134",activeforeground=FG,bd=0,highlightthickness=0,padx=7,pady=0,cursor="hand2")
     min_btn.pack(side="right",padx=(0,3))
     controls=tk.Frame(panel,bg=PANEL); controls.pack(fill="x",pady=(4,2))
@@ -330,9 +350,47 @@ def run_ui():
             root.geometry(f"{W}x{COMPACT_H}+{root.winfo_x()}+{root.winfo_y()}")
     toggle.configure(command=toggle_details)
 
+    lock_state={"enabled":None,"busy":False,"error":None}
+    lock_results=queue.Queue()
+    def change_owner_lock():
+        if lock_state["busy"] or lock_state["enabled"] is None:return
+        target=not lock_state["enabled"]
+        lock_state["busy"]=True
+        lock_state["error"]=None
+        def worker():
+            try:
+                response=set_conversation_lock(target)
+                lock_results.put(("ok",response))
+            except Exception as exc:
+                lock_results.put(("error",type(exc).__name__))
+        threading.Thread(target=worker,daemon=True).start()
+    owner_lock_btn.configure(command=change_owner_lock)
+
     colors={"OFFLINE":BAD,"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"REPLAY SUPPRESSED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
     def refresh():
+        while not lock_results.empty():
+            kind,value=lock_results.get_nowait()
+            lock_state["busy"]=False
+            if kind=="ok":
+                lock_state["enabled"]=value["conversation_lock_enabled"]
+                lock_state["error"]=None
+            else:
+                lock_state["error"]=value
         snap=snapshot()
+        if isinstance(snap.get("conversation_lock_enabled"),bool):
+            lock_state["enabled"]=snap["conversation_lock_enabled"]
+        elif not snap["online"]:
+            lock_state["enabled"]=None
+        if lock_state["busy"]:
+            label="OWNER LOCK: CONFIRM..."
+        elif lock_state["error"]:
+            label="OWNER LOCK: ERROR"
+        elif lock_state["enabled"] is None:
+            label="OWNER LOCK: ?"
+        else:
+            label="OWNER LOCK: "+("ON" if lock_state["enabled"] else "OFF")
+        owner_lock_btn.configure(text=label,state="disabled" if lock_state["busy"] or lock_state["enabled"] is None else "normal",
+                                 bg="#5f2120" if lock_state["enabled"] else "#3c4043")
         title.configure(text=snap["title"],fg=colors.get(snap.get("title_phase",snap["title"]),GOOD))
         relay.configure(text=snap["backend"]); browser.configure(text=snap["browser"])
         phase.configure(text=snap["phase"]); action.configure(text=snap["action"][:86])

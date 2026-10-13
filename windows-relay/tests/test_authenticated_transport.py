@@ -42,6 +42,8 @@ class AuthenticatedTransportTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.state = relay.State(Path(self.temp.name) / "state.json")
+        self.assertFalse(self.state.conversation_lock_enabled)
+        self.state.set_conversation_lock(True)  # Existing strict-owner contract exercises LOCK ON.
         self.packet = packet()
         self.valid = transport_for(self.packet)
 
@@ -119,6 +121,31 @@ class AuthenticatedTransportTests(unittest.TestCase):
             relay.validate_transport_identity(
                 self.packet, candidate["issuance"], candidate["owner"], self.state
             )
+
+    def test_lock_off_allows_new_focused_conversation_identity_with_exact_issuance(self):
+        self.state.set_conversation_lock(False)
+        self.assertNotIn("conversation_owner",self.state.data)
+        changed=transport_for(self.packet,key="https://chatgpt.com/c/next-agent",tab=61)
+        self.assertTrue(relay.validate_transport_identity(
+            self.packet,changed["issuance"],changed["owner"],self.state))
+        journal=Path(self.temp.name)/"issuance-journal.jsonl"
+        self.assertIn("next-agent",journal.read_text(encoding="utf-8"))
+
+    def test_lock_enable_requires_new_operator_owner_approval(self):
+        self.bind()
+        self.state.set_conversation_lock(False)
+        self.state.set_conversation_lock(True)
+        with self.assertRaisesRegex(relay.RelayError,"conversation_owner_mismatch"):
+            relay.validate_transport_identity(self.packet,**self.valid,state=self.state)
+
+    def test_lock_off_still_rejects_invalid_tab_and_hash(self):
+        self.state.set_conversation_lock(False)
+        bad_tab=transport_for(self.packet,tab=0)
+        with self.assertRaisesRegex(relay.RelayError,"conversation_tab_mismatch"):
+            relay.validate_transport_identity(self.packet,**bad_tab,state=self.state)
+        bad_hash={**self.valid["issuance"],"packet_hash":"invalid"}
+        with self.assertRaisesRegex(relay.RelayError,"issuance_packet_mismatch"):
+            relay.validate_transport_identity(self.packet,bad_hash,self.valid["owner"],self.state)
 
     def test_operator_bind_requires_positive_tab_and_is_persisted(self):
         for tab in (0, False, "1"):

@@ -106,13 +106,17 @@ def extract(text:str)->Action:
 
 class State:
     def __init__(self,path:Path):
-        self.path=path; self.lock=threading.Lock(); self.browser_seen={}; self.browser_integration={}; self.mission_journal_path=path.with_name('consumer-mission-journal.jsonl'); self.mission_journal_lock=threading.Lock(); self.data={'version':1,'armed':False,'processed':{},'missions':[],'active_action':None,'last_action':None,'updated_at':now()}; self.load()
+        self.path=path; self.lock=threading.Lock(); self.browser_seen={}; self.browser_integration={}; self.mission_journal_path=path.with_name('consumer-mission-journal.jsonl'); self.mission_journal_lock=threading.Lock(); self.data={'version':1,'armed':False,'conversation_lock_enabled':False,'conversation_lock_epoch':0,'processed':{},'missions':[],'active_action':None,'last_action':None,'updated_at':now()}; self.load()
     def load(self):
         if self.path.exists():
             self.data=json.loads(self.path.read_text(encoding='utf-8'))
             if self.data.get('version')!=1 or not isinstance(self.data.get('processed'),dict): raise RelayError('corrupt state file')
         missions=self.data.setdefault('missions',[])
         if not isinstance(missions,list) or any(not isinstance(x,dict) for x in missions): raise RelayError('corrupt mission queue')
+        # Opt-in conversation lock: old persisted states are OFF by default.
+        self.data.setdefault('conversation_lock_enabled',False)
+        if type(self.data['conversation_lock_enabled']) is not bool: raise RelayError('invalid_conversation_lock_setting')
+        self.data.setdefault('conversation_lock_epoch',0)
         self.data.setdefault('stop_generation',0)
         self.data.setdefault('browser_quiesced_generation',0)
         owner=self.data.setdefault('outbound_owner','browser')
@@ -163,6 +167,22 @@ class State:
                 self.data['armed']=v; self.data['updated_at']=now()
             self._mutate_and_save(mutate)
             return generation
+    @property
+    def conversation_lock_enabled(self):
+        return self.data.get('conversation_lock_enabled') is True
+    def set_conversation_lock(self, enabled:bool):
+        if type(enabled) is not bool: raise RelayError('conversation_lock_setting_invalid')
+        with self.lock:
+            if self.data.get('active_action'): raise RelayError('conversation_lock_change_while_action_active')
+            def mutate():
+                self.data['conversation_lock_enabled']=enabled
+                self.data['conversation_lock_epoch']=int(self.data.get('conversation_lock_epoch',0) or 0)+1
+                # Enabling ALWAYS requires fresh operator owner approval.
+                self.data.pop('conversation_owner',None)
+                self.data['updated_at']=now()
+            self._mutate_and_save(mutate)
+            return self.data['conversation_lock_epoch']
+
     def bind_conversation_owner(self, owner):
         if (not isinstance(owner,dict) or not isinstance(owner.get('conversation_key'),str)
             or not owner['conversation_key'].startswith('https://chatgpt.com/')
@@ -665,15 +685,17 @@ def validate_transport_identity(packet:str, issuance, owner, state:State):
     if issuance.get('id')!=a.id or issuance.get('packet_hash')!=expected: raise RelayError('issuance_packet_mismatch')
     key=owner.get('conversation_key'); session=owner.get('session')
     if not isinstance(key,str) or not key.startswith('https://chatgpt.com/') or not isinstance(session,str) or not session: raise RelayError('conversation_owner_invalid')
-    bound=state.data.get('conversation_owner')
-    if not isinstance(bound,dict) or bound.get('authorization')!='operator' or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
-    # Tab identity is bound by a distinct operator authorization, never by a packet
-    # field or bearer token alone. Reject owner metadata from another browser tab.
+    # Tab identity remains mandatory in either mode. The persistent owner match
+    # is optional; issuance, bearer auth and STOP are never optional.
     tab_id=owner.get('tab_id')
-    if type(tab_id) is not int or tab_id<=0 or type(bound.get('tab_id')) is not int or tab_id!=bound['tab_id']: raise RelayError('conversation_tab_mismatch')
+    if type(tab_id) is not int or tab_id<=0: raise RelayError('conversation_tab_mismatch')
+    if state.conversation_lock_enabled:
+        bound=state.data.get('conversation_owner')
+        if not isinstance(bound,dict) or bound.get('authorization')!='operator' or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
+        if type(bound.get('tab_id')) is not int or tab_id!=bound['tab_id']: raise RelayError('conversation_tab_mismatch')
     if issuance.get('session')!=session or a.session!=session: raise RelayError('session_mismatch')
     journal=state.path.with_name('issuance-journal.jsonl')
-    row={**issuance,'conversation_key':key,'session':session,'backend_observed_at':now(),'backend_phase':'accepted'}
+    row={**issuance,'conversation_key':key,'session':session,'tab_id':tab_id,'backend_observed_at':now(),'backend_phase':'accepted'}
     with state.lock:
         journal.parent.mkdir(parents=True,exist_ok=True)
         prior=[]
@@ -682,7 +704,7 @@ def validate_transport_identity(packet:str, issuance, owner, state:State):
                 try: prior.append(json.loads(line))
                 except Exception: raise RelayError('issuance_journal_corrupt')
         for old in prior:
-            if old.get('id')==a.id and (old.get('packet_hash')!=expected or old.get('session')!=session): raise RelayError('issuance_identity_conflict')
+            if old.get('id')==a.id and (old.get('packet_hash')!=expected or old.get('session')!=session or old.get('conversation_key')!=key or old.get('tab_id') not in (None,tab_id)): raise RelayError('issuance_identity_conflict')
         if not any(old.get('id')==a.id for old in prior):
             with journal.open('a',encoding='utf-8') as jf:
                 jf.write(json.dumps(row,separators=(',',':'))+'\n'); jf.flush(); os.fsync(jf.fileno())
@@ -714,6 +736,27 @@ def confirm_owner_on_windows_desktop(owner):
         # Yes/No, warning icon, default NO, topmost user-visible operator prompt.
         response=ctypes.windll.user32.MessageBoxW(
             None,prompt,'GPT Windows Relay — OPERATOR OWNER APPROVAL',
+            0x00000004|0x00000030|0x00000100|0x00040000)
+    except Exception as exc:
+        raise RelayError('operator_confirmation_unavailable') from exc
+    return response==6
+
+
+# Local operator confirmation is mandatory when changing the optional lock,
+# particularly when disabling it. No bearer-only remote downgrade.
+def confirm_conversation_lock_change_on_windows_desktop(enabled):
+    if os.name!='nt': raise RelayError('operator_confirmation_unavailable')
+    change='ENABLE' if enabled else 'DISABLE'
+    explanation=('ENABLE: only an approved conversation/tab may send Windows actions.'
+                 if enabled else
+                 'DISABLE: any active focused ChatGPT tab with the paired Firefox extension may send Windows actions while the relay is ARMED.')
+    prompt=('Change GPT Windows Relay conversation owner lock?\n\n'
+            +change+' conversation lock\n\n'+explanation
+            +'\n\nPairing, STOP, packet hashes and duplicate protection stay enabled.'
+            +'\n\nYES applies this setting. NO cancels.')
+    try:
+        response=ctypes.windll.user32.MessageBoxW(
+            None,prompt,'GPT Windows Relay — CHANGE OWNER LOCK',
             0x00000004|0x00000030|0x00000100|0x00040000)
     except Exception as exc:
         raise RelayError('operator_confirmation_unavailable') from exc
@@ -783,7 +826,7 @@ class Handler(BaseHTTPRequestHandler):
         parts=urlsplit(self.path); request_path=parts.path
         if request_path=='/status':
             stop=self.server.state.operator_stop_status()
-            return self.sendj(200,{'ok':True,'version':1,'platform':'windows','armed':self.server.state.armed,'outbound_owner':self.server.state.outbound_owner,'pid':os.getpid(),'pending_missions':self.server.state.pending_mission_count(),**stop})
+            return self.sendj(200,{'ok':True,'version':1,'platform':'windows','armed':self.server.state.armed,'outbound_owner':self.server.state.outbound_owner,'pid':os.getpid(),'pending_missions':self.server.state.pending_mission_count(),'conversation_lock_enabled':self.server.state.conversation_lock_enabled,'conversation_lock_epoch':int(self.server.state.data.get('conversation_lock_epoch',0)),**stop})
         if request_path=='/packet-status':
             aid=parse_qs(parts.query).get('id',[None])[0]
             if not isinstance(aid,str) or not ID_RE.fullmatch(aid):
@@ -823,6 +866,18 @@ class Handler(BaseHTTPRequestHandler):
                 requested=p['armed']
                 print(f'ARM_STATE_CHANGE requested={requested} origin={self.headers.get("Origin","")[:120]} user_agent={self.headers.get("User-Agent","")[:160]}',flush=True)
                 generation=self.server.state.set_armed(requested); return self.sendj(200,{'ok':True,'armed':requested,'stop_generation':generation})
+            if request_path=='/conversation-lock':
+                requested=p.get('enabled')
+                if type(requested) is not bool: raise RelayError('conversation_lock_setting_invalid')
+                if not self.server.operator_prompt_lock.acquire(blocking=False):
+                    raise RelayError('operator_confirmation_busy')
+                try:
+                    if not confirm_conversation_lock_change_on_windows_desktop(requested):
+                        raise RelayError('operator_confirmation_declined')
+                    epoch=self.server.state.set_conversation_lock(requested)
+                    return self.sendj(200,{'ok':True,'conversation_lock_enabled':requested,'conversation_lock_epoch':epoch})
+                finally:
+                    self.server.operator_prompt_lock.release()
             if request_path=='/owner-bind':
                 presented=self.headers.get('X-GPT-Windows-Relay-Operator-Token','')
                 if not self.server.operator_token or not secrets.compare_digest(presented,self.server.operator_token): raise RelayError('operator_authorization_required')

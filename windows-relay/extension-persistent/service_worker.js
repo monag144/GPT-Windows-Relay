@@ -237,6 +237,20 @@ async function activeFocusedTabId(){
     return tab?.id??null;
   }catch{return null;}
 }
+// Owner lock OFF still requires the *currently focused* Firefox tab and a
+// matching ChatGPT conversation URL. It never lets dormant tabs submit actions.
+async function unlockedFocusedConversation(port,message,meta){
+  const tabId=port?.sender?.tab?.id;
+  const senderKey=normalizeConversationKey(port?.sender?.tab?.url);
+  const messageKey=normalizeConversationKey(message?.conversation_key||message?.conversation_href);
+  if(!Number.isSafeInteger(tabId)||tabId<=0||!senderKey||
+     (messageKey&&messageKey!==senderKey))
+    return {ok:false,error:'conversation_identity_missing',owner:null};
+  if((await activeFocusedTabId())!==tabId)
+    return {ok:false,error:'relay_active_tab_required',owner:null};
+  return {ok:true,claimed:false,transferred:false,upgraded:false,
+    owner:{conversation_key:senderKey,session:String(meta?.session||'default'),tab_id:tabId}};
+}
 function checkAndClaimRelayOwner(port,message,meta){
   const task=relayOwnerChain.then(async()=>{
     const tabId=port?.sender?.tab?.id;
@@ -342,7 +356,12 @@ chrome.runtime.onConnect.addListener(port=>{
       const meta=relayPacketMeta(m.packet);
       const packetId=meta.id;
       try{
-        const ownerDecision=await checkAndClaimRelayOwner(port,m,meta);
+        // Read the backend-controlled mode every time; never trust stale
+        // extension-local ownership settings after a HUD toggle.
+        const status=await call('/status',{},5000);
+        const ownerDecision=status.conversation_lock_enabled===true
+          ? await checkAndClaimRelayOwner(port,m,meta)
+          : await unlockedFocusedConversation(port,m,meta);
         if(!ownerDecision.ok){
           browserEvent('relay_cross_conversation_suppressed',{request_id:m.request_id,packet_id:packetId,session:meta.session,conversation_key:normalizeConversationKey(m.conversation_key||m.conversation_href||port?.sender?.tab?.url),error:ownerDecision.error,owner:ownerDecision.owner}).catch(()=>{});
           reply={ok:false,error:ownerDecision.error};
