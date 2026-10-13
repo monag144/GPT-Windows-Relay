@@ -135,6 +135,8 @@ class HudTests(unittest.TestCase):
   self.assertIn('command=lambda:relay_control("stop")',source)
   self.assertIn('command=lambda:relay_control("start")',source)
   self.assertIn("Join-Path $root '.relay-paused'",control)
+  self.assertIn("SetBackendArm $false",control)
+  self.assertIn("WaitBrowserQuiesced",control)
   self.assertIn('relay-control.ps1" start',start)
   self.assertIn('relay-control.ps1" stop',stop)
   self.assertNotIn('`r`n',start)
@@ -162,7 +164,8 @@ class HudTests(unittest.TestCase):
   source=(root/'hud.py').read_text(encoding='utf-8')
   stop=(root/'STOP-RELAY.bat').read_text(encoding='utf-8')
   control=(root/'relay-control.ps1').read_text(encoding='utf-8')
-  self.assertIn('title_phase="STOPPED" if (paused and not online)',source)
+  self.assertIn('title_phase=headline(online,life,browser) if intent=="RUNNING" else intent',source)
+  self.assertIn('if intent=="STOPPED":',source)
   self.assertIn('Relay STOPPED • operator stop',source)
   self.assertIn("$q=if($verified){'VERIFIED'}else{'UNVERIFIED'}",control)
   self.assertIn("BROWSER_QUIESCENCE=",control)
@@ -173,14 +176,16 @@ class HudTests(unittest.TestCase):
 
 
 
- def test_retry_control_is_explicit(self):
+ def test_five_button_hud_does_not_advertise_unimplemented_retry(self):
   from pathlib import Path
   root=Path(hud.__file__).resolve().parent
   source=(root/'hud.py').read_text(encoding='utf-8')
   control=(root/'relay-control.ps1').read_text(encoding='utf-8')
-  self.assertIn('text="RETRY"',source)
-  self.assertIn('relay_control("retry")',source)
-  self.assertIn("$Action -eq 'retry'",control)
+  for action in ('start','stop','restart','off','kill'):
+   self.assertIn('command=lambda:relay_control("'+action+'")',source)
+  self.assertNotIn('relay_control("retry")',source)
+  self.assertNotIn('text="RETRY"',source)
+  self.assertIn("'status','start','stop','restart','pause','resume','off','kill'",control)
 
 
 if __name__=='__main__':unittest.main()
