@@ -2,12 +2,12 @@
 
 **Repository:** `monag144/GPT-Windows-Relay` only. Do not use the old Termux relay as a Windows development source. The date is **Pacific local**, with **no clock time in filenames or document titles**. This directory index is a documented-navigation snapshot, not an assertion that GitHub or a running agent can never advance afterward.
 
-## Current operator policy — NO runtime governance
+## Relay execution safeguards — 2026-10-11
 
 - [Relay execution without governance — 2026-10-11](../policy/WINDOWS_RELAY_EXECUTION_WITHOUT_GOVERNANCE_2026-10-11.md) supersedes old five-operation GitHub audits, preflight receipts and periodic review requirements. Auth/STOP/owner/dedupe remain mandatory runtime security.
 - Past audit and PCE12–PCE17 governance incident files are historical evidence only, not live command admission instructions.
 
-## Current disk cleanup directive (2026-10-12)
+## Device cleanup and source retention — 2026-10-12
 
 - **[No on-device backups — 2026-10-12](../policy/WINDOWS_RELAY_NO_ON_DEVICE_BACKUPS_2026-10-12.md)**: authoritative operator rule; GitHub is the source-only version archive, no persistent local backup/snapshot/rollback folders. Pinned remote archive `archive/preconsolidation-source-2026-10-12`; local backup copies are removed from the WIP branch.
 
@@ -15,9 +15,11 @@
 - [Codex cleanup issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30): classify and choose the actual newest functional runtime, reconcile useful untracked code, physically remove proven redundant files without generating new backups, and preserve sensitive untracked data until explicit disposition.
 - **Launcher repaired by October 12:** `tools/Launch-Codex-CLI.bat` now selects the verified `GPT-Windows-Relay-Main-Build` checkout and refuses an unverified Git origin. [Issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30) continues to track remaining local runtime duplication; the old path warning is obsolete.
 
-## Live Windows Relay checkpoint (2026-10-12)
+## Windows Relay live execution checkpoint — 2026-10-12
 
 - **[Windows Relay live execution checkpoint — 2026-10-12](../releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md):** verified annotated Git tag, 13/13 focused tests and a real PowerShell canary using Main-Build and Firefox v0.3.18.
+- [Release and project health sweep — 2026-10-12](../reviews/WINDOWS_RELAY_RELEASE_AND_PROJECT_HEALTH_SWEEP_2026-10-12.md): source fixes, pending native broader tests, and unresolved untracked-disk scope.
+- [Legacy browser installer retirement — 2026-10-12](../facts/WINDOWS_RELAY_LEGACY_BROWSER_INSTALLER_RETIREMENT_2026-10-12.md): old README.txt installer guidance is superseded while preserving the operator's modified local text.
 - Oct 9/10/11 inventory and capability records are historical snapshots, not evidence the legacy Client is installed or that live execution has never succeeded.
 
 ## Engineering owner and source evidence (2026-10-11)
@@ -42,7 +44,7 @@
 
 - [Windows Relay HUD conversation controls — 2026-10-10](../design/WINDOWS_RELAY_HUD_CONVERSATION_CONTROLS_2026-10-10.md) — user-requested exact-conversation **FOCUS CHAT**, **SELECT CHAT / CLAIM–CONNECT** and visible **FORCE** button; requires STOP/owner/dedup gates, preserves five working Client buttons and prohibits automatic handoff. **Design only; no live Client changes.**
 
-## More specific later evidence and live gates
+## Historical and operational evidence — 2026-10-10
 
 - [Script-only agent handoff](../policy/SCRIPT_ONLY_AGENT_HANDOFF_2026-10-09.md) — newer user directive **permanently retires automatic switching** and standardizes the existing CMD/PowerShell one-shot script. Supersedes the [historical temporary hold](../policy/POLICY_2026-10-10T0331Z_MANUAL_AGENT_HANDOFF_AND_AUTOMATED_ROTATION_HOLD.md); Git commit chronology resolves same-Pacific-date updates.
 - [Agent switching retirement bin](../../windows-relay/bin/AGENT_SWITCHING_RETIREMENT_2026-10-09.md) — reasons, historical code SHA, archived rotation test sources and retained shared-component boundaries.
