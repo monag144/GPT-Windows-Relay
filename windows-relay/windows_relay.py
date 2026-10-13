@@ -667,6 +667,10 @@ def validate_transport_identity(packet:str, issuance, owner, state:State):
     if not isinstance(key,str) or not key.startswith('https://chatgpt.com/') or not isinstance(session,str) or not session: raise RelayError('conversation_owner_invalid')
     bound=state.data.get('conversation_owner')
     if not isinstance(bound,dict) or bound.get('authorization')!='operator' or bound.get('conversation_key')!=key or bound.get('session')!=session: raise RelayError('conversation_owner_mismatch')
+    # Tab identity is bound by a distinct operator authorization, never by a packet
+    # field or bearer token alone. Reject owner metadata from another browser tab.
+    tab_id=owner.get('tab_id')
+    if type(tab_id) is not int or tab_id<=0 or type(bound.get('tab_id')) is not int or tab_id!=bound['tab_id']: raise RelayError('conversation_tab_mismatch')
     if issuance.get('session')!=session or a.session!=session: raise RelayError('session_mismatch')
     journal=state.path.with_name('issuance-journal.jsonl')
     row={**issuance,'conversation_key':key,'session':session,'backend_observed_at':now(),'backend_phase':'accepted'}
