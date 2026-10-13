@@ -37,3 +37,15 @@ Canonical source only: `windows-relay/windows_relay.py`, `windows-relay/extensio
 4. Only after versions/provenance and arm state are confirmed, send a **new, unique-ID read-only canary** and answer the native operator confirmation (YES only for correct URL/session/tab). Record exact authenticated backend result or error. Do not suppress STOP/owner guards.
 
 **No source version, static test, mock test, or authenticated pairing alone establishes a production command execution success.**
+
+
+## Native Windows acceptance — Canary #2 succeeded (2026-10-12 Pacific / 2026-10-13 UTC)
+
+**Status: operator-supplied real command execution receipt; independently reviewed as text, not independently instrumented.** This supersedes the earlier *pending live acceptance* status above for the specific repaired action path, not for long-run reliability.
+
+1. Operator fast-forwarded Main-Build to `9cf9d6697edcabf45fe0c8226805447cd3b7c07e` without replacing the checkout; corrected authentication tests **8/8**, isolated HTTP owner-consent and dedupe tests **4/4**, Node persistent-worker transport mock **1/1**, total **13/13 passed**. No failing test remains among these three suites.
+2. Operator confirmed the same temporary Firefox add-on loaded from canonical `windows-relay/extension-persistent/`, ID `gpt-windows-relay@local`, manifest version **0.3.18**.
+3. Read-only live command ID `PCE17-CANARY-20261012-002`, session `pce17.1`, owner_claim `true`, shell `powershell` returned a full `[GPT_WINDOWS_RESULT]` envelope: `status=OK`, `exit_code=0`, `duration_ms=1680`, `stderr=""`, `stdout_truncated=false`, `stderr_truncated=false`. User-visible stdout started with **`GPT_WINDOWS_RELAY_CANARY_002_OK`** and included native PowerShell version **5.1.19041.2364**, ending with the established sandwich reminder. Backend issued a locally saved result descriptor; no token, machine-specific user path, or machine identity is reproduced in this public record.
+4. The successful execution demonstrates one actual complete ChatGPT → canonical Firefox extension → authenticated Main-Build backend → PowerShell → ChatGPT result cycle. The supplied receipt does not individually prove the exact timing/display of the YES/NO operator dialog; the operator did not report whether it appeared. Prior canary #1 remains a failed diagnostic and is not represented as successful.
+
+**Remaining acceptance work:** extended repeated-command/replay, STOP and cross-conversation negative tests, browser navigation/restart resilience and durable no-double-execution under interruption. Do not treat one successful read-only canary as endurance certification. No local backups or alternative runtime builds were created during this evidence update.
