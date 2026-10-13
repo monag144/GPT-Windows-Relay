@@ -50,12 +50,21 @@ class AuthenticatedTransportTests(unittest.TestCase):
 
     def test_missing_transport_fails_before_execution_or_reservation(self):
         self.bind()
-        for metadata in (None, {}, {"issuance": {}, "owner": {}}):
-            with self.subTest(metadata=metadata):
+        # Distinguish missing transport from present-but-malformed issuance.
+        cases = (
+            (None, "authenticated_transport_required"),
+            ({}, "transport_identity_missing"),
+            ({"issuance": {}, "owner": {}}, "issuance_packet_mismatch"),
+            ({"issuance": self.valid["issuance"], "owner": {}}, "conversation_owner_invalid"),
+        )
+        for metadata, expected_error in cases:
+            with self.subTest(metadata=metadata, expected_error=expected_error):
                 with mock.patch.object(relay, "execute", side_effect=AssertionError("must not execute")):
-                    with self.assertRaisesRegex(relay.RelayError, "authenticated_transport_required|transport_identity_missing"):
+                    with self.assertRaises(relay.RelayError) as caught:
                         relay.process(self.packet, self.state, metadata)
+                self.assertEqual(str(caught.exception), expected_error)
         self.assertIsNone(self.state.lookup(relay.extract(self.packet).id))
+        self.assertFalse((Path(self.temp.name) / "issuance-journal.jsonl").exists())
 
     def test_unbound_owner_is_not_authorized_by_pairing_metadata(self):
         with self.assertRaisesRegex(relay.RelayError, "conversation_owner_mismatch"):
