@@ -69,8 +69,8 @@ const actor=sandbox.__test__;
   assert.equal(success.result,'MOCK_ACTION_RESULT');
   assert.deepEqual(requests.map(x=>x.endpoint),
                    ['/action','/owner-bind-request','/action']);
-  assert.deepEqual(requests[0].body.issuance,meta.issuance);
-  assert.deepEqual(requests[0].body.owner,meta.owner);
+  assert.equal(JSON.stringify(requests[0].body.issuance),JSON.stringify(meta.issuance));
+  assert.equal(JSON.stringify(requests[0].body.owner),JSON.stringify(meta.owner));
 
   requests=[];ownerAnswer='decline';
   await assert.rejects(actor.callAction(packet,owner),
