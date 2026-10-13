@@ -47,6 +47,12 @@ def one_suite(name: str, cwd: Path) -> dict:
     combined = response.stdout + "\n" + response.stderr
     summary = re.search(r"Ran (\d+) tests? in ([0-9.]+)s", combined)
     failures = re.findall(r"(?m)^(?:FAIL|ERROR): ([^\r\n]+)", combined)
+    traceback_endings = re.findall(
+        r"(?m)^(?:AssertionError|AttributeError|TypeError|ValueError|"
+        r"RuntimeError|FileNotFoundError|PermissionError|ModuleNotFoundError|"
+        r"ImportError|SyntaxError|windows_relay\.RelayError):[^\r\n]*",
+        combined,
+    )
     final_summary = re.search(r"(?m)^(FAILED \([^\r\n]+\)|OK(?: \([^\r\n]*\))?)$", combined)
     return {
         "suite": name,
@@ -57,8 +63,10 @@ def one_suite(name: str, cwd: Path) -> dict:
         "unittest_summary": final_summary.group(1) if final_summary else "UNAVAILABLE",
         "failing_tests": failures[:35],
         "additional_failures_omitted": max(0, len(failures) - 35),
-        # On failure retain a short traceback tail only; no local artifact.
-        "failure_trace_tail": combined[-7000:] if response.returncode != 0 else None,
+        # Avoid 7 KB traceback tails printing entire HUD/source files:
+        # capture short per-error exception summaries and test identities only.
+        "exception_messages": [line[:480] for line in traceback_endings[:35]],
+        "exception_messages_omitted": max(0, len(traceback_endings)-35),
     }
 
 
