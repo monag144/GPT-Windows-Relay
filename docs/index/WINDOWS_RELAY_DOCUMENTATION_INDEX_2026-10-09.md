@@ -13,9 +13,14 @@
 
 - [Multiple-build disk audit — 2026-10-12](../reviews/WINDOWS_RELAY_MULTIBUILD_DISK_AUDIT_2026-10-12.md): 23 backends, 26 HUDs, competing untracked nested runtime/Prototype/backups and operator's one-runtime/no-local-backups target. Disk findings are operator-provided; GitHub alone cannot establish loaded/runtime state.
 - [Codex cleanup issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30): classify and choose the actual newest functional runtime, reconcile useful untracked code, physically remove proven redundant files without generating new backups, and preserve sensitive untracked data until explicit disposition.
-- **Warning:** `tools/Launch-Codex-CLI.bat` still selects an outdated checkout and falls back to the user home directory; use a verified Main-Build Codex launch until repaired (issue #30).
+- **Launcher repaired by October 12:** `tools/Launch-Codex-CLI.bat` now selects the verified `GPT-Windows-Relay-Main-Build` checkout and refuses an unverified Git origin. [Issue #30](https://github.com/monag144/GPT-Windows-Relay/issues/30) continues to track remaining local runtime duplication; the old path warning is obsolete.
 
-## Current engineering owner and source evidence (2026-10-11)
+## Live Windows Relay checkpoint (2026-10-12)
+
+- **[Windows Relay live execution checkpoint — 2026-10-12](../releases/WINDOWS_RELAY_LIVE_EXECUTION_CHECKPOINT_2026-10-12.md):** verified annotated Git tag, 13/13 focused tests and a real PowerShell canary using Main-Build and Firefox v0.3.18.
+- Oct 9/10/11 inventory and capability records are historical snapshots, not evidence the legacy Client is installed or that live execution has never succeeded.
+
+## Engineering owner and source evidence (2026-10-11)
 
 - [Engineering ownership and GitHub-push → relay-pull workflow](../policy/WINDOWS_RELAY_ENGINEERING_OWNER_AND_DELIVERY_2026-10-11.md): ChatGPT leads routine engineering, Codex handles major escalations, runtime owner security stays separate.
 - [GitHub permission-prompt automation evidence](../facts/WINDOWS_RELAY_GITHUB_APPROVAL_BEHAVIOR_2026-10-11.md): source markers, test limitations and loaded-extension uncertainty; not proof of live authorization.
