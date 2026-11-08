@@ -84,7 +84,13 @@ class BrowserContractTests(unittest.TestCase):
             self.assertIn("relay_action_result",src)
         self.assertIn("callAction(m.packet)",self.live_worker)
         self.assertIn("callAction(m.packet,ownerDecision.owner)",self.persistent_worker)
-        self.assertIn("const ownerDecision=await checkAndClaimRelayOwner",self.persistent_worker)
+        # The canonical worker chooses strict owner enforcement only when the
+        # backend-controlled owner lock is ON. In OFF mode a focused tab
+        # remains required, and issuance/transport are still authenticated.
+        self.assertIn("status.conversation_lock_enabled===true",self.persistent_worker)
+        self.assertIn("await checkAndClaimRelayOwner(port,m,meta)",self.persistent_worker)
+        self.assertIn("await unlockedFocusedConversation(port,m,meta)",self.persistent_worker)
+        self.assertIn("await syncOwnerLockEpoch(status.conversation_lock_epoch)",self.persistent_worker)
 
     def test_stable_main_observer_replaces_computed_conversation_root(self):
         self.assertIn("const next=document.querySelector('main');",self.src)
