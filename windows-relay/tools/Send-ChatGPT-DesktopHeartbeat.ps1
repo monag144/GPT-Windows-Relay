@@ -82,6 +82,45 @@ function Get-EnabledSend($window){
     if($found.Count -eq 0){return $null}
     return $found[0]
 }
+# A blank ChatGPT composer can expose its placeholder as the UIA Value.
+# Allow only the Katana-observed 11-char "Ask ChatGPT" placeholder plus
+# surrounding whitespace, and only if no Send control is enabled, the
+# composer is unfocused, and at least one disabled Send control is visible.
+# Mere similarity to placeholder wording is NOT sufficient.
+function Test-DisabledSendControlPresent($window){
+    $nodes=Descendants $window
+    $found=0
+    for($i=0;$i -lt $nodes.Count;$i++){
+        try{
+            $node=$nodes.Item($i)
+            if([string]$node.Current.ControlType.ProgrammaticName -ne 'ControlType.Button'){continue}
+            if([string]$node.Current.Name -notmatch '(?i)^(send|send message|send prompt|submit)(\b|$)'){continue}
+            if($node.Current.IsOffscreen){continue}
+            $found++
+            if($node.Current.IsEnabled){return $false}
+        }catch{}
+    }
+    return ($found -ge 1)
+}
+function Assert-ComposableEmptyState($window,$composer){
+    $value=[string]$composer.pattern.Current.Value
+    if($value.Length -eq 0){
+        Write-Output 'COMPOSER_BASELINE=EMPTY'
+        return
+    }
+    $trimmed=$value.Trim()
+    $looksLikeObservedPlaceholder=($trimmed -ceq 'Ask ChatGPT' -and $value.Length -le 16)
+    if(-not $looksLikeObservedPlaceholder){
+        throw 'COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT'
+    }
+    if($composer.node.Current.HasKeyboardFocus){
+        throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_FOCUSED_REFUSE'
+    }
+    if(-not (Test-DisabledSendControlPresent $window)){
+        throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
+    }
+    Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
+}
 function Try-ClearOwnDraft($window){
     if($script:submitted -or [string]::IsNullOrEmpty($script:wire)){return}
     try{
@@ -111,7 +150,7 @@ try{
     $window=Get-ChatGPTWindow
     $doc=Get-AnchoredDocument $window $canary
     $composer=Get-Composer $window
-    if(([string]$composer.pattern.Current.Value).Length -ne 0){throw 'COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT'}
+    Assert-ComposableEmptyState $window $composer
     $id='PCE18-KATANA-HEARTBEAT-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
     $payload=[ordered]@{
         version=1
@@ -142,8 +181,10 @@ try{
     $composer=Get-Composer $window
     if([string]$composer.pattern.Current.Value -cne $script:wire){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
     Write-Output 'UIA_SEND_INVOKE_BEGIN'
-    $send.pattern.Invoke()
+    # Once Invoke starts, delivery can be uncertain even if UIA throws.
+    # Never clear an already submitted message or retry blindly.
     $script:submitted=$true
+    $send.pattern.Invoke()
     $confirmed=$false
     $deadline=[DateTime]::UtcNow.AddSeconds($DeliveryTimeoutSeconds)
     while([DateTime]::UtcNow -lt $deadline){
