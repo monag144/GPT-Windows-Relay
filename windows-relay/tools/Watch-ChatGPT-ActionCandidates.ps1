@@ -59,7 +59,18 @@ function Test-RelayCandidate([string]$body){
     }
     if($names -contains 'timeout' -and ($obj.timeout -isnot [int] -and $obj.timeout -isnot [long])){return $null}
     if($names -contains 'timeout' -and ($obj.timeout -lt 1 -or $obj.timeout -gt 300)){return $null}
-    return @{id=$obj.id; session=$session; shell=$shell}
+    # One exact, harmless CMD packet is permitted as a native smoke canary.
+    # A user message can spoof UIA text, so this is not general authorization.
+    $safeSmoke=(
+        $obj.id -ceq 'PCE18-KATANA-OPTEST-003' -and
+        $session -ceq 'katana.native' -and
+        $shell -ceq 'cmd' -and
+        $obj.command -is [string] -and
+        $obj.command -ceq 'echo PCE18_OPERATION_003_SUCCESS' -and
+        $names.Count -eq 7 -and
+        @($names|Where-Object{$_ -cnotin @('version','platform','id','session','action','shell','command')}).Count -eq 0
+    )
+    return @{id=$obj.id; session=$session; shell=$shell; safeSmoke=$safeSmoke}
 }
 function Find-ChatGPTWindows {
     $root=[System.Windows.Automation.AutomationElement]::RootElement
@@ -130,6 +141,8 @@ while($clock.Elapsed.TotalSeconds -lt $WatchSeconds){
                 Write-Output ('CANDIDATE_SHELL='+$candidate.shell)
                 Write-Output ('CANDIDATE_FINGERPRINT='+$candidate.hash.Substring(0,16))
                 Write-Output ('CANDIDATE_STATUS='+$classification)
+                $smokeLabel=if($candidate.safeSmoke){'TRUE'}else{'FALSE'}
+                Write-Output ('CANDIDATE_SAFE_SMOKE_MATCH='+$smokeLabel)
             }
         }
     }catch{$counts.errors++}
