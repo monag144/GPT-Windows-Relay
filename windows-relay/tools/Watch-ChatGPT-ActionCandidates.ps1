@@ -109,7 +109,7 @@ function Read-DocumentCandidates($window){
                 if($null -eq $data){$counts.invalid++;continue}
                 $payloadBytes=[Text.Encoding]::UTF8.GetBytes($match.Value)
                 $hash=[BitConverter]::ToString($hashAlgo.ComputeHash($payloadBytes)).Replace('-','').ToLowerInvariant()
-                [void]$results.Add(@{id=$data.id; session=$data.session; shell=$data.shell; hash=$hash})
+                [void]$results.Add(@{id=$data.id; session=$data.session; shell=$data.shell; hash=$hash; safeSmoke=$data.safeSmoke})
             }
         }catch{$counts.errors++}
     }
