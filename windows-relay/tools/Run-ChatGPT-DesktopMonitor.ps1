@@ -12,7 +12,7 @@ $root=$PSScriptRoot
 $scanner=Join-Path $root 'Watch-ChatGPT-ActionCandidates.ps1'
 $heartbeat=Join-Path $root 'Send-ChatGPT-DesktopHeartbeat.ps1'
 $localRoot=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelay'
-$ledger=Join-Path $localRoot 'desktop-heartbeat-ledger.json'
+$ledger=Join-Path $localRoot 'desktop-heartbeat-ledger-v2.json'
 $canary='PCE18-KATANA-DETECTION-001'
 $known=New-Object 'System.Collections.Generic.HashSet[string]'
 $created=$false
@@ -49,13 +49,14 @@ function Save-Ledger([string]$status,[string]$id=''){
 try {
     if(-not(Test-Path -LiteralPath $scanner)){throw 'SCANNER_MISSING'}
     if(-not(Test-Path -LiteralPath $heartbeat)){throw 'HEARTBEAT_SCRIPT_MISSING'}
-    Write-Output 'CHATGPT_DESKTOP_MONITOR_V1'
-    Write-Output 'MODE=CONTINUOUS_AUTOMATIC_DETECTION_AND_ONE_HEARTBEAT'
+    Write-Output 'CHATGPT_DESKTOP_MONITOR_V2'
+    Write-Output 'MODE=CONTINUOUS_AUTOMATIC_DETECTION_AND_ONE_FOCUSED_ENTER_HEARTBEAT'
     Write-Output 'WINDOWS_COMMAND_EXECUTION=DISABLED_UNTRUSTED_UIA_ORIGIN'
     Write-Output 'OPERATOR_STOP=CLOSE_THIS_WINDOW_OR_CTRL_C'
     Write-Output ('SCAN_SECONDS='+$ScanSeconds)
     $iteration=0
     $lastDraftNotice=''
+    Write-Output 'PRESERVES_PRIOR_HEARTBEAT_LEDGER=TRUE'
     while($true){
         $iteration++
         $scan=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scanner -WatchSeconds $ScanSeconds -IntervalSeconds 1 2>&1)
@@ -82,11 +83,11 @@ try {
             # First mark intent, then attempt. This is fail-closed after a crash;
             # it never automatically retries a possibly submitted heartbeat.
             Save-Ledger 'SUBMISSION_ATTEMPTED'
-            $result=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $heartbeat -DetectionSeconds 3 -DeliveryTimeoutSeconds 15 2>&1)
+            $result=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $heartbeat -DetectionSeconds 8 -DeliveryTimeoutSeconds 15 2>&1)
             $heartbeatExit=$LASTEXITCODE
             $idLine=@($result|Where-Object{$_ -match '^HEARTBEAT_ID='}|Select-Object -First 1)
             $hbId=if($idLine.Count){([string]$idLine[0]).Substring('HEARTBEAT_ID='.Length)}else{''}
-            $begun=(@($result|Where-Object{$_ -eq 'UIA_SEND_INVOKE_BEGIN'}).Count -gt 0)
+            $begun=(@($result|Where-Object{$_ -eq 'UIA_FOCUSED_ENTER_BEGIN'}).Count -gt 0)
             $draft=(@($result|Where-Object{$_ -match '^HEARTBEAT_ERROR=COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT$'}).Count -gt 0)
             $passed=(@($result|Where-Object{$_ -eq 'RESULT=HEARTBEAT_SUBMITTED'}).Count -gt 0)
             $uncertain=(@($result|Where-Object{$_ -eq 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'}).Count -gt 0)
