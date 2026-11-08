@@ -38,8 +38,11 @@ const chrome={
       return Promise.resolve(response);
     },
     set(value,done){
+      // Firefox updates storage before reporting success to the callback.
+      // A simulated storage failure must not persist the attempted write.
+      if(!storeFails)Object.assign(storage,value);
       if(done){chrome.runtime.lastError=storeFails?{message:'simulated failure'}:null;done();return;}
-      Object.assign(storage,value);return Promise.resolve();
+      return storeFails?Promise.reject(new Error('simulated failure')):Promise.resolve();
     },
   }},
 };
@@ -91,6 +94,7 @@ const actor=sandbox.__test__;
   storeFails=true;
   await assert.rejects(actor.extensionStorageGet('owner'),/relay_storage_read_failed/);
   await assert.rejects(actor.extensionStorageSet({x:1}),/relay_storage_write_failed/);
+  assert.equal(storage.x,undefined,'failed storage write must not be persisted');
 
   // Lock OFF does not rely on stale storage; only the focused sender tab can act.
   const focused={sender:{url:owner.conversation_key,tab:{id:37,url:owner.conversation_key}}};
