@@ -162,7 +162,6 @@ $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
-    Add-Type -AssemblyName System.Windows.Forms
     $detector=Join-Path $PSScriptRoot 'Watch-ChatGPT-ActionCandidates.ps1'
     if(-not(Test-Path -LiteralPath $detector)){throw 'DETECTION_TOOL_MISSING'}
     # Read-only detector; its results are untrusted until a controlled provenance test.
