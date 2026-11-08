@@ -29,7 +29,11 @@ const chrome={
   action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{}},
   storage:{local:{
     get(key,done){
-      const response=Array.isArray(key)?{relayToken:storage.relayToken}:{};
+      // Mirror Firefox's string/array key lookup, including persisted
+      // owner-lock epochs. Previously every string read returned {}, masking
+      // actual storage state and causing false epoch-invalidation failures.
+      const keys=Array.isArray(key)?key:(typeof key==='string'?[key]:Object.keys(key||{}));
+      const response=Object.fromEntries(keys.filter(k=>Object.prototype.hasOwnProperty.call(storage,k)).map(k=>[k,storage[k]]));
       if(done){chrome.runtime.lastError=storeFails?{message:'simulated failure'}:null;done(response);return;}
       return Promise.resolve(response);
     },
