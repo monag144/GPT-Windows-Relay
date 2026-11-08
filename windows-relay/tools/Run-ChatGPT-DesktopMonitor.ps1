@@ -20,7 +20,7 @@ function Operator-StopActive {
 $scanner=Join-Path $root 'Watch-ChatGPT-ActionCandidates.ps1'
 $heartbeat=Join-Path $root 'Send-ChatGPT-DesktopHeartbeat.ps1'
 $localRoot=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelay'
-$ledger=Join-Path $localRoot 'desktop-heartbeat-ledger-v2.json'
+$ledger=Join-Path $localRoot 'desktop-heartbeat-ledger-v3.json'
 $canary='PCE18-KATANA-DETECTION-001'
 $known=New-Object 'System.Collections.Generic.HashSet[string]'
 $created=$false
@@ -57,8 +57,8 @@ function Save-Ledger([string]$status,[string]$id=''){
 try {
     if(-not(Test-Path -LiteralPath $scanner)){throw 'SCANNER_MISSING'}
     if(-not(Test-Path -LiteralPath $heartbeat)){throw 'HEARTBEAT_SCRIPT_MISSING'}
-    Write-Output 'CHATGPT_DESKTOP_MONITOR_V2'
-    Write-Output 'MODE=CONTINUOUS_AUTOMATIC_DETECTION_AND_ONE_FOCUSED_ENTER_HEARTBEAT'
+    Write-Output 'CHATGPT_DESKTOP_MONITOR_V3'
+    Write-Output 'MODE=CONTINUOUS_AUTOMATIC_DETECTION_AND_ONE_GUARDED_SEND_CLICK'
     Write-Output 'WINDOWS_COMMAND_EXECUTION=DISABLED_UNTRUSTED_UIA_ORIGIN'
     Write-Output 'OPERATOR_STOP=CLOSE_THIS_WINDOW_OR_CTRL_C'
     Write-Output ('SCAN_SECONDS='+$ScanSeconds)
@@ -97,10 +97,17 @@ try {
             $heartbeatExit=$LASTEXITCODE
             $idLine=@($result|Where-Object{$_ -match '^HEARTBEAT_ID='}|Select-Object -First 1)
             $hbId=if($idLine.Count){([string]$idLine[0]).Substring('HEARTBEAT_ID='.Length)}else{''}
-            $begun=(@($result|Where-Object{$_ -eq 'UIA_FOCUSED_ENTER_BEGIN'}).Count -gt 0)
+            $begun=(@($result|Where-Object{$_ -eq 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'}).Count -gt 0)
             $draft=(@($result|Where-Object{$_ -match '^HEARTBEAT_ERROR=COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT$'}).Count -gt 0)
             $passed=(@($result|Where-Object{$_ -eq 'RESULT=HEARTBEAT_SUBMITTED'}).Count -gt 0)
             $uncertain=(@($result|Where-Object{$_ -eq 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'}).Count -gt 0)
+            # Expose a bounded diagnostic summary so the operator can see
+            # whether injection reached the click gate and whether submission cleared.
+            foreach($line in $result){
+                if([string]$line -match '^(DETECTION=|COMPOSER_BASELINE=|HEARTBEAT_ID=|UIA_GUARDED_SEND_BUTTON_CLICK_|DELIVERY=|RESULT=|HEARTBEAT_ERROR=)'){
+                    Write-Output ('DESKTOP_SENDER_'+[string]$line)
+                }
+            }
             if($passed){
                 Save-Ledger 'DELIVERED_LOCALLY' $hbId
                 Write-Output ('DESKTOP_HEARTBEAT_SUBMITTED_ID='+$hbId)
