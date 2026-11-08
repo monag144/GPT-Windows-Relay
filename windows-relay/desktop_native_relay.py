@@ -368,13 +368,61 @@ def runner():
     return 0
 
 
+HUD_MODE = HOME / 'hud-mode.json'
+
+def select_original_hud():
+    """Route the existing top-right hud.py to this desktop transport."""
+    write_json(HUD_MODE, {'version': 1, 'transport': 'native-chatgpt-app'})
+    note('NATIVE_HUD=ORIGINAL_TOP_RIGHT_SELECTED')
+
+def launch_runner_if_absent():
+    if runner_active():
+        note('NATIVE_RUNNER=ALREADY_RUNNING')
+        return
+    flags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+    subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), 'run'],
+                     cwd=str(ROOT), creationflags=flags)
+    note('NATIVE_RUNNER=START_REQUESTED')
+
+def restart_runner():
+    update_control('off')
+    for _ in range(80):
+        if not runner_active():
+            break
+        time.sleep(.25)
+    else:
+        raise RuntimeError('NATIVE_RESTART_TIMEOUT')
+    update_control('arm')
+    launch_runner_if_absent()
+    note('NATIVE_RESTART=REQUESTED')
+
+def kill_runner():
+    """Request emergency OFF and verify shutdown without risking a foreign PID."""
+    update_control('off')
+    for _ in range(40):
+        if not runner_active():
+            note('NATIVE_KILL=OFF_AND_STOPPED')
+            return
+        time.sleep(.25)
+    # No blind taskkill from a stale runtime-status PID.
+    raise RuntimeError('NATIVE_KILL_STILL_RUNNING_REQUIRES_PROCESS_IDENTITY_CHECK')
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="run",
-                        choices=("run", "arm", "stop", "off", "status", "check-running"))
+                        choices=("run", "arm", "stop", "off", "restart", "kill",
+                                 "hud-mode", "status", "check-running"))
     args = parser.parse_args()
     if args.command == "run":
         return runner()
+    if args.command == 'hud-mode':
+        select_original_hud()
+        return 0
+    if args.command == 'restart':
+        restart_runner()
+        return 0
+    if args.command == 'kill':
+        kill_runner()
+        return 0
     if args.command == "status":
         note(json.dumps(get_status(), sort_keys=True))
         return 0
@@ -383,6 +431,8 @@ def main():
         note("NATIVE_DESKTOP_RUNNER_RUNNING=" + str(active).upper())
         return 10 if active else 0
     cfg = update_control(args.command)
+    if args.command == 'arm':
+        launch_runner_if_absent()
     note("NATIVE_DESKTOP_ARMED=" + str(cfg["armed"]).upper())
     note("NATIVE_DESKTOP_OFF=" + str(cfg["off"]).upper())
     return 0
