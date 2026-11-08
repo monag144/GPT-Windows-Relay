@@ -22,7 +22,9 @@ function Get-ChatGPTWindow {
     return $found[0]
 }
 function Descendants($window){
-    return $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+    # Preserve AutomationElementCollection as one object; PS pipelines otherwise
+    # enumerate it and break the .Item(index) calls in the downstream probes.
+    return ,($window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition))
 }
 function Has-Marker($document,[string]$value){
     $p=$null
