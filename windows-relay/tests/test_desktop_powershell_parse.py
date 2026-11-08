@@ -18,6 +18,8 @@ ENTRIES = (
     ROOT / "tools" / "Send-ChatGPT-DesktopHeartbeat.ps1",
     ROOT / "tools" / "Run-ChatGPT-DesktopMonitor.ps1",
     ROOT / "tools" / "Get-ChatGPT-DesktopMonitorStatus.ps1",
+    ROOT / "tools" / "Watch-ChatGPT-ActionCandidates.ps1",
+    ROOT / "tools" / "Invoke-ChatGPT-DesktopSafeSmoke.ps1",
     ROOT / "relay-control.ps1",
     ROOT / "relay-watchdog-loop.ps1",
 )
