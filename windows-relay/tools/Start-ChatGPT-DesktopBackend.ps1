@@ -51,5 +51,43 @@ $physicalStatus=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $con
 if(@($physicalStatus | Where-Object { [string]$_ -match '^STATE=RUNNING\s+PID=' }).Count -ne 1){
     throw 'NONCANONICAL_BACKEND_LISTENER_REFUSE_MONITOR'
 }
+# Ensure the *existing* HUD/watchdog lifecycle is present even when the
+# backend was already running before this desktop-app launcher was invoked.
+$hud=Join-Path $root 'hud.py'
+$watchdog=Join-Path $root 'relay-watchdog-loop.ps1'
+if(-not(Test-Path -LiteralPath $hud)){throw 'CANONICAL_HUD_SOURCE_MISSING'}
+if(-not(Test-Path -LiteralPath $watchdog)){throw 'CANONICAL_WATCHDOG_SOURCE_MISSING'}
+function Has-CanonicalProcess([string]$file,[string]$exeRegex){
+    $quoted='"'+[IO.Path]::GetFullPath($file)+'"'
+    foreach($proc in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)){
+        if($proc.Name -notmatch $exeRegex){continue}
+        if(([string]$proc.CommandLine).IndexOf($quoted,[StringComparison]::OrdinalIgnoreCase) -ge 0){return $true}
+    }
+    return $false
+}
+if(-not(Has-CanonicalProcess $watchdog '^powershell(.exe)?
+Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
+)){
+    $args='-NoProfile -ExecutionPolicy Bypass -File "'+$watchdog+'"'
+    Start-Process powershell.exe -WindowStyle Hidden -WorkingDirectory $root -ArgumentList $args | Out-Null
+    Write-Output 'CANONICAL_WATCHDOG=START_REQUESTED'
+}else{
+    Write-Output 'CANONICAL_WATCHDOG=ALREADY_RUNNING'
+}
+$hudFound=$false
+for($i=0;$i -lt 20;$i++){
+    if(Has-CanonicalProcess $hud '^python(w)?(.exe)?
+Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
+){$hudFound=$true;break}
+    Start-Sleep -Milliseconds 250
+}
+if(-not $hudFound){
+    # Watchdog may be unable to locate Python or may have exited.
+    # Report the real fault; do not claim the HUD is visible.
+    Write-Output 'CANONICAL_HUD=NOT_RUNNING'
+    Write-Output 'CANONICAL_HUD_DIAGNOSTIC=RUN_PYTHON_B_HUD_PY_TO_CAPTURE_EXCEPTION'
+}else{
+    Write-Output 'CANONICAL_HUD=RUNNING'
+}
 Write-Output 'CANONICAL_BACKEND_READY=TRUE'
 Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
