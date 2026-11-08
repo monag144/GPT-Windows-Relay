@@ -95,6 +95,24 @@ def status_update(**fields):
     write_json(STATUS, prior)
 
 
+def runner_active() -> bool:
+    if os.name != "nt" or msvcrt is None:
+        return False
+    HOME.mkdir(parents=True, exist_ok=True)
+    with LOCK.open("a+b") as handle:
+        if LOCK.stat().st_size == 0:
+            handle.write(b"x")
+            handle.flush()
+        handle.seek(0)
+        try:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return True
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return False
+
+
 def get_status() -> dict:
     cfg = configuration()
     try:
@@ -103,6 +121,7 @@ def get_status() -> dict:
         live = {}
     return {
         "native_armed": cfg["armed"] and not cfg["off"],
+        "native_running": runner_active(),
         "native_off": cfg["off"],
         "pid": live.get("pid"),
         "heartbeat_utc": live.get("updated_utc"),
@@ -347,13 +366,17 @@ def runner():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="run",
-                        choices=("run", "arm", "stop", "off", "status"))
+                        choices=("run", "arm", "stop", "off", "status", "check-running"))
     args = parser.parse_args()
     if args.command == "run":
         return runner()
     if args.command == "status":
         note(json.dumps(get_status(), sort_keys=True))
         return 0
+    if args.command == "check-running":
+        active = runner_active()
+        note("NATIVE_DESKTOP_RUNNER_RUNNING=" + str(active).upper())
+        return 10 if active else 0
     cfg = update_control(args.command)
     note("NATIVE_DESKTOP_ARMED=" + str(cfg["armed"]).upper())
     note("NATIVE_DESKTOP_OFF=" + str(cfg["off"]).upper())
