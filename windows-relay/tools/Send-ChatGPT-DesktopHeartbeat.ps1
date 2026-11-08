@@ -2,9 +2,11 @@
 # Never dispatches Windows shell commands or calls the backend executor.
 [CmdletBinding()]
 param([ValidateRange(2,30)][int]$DetectionSeconds=5,
-      [ValidateRange(3,30)][int]$DeliveryTimeoutSeconds=15)
+      [ValidateRange(3,30)][int]$DeliveryTimeoutSeconds=15,
+      [switch]$SmokeResult,
+      [ValidateSet(0,1)][int]$SmokeExitCode=1)
 $ErrorActionPreference='Stop'
-$canary='PCE18-KATANA-DETECTION-001'
+$canary=if($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
 $script:wire=''
 $script:submitted=$false
 # Targeted keyboard event must never reach another app or CMD.
@@ -170,34 +172,63 @@ $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
-    $detector=Join-Path $PSScriptRoot 'Watch-ChatGPT-ActionCandidates.ps1'
-    if(-not(Test-Path -LiteralPath $detector)){throw 'DETECTION_TOOL_MISSING'}
-    # Read-only detector; its results are untrusted until a controlled provenance test.
-    $lines=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $detector -WatchSeconds $DetectionSeconds -IntervalSeconds 1 2>&1)
-    if($LASTEXITCODE -ne 0){throw ('DETECTION_RUNNER_EXIT='+$LASTEXITCODE)}
-    $detected=(@($lines|Where-Object{$_ -ceq ('CANDIDATE_ID='+$canary)}).Count -gt 0)
-    $status=if($detected){'PASS'}else{'FAIL'}
-    $level=if($detected){100}else{50}
-    Write-Output ('DETECTION='+$status)
+    if($SmokeResult){
+        # Smoke executor has already validated an exact, fixed CMD canary.
+        # No general UIA-origin authentication is implied.
+        $status='NOT_APPLICABLE'
+        $level=0
+        Write-Output 'DETECTION=SMOKE_ONLY'
+    }else{
+        $detector=Join-Path $PSScriptRoot 'Watch-ChatGPT-ActionCandidates.ps1'
+        if(-not(Test-Path -LiteralPath $detector)){throw 'DETECTION_TOOL_MISSING'}
+        # Read-only detector; its results are untrusted until a controlled provenance test.
+        $lines=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $detector -WatchSeconds $DetectionSeconds -IntervalSeconds 1 2>&1)
+        if($LASTEXITCODE -ne 0){throw ('DETECTION_RUNNER_EXIT='+$LASTEXITCODE)}
+        $detected=(@($lines|Where-Object{$_ -ceq ('CANDIDATE_ID='+$canary)}).Count -gt 0)
+        $status=if($detected){'PASS'}else{'FAIL'}
+        $level=if($detected){100}else{50}
+        Write-Output ('DETECTION='+$status)
+    }
     $window=Get-ChatGPTWindow
     Assert-OperatorAllowsDesktopSend
     $doc=Get-AnchoredDocument $window $canary
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
-    $id='PCE18-KATANA-HEARTBEAT-V3-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
-    $payload=[ordered]@{
-        version=1
-        platform='windows'
-        id=$id
-        target='ChatGPT Windows desktop app'
-        detection=$status
-        delivery='RECEIPT_REQUIRED'
-        pass_percent_if_received=$level
-        canary=$canary
-        command_execution='NOT_TESTED'
-    }
     $eol=[Environment]::NewLine
-    $script:wire='[GPT_WINDOWS_HEARTBEAT]'+$eol+($payload|ConvertTo-Json -Compress)+$eol+'[/GPT_WINDOWS_HEARTBEAT]'
+    if($SmokeResult){
+        $id='PCE18-KATANA-SMOKE-RESULT-003'
+        $passed=($SmokeExitCode -eq 0)
+        $payload=[ordered]@{
+            version=1
+            platform='windows'
+            id=$id
+            source_action_id='PCE18-KATANA-OPTEST-003'
+            session='katana.native'
+            action='EXEC'
+            shell='cmd'
+            status=$(if($passed){'OK'}else{'ERROR'})
+            exit_code=$SmokeExitCode
+            stdout=$(if($passed){'PCE18_OPERATION_003_SUCCESS'}else{''})
+            stderr=$(if($passed){''}else{'Fixed smoke command failed validation or execution'})
+            origin_authentication='NOT_PROVEN'
+            execution_scope='EXACT_SMOKE_ALLOWLIST_ONLY'
+        }
+        $script:wire='[GPT_WINDOWS_RESULT]'+$eol+($payload|ConvertTo-Json -Compress)+$eol+'[/GPT_WINDOWS_RESULT]'
+    }else{
+        $id='PCE18-KATANA-HEARTBEAT-V3-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+        $payload=[ordered]@{
+            version=1
+            platform='windows'
+            id=$id
+            target='ChatGPT Windows desktop app'
+            detection=$status
+            delivery='RECEIPT_REQUIRED'
+            pass_percent_if_received=$level
+            canary=$canary
+            command_execution='NOT_TESTED'
+        }
+        $script:wire='[GPT_WINDOWS_HEARTBEAT]'+$eol+($payload|ConvertTo-Json -Compress)+$eol+'[/GPT_WINDOWS_HEARTBEAT]'
+    }
     Write-Output ('HEARTBEAT_ID='+$id)
     $composer.pattern.SetValue($script:wire)
     $send=$null
