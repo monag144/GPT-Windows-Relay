@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue
+import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue,sys
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -132,7 +132,58 @@ def command_preview(command,limit=92):
     return text if len(text)<=limit else text[:limit-1]+"…"
 
 # GPT_RELAY_HUD_OPERATOR_STOP_START_V1
+# The *same* original HUD is reused by the native desktop app transport.
+# Browser mode remains unchanged until the native desktop launcher selects it.
+NATIVE_MODE_FILE=Path(os.environ.get('LOCALAPPDATA',Path.home()))/'GPTWindowsRelayDesktop'/'hud-mode.json'
+def native_mode():
+    mode=read_json(NATIVE_MODE_FILE,{})
+    return mode.get('transport')=='native-chatgpt-app'
+
+def native_snapshot():
+    import desktop_native_relay as native
+    report=native.get_status()
+    live=bool(report.get('native_running'))
+    armed=bool(report.get('native_armed'))
+    off=bool(report.get('native_off'))
+    phase=str(report.get('phase') or 'UNKNOWN').upper()
+    if off: title='OFF'
+    elif not live: title='OFFLINE'
+    elif not armed: title='STOPPED'
+    elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
+    elif phase=='ERROR': title='STALLED'
+    else: title='READY'
+    state=read_json(native.STATE,{})
+    detail,active=action_detail(state)
+    aid=str(report.get('last_action') or (detail.get('id') if detail else '') or '-')
+    result=str(report.get('last_result') or '-')
+    cmd=command_preview(detail.get('command') if detail else '')
+    exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
+           if detail else 'ID: '+aid+'\nRESULT: '+result)
+    return {
+        'online':live,'title':title,'title_phase':title,
+        'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
+        'browser':'ChatGPT Windows app • UI Automation • no browser extension',
+        'phase':phase+' • '+('running' if live else 'not running')+' • result '+result,
+        'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
+        'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
+    }
+
+def native_control(action):
+    if action not in {'start','stop','restart','off','kill'}: raise ValueError('unsupported native control')
+    import desktop_native_relay as native
+    # The existing original HUD submits native control requests only;
+    # its buttons must never arm the Firefox relay in desktop mode.
+    python=Path(sys.executable)
+    if python.name.lower()=='pythonw.exe': python=python.with_name('python.exe')
+    native_action='arm' if action=='start' else action
+    flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
+    subprocess.Popen([str(python),'-B',str(Path(native.__file__).resolve()),native_action],
+                     cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
 def relay_control(action):
+    if native_mode():
+        native_control(action)
+        return
     if action not in {"start","stop","restart","off","kill"}:raise ValueError("unsupported relay control")
     script=Path(__file__).with_name("relay-control.ps1")
     if not script.is_file():raise FileNotFoundError(script)
@@ -192,6 +243,7 @@ def headline(online,life,browser):
     return "READY"
 
 def snapshot():
+    if native_mode():return native_snapshot()
     state=read_json(L/"state.json",{"processed":{}})
     events=recent_events()
     owner_lock=None
@@ -368,6 +420,7 @@ def run_ui():
     lock_state={"enabled":None,"busy":False,"error":None}
     lock_results=queue.Queue()
     def change_owner_lock():
+        if native_mode():return
         if lock_state["busy"] or lock_state["enabled"] is None:return
         target=not lock_state["enabled"]
         lock_state["busy"]=True
@@ -392,6 +445,14 @@ def run_ui():
             else:
                 lock_state["error"]=value
         snap=snapshot()
+        if snap.get('native_mode'):
+            owner_lock_btn.configure(text='OWNER LOCK: N/A',state='disabled',bg='#3c4043')
+            title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
+            relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
+            phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
+            preview.configure(text=snap['preview']); set_details(snap['exact'])
+            root.after(1000,refresh)
+            return
         if isinstance(snap.get("conversation_lock_enabled"),bool):
             lock_state["enabled"]=snap["conversation_lock_enabled"]
         elif not snap["online"]:
