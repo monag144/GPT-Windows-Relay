@@ -39,6 +39,9 @@ class DesktopMonitorTests(unittest.TestCase):
         self.assertIn("start \"GPT ChatGPT Desktop Monitor\" powershell.exe",LAUNCH)
         self.assertNotIn("START-GPT-WINDOWS-RELAY.bat",LAUNCH)
         self.assertIn("Start-ChatGPT-DesktopBackend.ps1",LAUNCH)
+        self.assertIn("Get-ChatGPT-DesktopMonitorStatus.ps1",LAUNCH)
+        self.assertIn("MONITOR_STATUS_RC",LAUNCH)
+        self.assertIn("No duplicate window launched.",LAUNCH)
 
 
 if __name__=="__main__":
