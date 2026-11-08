@@ -6,6 +6,15 @@ $ErrorActionPreference='Stop'
 $canary='PCE18-KATANA-DETECTION-001'
 $script:wire=''
 $script:submitted=$false
+# Targeted keyboard event must never reach another app or CMD.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class DesktopHeartbeatForeground {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+'@
 function Get-ChatGPTWindow {
     $root=[System.Windows.Automation.AutomationElement]::RootElement
     $windows=$root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)
@@ -131,13 +140,14 @@ function Try-ClearOwnDraft($window){
         }
     }catch{}
 }
-Write-Output 'CHATGPT_DESKTOP_HEARTBEAT_V1'
+Write-Output 'CHATGPT_DESKTOP_HEARTBEAT_V2'
 Write-Output 'MODE=CANNED_MESSAGE_ONLY_NO_COMMAND_EXECUTION_NO_BACKEND'
 Write-Output ('DETECTION_CANARY='+$canary)
 $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
+    Add-Type -AssemblyName System.Windows.Forms
     $detector=Join-Path $PSScriptRoot 'Watch-ChatGPT-ActionCandidates.ps1'
     if(-not(Test-Path -LiteralPath $detector)){throw 'DETECTION_TOOL_MISSING'}
     # Read-only detector; its results are untrusted until a controlled provenance test.
@@ -151,7 +161,7 @@ try{
     $doc=Get-AnchoredDocument $window $canary
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
-    $id='PCE18-KATANA-HEARTBEAT-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+    $id='PCE18-KATANA-HEARTBEAT-V2-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
     $payload=[ordered]@{
         version=1
         platform='windows'
@@ -180,11 +190,27 @@ try{
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $composer=Get-Composer $window
     if([string]$composer.pattern.Current.Value -cne $script:wire){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
-    Write-Output 'UIA_SEND_INVOKE_BEGIN'
-    # Once Invoke starts, delivery can be uncertain even if UIA throws.
-    # Never clear an already submitted message or retry blindly.
+    # UIA Invoke previously left a heartbeat in the composer unsent.
+    # Focus this ChatGPT editor and send exactly one Enter keystroke.
+    $composer.node.SetFocus()
+    Start-Sleep -Milliseconds 250
+    $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()
+    $foregroundPid=[uint32]0
+    [void][DesktopHeartbeatForeground]::GetWindowThreadProcessId($foregroundHandle,[ref]$foregroundPid)
+    $chatPid=[int]$window.Current.ProcessId
+    if($foregroundPid -ne $chatPid -or -not $composer.node.Current.HasKeyboardFocus){
+        throw 'CHATGPT_COMPOSER_NOT_FOREGROUND_AND_FOCUSED'
+    }
+    $composer=Get-Composer $window
+    if([string]$composer.pattern.Current.Value -cne $script:wire){
+        throw 'COMPOSER_CHANGED_BEFORE_ENTER'
+    }
+    $doc=Get-AnchoredDocument $window $canary
+    if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
+    Write-Output 'UIA_FOCUSED_ENTER_BEGIN'
+    # Reserve before keyboard injection; failures may be ambiguous.
     $script:submitted=$true
-    $send.pattern.Invoke()
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
     $confirmed=$false
     $deadline=[DateTime]::UtcNow.AddSeconds($DeliveryTimeoutSeconds)
     while([DateTime]::UtcNow -lt $deadline){
@@ -192,7 +218,11 @@ try{
         try{
             $doc=Get-AnchoredDocument $window $canary
             $composer=Get-Composer $window
-            if((Has-Marker $doc $id) -and ([string]$composer.pattern.Current.Value).Length -eq 0){
+            $valueAfter=[string]$composer.pattern.Current.Value
+            $composerCleared=($valueAfter.Length -eq 0 -or
+                ($valueAfter.Trim() -ceq 'Ask ChatGPT' -and
+                 (Test-DisabledSendControlPresent $window)))
+            if((Has-Marker $doc $id) -and $composerCleared){
                 $confirmed=$true
                 break
             }
@@ -205,7 +235,7 @@ try{
         Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
         exit 0
     }
-    Write-Output 'DELIVERY=SUBMISSION_ATTEMPTED_ACK_UNCONFIRMED'
+    Write-Output 'DELIVERY=FOCUSED_ENTER_ATTEMPTED_ACK_UNCONFIRMED'
     Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
     exit 5
 }catch{
