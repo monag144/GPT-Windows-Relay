@@ -12,6 +12,10 @@ $run=Join-Path $root 'run.ps1'
 $watchdog=Join-Path $root 'relay-watchdog-loop.ps1'
 function Listener {Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1}
 function ProcessForListener($l){if($l){Get-CimInstance Win32_Process -Filter ('ProcessId='+$l.OwningProcess) -ErrorAction SilentlyContinue}}
+function SafeProcessCommandLine($proc){
+  if($null -eq $proc){return 'unknown'}
+  return [string]$proc.CommandLine
+}
 function IsCanonicalProcess($proc,[string]$relative){
   if($null -eq $proc){return $false}
   $expected=[IO.Path]::GetFullPath((Join-Path $root $relative)); $quoted='"'+$expected+'"'
@@ -103,8 +107,8 @@ if($Action -eq 'status'){
   if(Test-Path $off){Write-Output 'STATE=OFF';exit}
   if(Test-Path $pause){Write-Output 'STATE=STOPPED';exit}
   if(Test-Path $starting){Write-Output 'STATE=STARTING';exit}
-  if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('STATE=RUNNING PID='+$l.OwningProcess+' SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}));exit}
-  if($l){$proc=ProcessForListener $l;Write-Output ('STATE=FOREIGN_LISTENER PID='+$l.OwningProcess+' SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}));exit}
+  if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('STATE=RUNNING PID='+$l.OwningProcess+' SOURCE='+(SafeProcessCommandLine $proc));exit}
+  if($l){$proc=ProcessForListener $l;Write-Output ('STATE=FOREIGN_LISTENER PID='+$l.OwningProcess+' SOURCE='+(SafeProcessCommandLine $proc));exit}
   Write-Output 'STATE=DISCONNECTED REASON=port 8766 not listening';exit
 }
 if($Action -in @('stop','pause')){
@@ -167,4 +171,4 @@ if($Action -eq 'restart'){
   Remove-Item $starting -Force -ErrorAction SilentlyContinue
 }
   $l=CanonicalListener
-if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('RUNNING PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}))}elseif($l){$proc=ProcessForListener $l;Write-Output ('FOREIGN_LISTENER PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(if($proc){$proc.CommandLine}else{'unknown'}))}else{Write-Output 'STOPPED PAUSED=False'}
+if($l -and (CanonicalListener)){$proc=ProcessForListener $l;Write-Output ('RUNNING PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(SafeProcessCommandLine $proc))}elseif($l){$proc=ProcessForListener $l;Write-Output ('FOREIGN_LISTENER PID='+$l.OwningProcess+' PAUSED=False SOURCE='+(SafeProcessCommandLine $proc))}else{Write-Output 'STOPPED PAUSED=False'}
