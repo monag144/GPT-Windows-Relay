@@ -9,7 +9,7 @@ CONTROL = (ROOT/"DESKTOP-NATIVE-CONTROL.cmd").read_text(encoding="utf-8")
 SCAN = (ROOT/"tools"/"Watch-ChatGPT-ActionCandidates.ps1").read_text(encoding="utf-8")
 SEND = (ROOT/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1").read_text(encoding="utf-8")
 NATIVE = (ROOT/"desktop_native_relay.py").read_text(encoding="utf-8")
-HUD = (ROOT/"desktop_native_hud.py").read_text(encoding="utf-8")
+HUD = (ROOT/"hud.py").read_text(encoding="utf-8")
 
 
 class NativeEntrypointTests(unittest.TestCase):
@@ -20,7 +20,9 @@ class NativeEntrypointTests(unittest.TestCase):
         self.assertNotIn("START-GPT-WINDOWS-RELAY.bat", NATIVE_LAUNCH)
         self.assertNotIn("extension-persistent", NATIVE_LAUNCH)
         self.assertIn("desktop_native_relay.py", NATIVE_LAUNCH)
-        self.assertIn("desktop_native_hud.py", NATIVE_LAUNCH)
+        self.assertIn("Reconcile-OriginalDesktopHUD.ps1", NATIVE_LAUNCH)
+        self.assertIn("hud-mode", NATIVE_LAUNCH)
+        self.assertNotIn("desktop_native_hud.py", NATIVE_LAUNCH)
 
     def test_native_state_and_full_commands(self):
         self.assertIn("GPTWindowsRelayDesktop", NATIVE)
@@ -51,8 +53,14 @@ class NativeEntrypointTests(unittest.TestCase):
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN", SEND)
 
     def test_native_hud_does_not_arm_browser(self):
-        self.assertIn("NATIVE ARMED", HUD)
-        self.assertIn("native.update_control(command)", HUD)
+        self.assertIn("def native_snapshot():", HUD)
+        self.assertIn("def native_control(action):", HUD)
+        self.assertIn("OWNER LOCK: N/A", HUD)
+        self.assertIn("START", HUD)
+        self.assertIn("RESTART", HUD)
+        self.assertIn("KILL", HUD)
+        self.assertIn("native_mode()", HUD)
+        self.assertIn("native_action=", HUD)
         self.assertIn("STOP", HUD)
         self.assertNotIn("http://127.0.0.1:8766", HUD)
         self.assertIn("desktop_native_relay.py", CONTROL)
