@@ -1,5 +1,5 @@
 # Native ChatGPT desktop heartbeat V3; operator-invoked; one UIA-targeted physical Send click.
-# Never dispatches Windows shell commands or calls the backend /action.
+# Never dispatches Windows shell commands or calls the backend executor.
 [CmdletBinding()]
 param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [ValidateRange(3,30)][int]$DeliveryTimeoutSeconds=15)
