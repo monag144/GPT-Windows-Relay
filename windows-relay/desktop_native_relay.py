@@ -11,7 +11,10 @@ import base64
 import datetime as dt
 import hashlib
 import json
-import msvcrt
+try:
+    import msvcrt
+except ImportError:  # Allows non-Windows unit tests of packet parsing.
+    msvcrt = None
 import os
 import re
 import shutil
@@ -34,7 +37,6 @@ OUTBOX = HOME / "outbox"
 STATUS = HOME / "runtime-status.json"
 LOCK = HOME / "desktop-runner.lock"
 SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
-STOP_MARKERS = (".relay-paused", ".relay-off", ".relay-kill", ".relay-kill-hud")
 MAX_TRANSPORT_BYTES = 100_000
 
 
@@ -79,8 +81,7 @@ def update_control(command: str) -> dict:
 
 def stop_requested() -> bool:
     cfg = configuration()
-    return (not cfg["armed"] or cfg["off"]
-            or any((ROOT / x).exists() for x in STOP_MARKERS))
+    return (not cfg["armed"] or cfg["off"])
 
 
 def status_update(**fields):
@@ -281,7 +282,7 @@ def deliver(state: wr.State, aid: str):
 
 
 def runner():
-    if os.name != "nt":
+    if os.name != "nt" or msvcrt is None:
         raise RuntimeError("NATIVE_WINDOWS_ONLY")
     HOME.mkdir(parents=True, exist_ok=True)
     with LOCK.open("a+b") as mutex_file:
@@ -295,6 +296,9 @@ def runner():
             note("NATIVE_DESKTOP_RELAY_ALREADY_RUNNING")
             return 2
         state = wr.State(STATE)
+        initial_cfg = configuration()
+        if state.armed != initial_cfg["armed"]:
+            state.set_armed(initial_cfg["armed"])
         if state.outbound_owner != "windows":
             state.data["outbound_owner"] = "windows"
             state.save()
@@ -311,6 +315,8 @@ def runner():
             try:
                 candidates = read_scan()
                 cfg = configuration()
+                if state.armed != cfg["armed"]:
+                    state.set_armed(cfg["armed"])
                 if cfg["armed"] and not stop_requested():
                     for aid, packet in candidates:
                         if aid in seen:
