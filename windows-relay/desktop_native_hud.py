@@ -57,6 +57,17 @@ def run():
     def apply(command):
         try:
             native.update_control(command)
+            if command == "arm" and not native.runner_active():
+                # The user may have OFF'd the worker; ARM also starts the
+                # independent native runner, never the Firefox backend.
+                import subprocess
+                import os
+                executable = Path(sys.executable)
+                if executable.name.lower() == "pythonw.exe":
+                    executable = executable.with_name("python.exe")
+                subprocess.Popen([str(executable), "-B",
+                                  str(Path(native.__file__).resolve()), "run"],
+                                 creationflags=subprocess.CREATE_NEW_CONSOLE)
             refresh()
         except Exception as exc:
             action_text.set(f"Control error: {type(exc).__name__}")
