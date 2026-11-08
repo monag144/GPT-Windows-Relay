@@ -6,7 +6,8 @@
 param(
     [ValidateRange(1,120)][int]$WatchSeconds=30,
     [ValidateRange(1,5)][int]$IntervalSeconds=2,
-    [ValidateRange(100,10000)][int]$MaxElements=5000
+    [ValidateRange(100,10000)][int]$MaxElements=5000,
+    [switch]$EmitPackets
 )
 $ErrorActionPreference='Stop'
 $open='[GPT_WINDOWS_ACTION]'
@@ -109,7 +110,7 @@ function Read-DocumentCandidates($window){
                 if($null -eq $data){$counts.invalid++;continue}
                 $payloadBytes=[Text.Encoding]::UTF8.GetBytes($match.Value)
                 $hash=[BitConverter]::ToString($hashAlgo.ComputeHash($payloadBytes)).Replace('-','').ToLowerInvariant()
-                [void]$results.Add(@{id=$data.id; session=$data.session; shell=$data.shell; hash=$hash; safeSmoke=$data.safeSmoke})
+                [void]$results.Add(@{id=$data.id; session=$data.session; shell=$data.shell; hash=$hash; safeSmoke=$data.safeSmoke; packet=$match.Value})
             }
         }catch{$counts.errors++}
     }
@@ -141,6 +142,12 @@ while($clock.Elapsed.TotalSeconds -lt $WatchSeconds){
                 Write-Output ('CANDIDATE_SHELL='+$candidate.shell)
                 Write-Output ('CANDIDATE_FINGERPRINT='+$candidate.hash.Substring(0,16))
                 Write-Output ('CANDIDATE_STATUS='+$classification)
+                if($EmitPackets){
+                    # Full packet is emitted only to the explicitly launched
+                    # native local relay process, never to the default probe.
+                    $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($candidate.packet))
+                    Write-Output ('CANDIDATE_PACKET_B64='+$encoded)
+                }
                 $smokeLabel=if($candidate.safeSmoke){'TRUE'}else{'FALSE'}
                 Write-Output ('CANDIDATE_SAFE_SMOKE_MATCH='+$smokeLabel)
             }
