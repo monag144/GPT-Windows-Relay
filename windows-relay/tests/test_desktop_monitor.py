@@ -13,7 +13,7 @@ class DesktopMonitorTests(unittest.TestCase):
         self.assertIn("Watch-ChatGPT-ActionCandidates.ps1",SCRIPT)
         self.assertIn("DESKTOP_ACTION_DETECTED=",SCRIPT)
         self.assertIn("DESKTOP_ACTION_STATUS=OBSERVED_NOT_EXECUTED",SCRIPT)
-        self.assertIn("CHATGPT_DESKTOP_MONITOR_V2",SCRIPT)
+        self.assertIn("CHATGPT_DESKTOP_MONITOR_V3",SCRIPT)
 
     def test_singleton_and_dedupe(self):
         self.assertIn("Local\\GPTWindowsDesktopMonitor",SCRIPT)
@@ -21,9 +21,9 @@ class DesktopMonitorTests(unittest.TestCase):
         self.assertIn("SUBMISSION_ATTEMPTED",SCRIPT)
         self.assertIn("DELIVERY_UNCERTAIN",SCRIPT)
         self.assertIn("BLOCKED_BY_DRAFT",SCRIPT)
-        self.assertIn("desktop-heartbeat-ledger-v2.json",SCRIPT)
+        self.assertIn("desktop-heartbeat-ledger-v3.json",SCRIPT)
         self.assertIn("MONITOR_STOP=CANONICAL_OPERATOR_STOP",SCRIPT)
-        self.assertIn("UIA_FOCUSED_ENTER_BEGIN",SCRIPT)
+        self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN",SCRIPT)
         self.assertIn("HEARTBEAT_JOURNAL_UNREADABLE_REFUSE_DUPLICATE",SCRIPT)
 
     def test_defers_user_draft_and_never_executes_commands(self):
