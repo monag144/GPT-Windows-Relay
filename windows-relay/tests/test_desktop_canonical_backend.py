@@ -10,6 +10,8 @@ class DesktopCanonicalBackendTests(unittest.TestCase):
         self.assertIn('START-GPT-WINDOWS-RELAY.bat',SCRIPT)
         self.assertIn('127.0.0.1:8766/status',SCRIPT)
         self.assertIn('CANONICAL_BACKEND_READY=TRUE',SCRIPT)
+        self.assertIn('NONCANONICAL_BACKEND_LISTENER_REFUSE_MONITOR',SCRIPT)
+        self.assertIn('relay-control.ps1',SCRIPT)
 
     def test_fail_closed_if_preexisting_backend_armed(self):
         self.assertIn('BACKEND_PERSISTED_ARMED_REFUSE_UNVERIFIED_DESKTOP_INPUT',SCRIPT)
