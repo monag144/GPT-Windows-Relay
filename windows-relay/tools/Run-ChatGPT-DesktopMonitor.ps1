@@ -55,6 +55,7 @@ try {
     Write-Output 'OPERATOR_STOP=CLOSE_THIS_WINDOW_OR_CTRL_C'
     Write-Output ('SCAN_SECONDS='+$ScanSeconds)
     $iteration=0
+    $lastDraftNotice=''
     while($true){
         $iteration++
         $scan=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scanner -WatchSeconds $ScanSeconds -IntervalSeconds 1 2>&1)
@@ -98,7 +99,11 @@ try {
                 Write-Output 'DESKTOP_HEARTBEAT_DELIVERY_UNCERTAIN=NO_RETRY'
             }elseif($draft){
                 Save-Ledger 'BLOCKED_BY_DRAFT'
-                Write-Output 'DESKTOP_HEARTBEAT=WAITING_FOR_EMPTY_COMPOSER'
+                if($lastDraftNotice -ne 'BLOCKED_BY_DRAFT'){
+                    Write-Output 'DESKTOP_HEARTBEAT=WAITING_FOR_EMPTY_COMPOSER'
+                    Write-Output 'DESKTOP_COMPOSER_DIAGNOSTIC=RUN_INSPECT_CHATGPT_COMPOSER_STATE'
+                }
+                $lastDraftNotice='BLOCKED_BY_DRAFT'
             }else{
                 Save-Ledger 'FAILED_NEEDS_REVIEW' $hbId
                 Write-Output ('DESKTOP_HEARTBEAT_FAILED_EXIT='+$heartbeatExit)
