@@ -9,6 +9,14 @@ param(
 )
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
+$canonicalRoot=Split-Path -Parent $PSScriptRoot
+$stopMarkers=@('.relay-paused','.relay-off','.relay-kill','.relay-kill-hud')
+function Operator-StopActive {
+    foreach($marker in $stopMarkers){
+        if(Test-Path -LiteralPath (Join-Path $canonicalRoot $marker)){return $true}
+    }
+    return $false
+}
 $scanner=Join-Path $root 'Watch-ChatGPT-ActionCandidates.ps1'
 $heartbeat=Join-Path $root 'Send-ChatGPT-DesktopHeartbeat.ps1'
 $localRoot=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelay'
@@ -58,6 +66,7 @@ try {
     $lastDraftNotice=''
     Write-Output 'PRESERVES_PRIOR_HEARTBEAT_LEDGER=TRUE'
     while($true){
+        if(Operator-StopActive){Write-Output 'MONITOR_STOP=CANONICAL_OPERATOR_STOP';break}
         $iteration++
         $scan=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scanner -WatchSeconds $ScanSeconds -IntervalSeconds 1 2>&1)
         $exitCode=$LASTEXITCODE
@@ -77,13 +86,14 @@ try {
                 Write-Output ('MONITOR_CANDIDATE_COUNT='+$known.Count)
             }
         }
+        if(Operator-StopActive){Write-Output 'MONITOR_STOP=CANONICAL_OPERATOR_STOP';break}
         $state=Read-Ledger
         $terminal=@('SUBMISSION_ATTEMPTED','DELIVERED_LOCALLY','DELIVERY_UNCERTAIN','FAILED_NEEDS_REVIEW')
         if($null -eq $state -or $state.status -eq 'BLOCKED_BY_DRAFT'){
             # First mark intent, then attempt. This is fail-closed after a crash;
             # it never automatically retries a possibly submitted heartbeat.
             Save-Ledger 'SUBMISSION_ATTEMPTED'
-            $result=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $heartbeat -DetectionSeconds 8 -DeliveryTimeoutSeconds 15 2>&1)
+            $result=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $heartbeat -DetectionSeconds 8 -DeliveryTimeoutSeconds 15 2>&1)
             $heartbeatExit=$LASTEXITCODE
             $idLine=@($result|Where-Object{$_ -match '^HEARTBEAT_ID='}|Select-Object -First 1)
             $hbId=if($idLine.Count){([string]$idLine[0]).Substring('HEARTBEAT_ID='.Length)}else{''}
