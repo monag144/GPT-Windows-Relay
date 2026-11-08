@@ -1,4 +1,5 @@
-# Native ChatGPT desktop heartbeat; operator-invoked, UIA-only, NO command execution.
+# Native ChatGPT desktop heartbeat V3; operator-invoked; one UIA-targeted physical Send click.
+# Never dispatches Windows shell commands or calls the backend /action.
 [CmdletBinding()]
 param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [ValidateRange(3,30)][int]$DeliveryTimeoutSeconds=15)
@@ -15,6 +16,10 @@ public static class DesktopHeartbeatForeground {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [StructLayout(LayoutKind.Sequential)] public struct MousePoint { public int X; public int Y; }
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out MousePoint pt);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint buttons, UIntPtr extraInfo);
 }
 '@
 # The desktop app transport shares STOP/OFF/KILL with the canonical relay.
@@ -93,10 +98,8 @@ function Get-EnabledSend($window){
             if([string]$node.Current.ControlType.ProgrammaticName -ne 'ControlType.Button'){continue}
             if([string]$node.Current.Name -notmatch '(?i)^(send|send message|send prompt|submit)(\b|$)'){continue}
             if($node.Current.IsOffscreen -or -not $node.Current.IsEnabled){continue}
-            $p=$null
-            if($node.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$p)){
-                [void]$found.Add(@{node=$node; pattern=$p})
-            }
+            # Real Send buttons may not expose a functioning InvokePattern.
+            [void]$found.Add(@{node=$node})
         }catch{}
     }
     if($found.Count -gt 1){throw ('AMBIGUOUS_ENABLED_SEND_BUTTONS='+$found.Count)}
@@ -152,7 +155,7 @@ function Try-ClearOwnDraft($window){
         }
     }catch{}
 }
-Write-Output 'CHATGPT_DESKTOP_HEARTBEAT_V2'
+Write-Output 'CHATGPT_DESKTOP_HEARTBEAT_V3'
 Write-Output 'MODE=CANNED_MESSAGE_ONLY_NO_COMMAND_EXECUTION_NO_BACKEND'
 Write-Output ('DETECTION_CANARY='+$canary)
 $window=$null
@@ -174,7 +177,7 @@ try{
     $doc=Get-AnchoredDocument $window $canary
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
-    $id='PCE18-KATANA-HEARTBEAT-V2-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+    $id='PCE18-KATANA-HEARTBEAT-V3-'+([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
     $payload=[ordered]@{
         version=1
         platform='windows'
@@ -203,34 +206,57 @@ try{
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $composer=Get-Composer $window
     if([string]$composer.pattern.Current.Value -cne $script:wire){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
-    # UIA Invoke previously left a heartbeat in the composer unsent.
-    # Focus this ChatGPT editor and send exactly one Enter keystroke.
+    # Never activate an unverified button via a blind Enter keypress.
+    # SendKeys and UIA Invoke did not yield a confirmed ChatGPT submission.
+    # Instead, click exactly the enabled UIA Send button in this ChatGPT window.
     Assert-OperatorAllowsDesktopSend
     $chatHandle=[IntPtr]::new([int64]$window.Current.NativeWindowHandle)
     if($chatHandle -eq [IntPtr]::Zero){throw 'CHATGPT_NATIVE_WINDOW_HANDLE_MISSING'}
     [void][DesktopHeartbeatForeground]::ShowWindow($chatHandle,9)
     [void][DesktopHeartbeatForeground]::SetForegroundWindow($chatHandle)
-    Start-Sleep -Milliseconds 200
-    $composer.node.SetFocus()
     Start-Sleep -Milliseconds 250
     $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()
     $foregroundPid=[uint32]0
     [void][DesktopHeartbeatForeground]::GetWindowThreadProcessId($foregroundHandle,[ref]$foregroundPid)
     $chatPid=[int]$window.Current.ProcessId
-    if($foregroundPid -ne $chatPid -or -not $composer.node.Current.HasKeyboardFocus){
-        throw 'CHATGPT_COMPOSER_NOT_FOREGROUND_AND_FOCUSED'
-    }
+    if($foregroundPid -ne $chatPid){throw 'CHATGPT_NOT_FOREGROUND_REFUSE_MOUSE_CLICK'}
     $composer=Get-Composer $window
     if([string]$composer.pattern.Current.Value -cne $script:wire){
-        throw 'COMPOSER_CHANGED_BEFORE_ENTER'
+        throw 'COMPOSER_CHANGED_BEFORE_MOUSE_CLICK'
     }
     $doc=Get-AnchoredDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
+    $send=Get-EnabledSend $window
+    if($null -eq $send){throw 'SEND_BUTTON_UNAVAILABLE_BEFORE_MOUSE_CLICK'}
+    $rect=$send.node.Current.BoundingRectangle
+    $windowRect=$window.Current.BoundingRectangle
+    $cx=[int][Math]::Round($rect.Left+$rect.Width/2)
+    $cy=[int][Math]::Round($rect.Top+$rect.Height/2)
+    if($rect.Width -lt 8 -or $rect.Height -lt 8 -or
+       $cx -lt $windowRect.Left -or $cx -ge $windowRect.Right -or
+       $cy -lt $windowRect.Top -or $cy -ge $windowRect.Bottom){
+        throw 'SEND_BUTTON_OUTSIDE_CHATGPT_WINDOW_REFUSE'
+    }
+    if(-not $send.node.Current.IsEnabled -or $send.node.Current.IsOffscreen){
+        throw 'SEND_BUTTON_NOT_ENABLED_REFUSE'
+    }
+    $priorCursor=New-Object DesktopHeartbeatForeground+MousePoint
+    if(-not [DesktopHeartbeatForeground]::GetCursorPos([ref]$priorCursor)){
+        throw 'CURSOR_POSITION_UNAVAILABLE_REFUSE'
+    }
     Assert-OperatorAllowsDesktopSend
-    Write-Output 'UIA_FOCUSED_ENTER_BEGIN'
-    # Reserve before keyboard injection; failures may be ambiguous.
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
+    # Once pointer input begins, delivery may be ambiguous: no retries.
     $script:submitted=$true
-    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    try{
+        if(-not [DesktopHeartbeatForeground]::SetCursorPos($cx,$cy)){throw 'SET_SEND_CURSOR_FAILED'}
+        [DesktopHeartbeatForeground]::mouse_event([uint32]0x0002,0,0,0,[UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 90
+        [DesktopHeartbeatForeground]::mouse_event([uint32]0x0004,0,0,0,[UIntPtr]::Zero)
+    }finally{
+        [void][DesktopHeartbeatForeground]::SetCursorPos($priorCursor.X,$priorCursor.Y)
+    }
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED'
     $confirmed=$false
     $deadline=[DateTime]::UtcNow.AddSeconds($DeliveryTimeoutSeconds)
     while([DateTime]::UtcNow -lt $deadline){
@@ -255,7 +281,7 @@ try{
         Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
         exit 0
     }
-    Write-Output 'DELIVERY=FOCUSED_ENTER_ATTEMPTED_ACK_UNCONFIRMED'
+    Write-Output 'DELIVERY=GUARDED_CLICK_ATTEMPTED_ACK_UNCONFIRMED'
     Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
     exit 5
 }catch{
