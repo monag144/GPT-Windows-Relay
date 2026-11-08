@@ -211,7 +211,7 @@ try{
         }
         $nativeDir=[IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayDesktop\outbox'))
         $actual=[IO.Path]::GetFullPath($NativeResultPath)
-        if([IO.Path]::GetDirectoryName($actual) -cne $nativeDir -or
+        if([IO.Path]::GetDirectoryName($actual) -ine $nativeDir -or
            [IO.Path]::GetExtension($actual) -cne '.txt' -or
            -not(Test-Path -LiteralPath $actual -PathType Leaf)){
             throw 'NATIVE_RESULT_PATH_INVALID'
