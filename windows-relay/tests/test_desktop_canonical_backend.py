@@ -12,6 +12,10 @@ class DesktopCanonicalBackendTests(unittest.TestCase):
         self.assertIn('CANONICAL_BACKEND_READY=TRUE',SCRIPT)
         self.assertIn('NONCANONICAL_BACKEND_LISTENER_REFUSE_MONITOR',SCRIPT)
         self.assertIn('relay-control.ps1',SCRIPT)
+        self.assertIn('CANONICAL_HUD=RUNNING',SCRIPT)
+        self.assertIn('CANONICAL_HUD=NOT_RUNNING',SCRIPT)
+        self.assertIn('relay-watchdog-loop.ps1',SCRIPT)
+        self.assertIn('CANONICAL_WATCHDOG=ALREADY_RUNNING',SCRIPT)
 
     def test_fail_closed_if_preexisting_backend_armed(self):
         self.assertIn('BACKEND_PERSISTED_ARMED_REFUSE_UNVERIFIED_DESKTOP_INPUT',SCRIPT)
