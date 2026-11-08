@@ -82,12 +82,38 @@ Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATT
     Start-Sleep -Milliseconds 250
 }
 if(-not $hudFound){
-    # Watchdog may be unable to locate Python or may have exited.
-    # Report the real fault; do not claim the HUD is visible.
+    # Reconcile one missing HUD from this canonical tree even when the
+    # previously running watchdog was started before desktop integration.
+    $hudPython=Join-Path $root '.venv\Scripts\pythonw.exe'
+    if(-not(Test-Path -LiteralPath $hudPython)){
+        $pyw=Get-Command pythonw.exe -ErrorAction SilentlyContinue
+        if($null -ne $pyw){$hudPython=$pyw.Source}
+        else{$hudPython=Join-Path $root '.venv\Scripts\python.exe'}
+    }
+    if(Test-Path -LiteralPath $hudPython){
+        try{
+            if(-not(Has-CanonicalProcess $hud '^python(w)?(.exe)?
+Write-Output 'CANONICAL_BACKEND_READY=TRUE'
+Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
+)){
+                Write-Output 'CANONICAL_HUD_DIRECT_START=ATTEMPTED'
+                Start-Process -FilePath $hudPython -WindowStyle Hidden -WorkingDirectory $root -ArgumentList @('"'+$hud+'"') | Out-Null
+            }
+            Start-Sleep -Milliseconds 800
+            $hudFound=Has-CanonicalProcess $hud '^python(w)?(.exe)?
+Write-Output 'CANONICAL_BACKEND_READY=TRUE'
+Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
+
+        }catch{Write-Output 'CANONICAL_HUD_DIRECT_START=FAILED'}
+    }
+}
+if($hudFound){
+    Write-Output 'CANONICAL_HUD=RUNNING'
+}else{
+    # Fail visibly with a reproducible diagnostic; the backend stays
+    # disarmed and the foreground monitor can still run without the HUD.
     Write-Output 'CANONICAL_HUD=NOT_RUNNING'
     Write-Output 'CANONICAL_HUD_DIAGNOSTIC=RUN_PYTHON_B_HUD_PY_TO_CAPTURE_EXCEPTION'
-}else{
-    Write-Output 'CANONICAL_HUD=RUNNING'
 }
 Write-Output 'CANONICAL_BACKEND_READY=TRUE'
 Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
