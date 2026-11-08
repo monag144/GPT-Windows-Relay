@@ -1,8 +1,5 @@
 name: Native desktop relay checks
 on:
-  push:
-    branches:
-      - wip/windows-relay-rebuilt-resynced-2047-101026
   workflow_dispatch:
 
 jobs:
