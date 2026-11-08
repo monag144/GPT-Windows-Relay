@@ -104,7 +104,7 @@ try {
             # Expose a bounded diagnostic summary so the operator can see
             # whether injection reached the click gate and whether submission cleared.
             foreach($line in $result){
-                if([string]$line -match '^(DETECTION=|COMPOSER_BASELINE=|HEARTBEAT_ID=|UIA_GUARDED_SEND_BUTTON_CLICK_|DELIVERY=|RESULT=|HEARTBEAT_ERROR=)'){
+                if([string]$line -match '^(DETECTION=|COMPOSER_BASELINE=|HEARTBEAT_ID=|UIA_COMPOSER_WRITE=|UIA_SEND_BUTTON=|UIA_GUARDED_SEND_BUTTON_CLICK_|DELIVERY=|RESULT=|HEARTBEAT_ERROR=)'){
                     Write-Output ('DESKTOP_SENDER_'+[string]$line)
                 }
             }
