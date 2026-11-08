@@ -16,8 +16,10 @@ class DesktopMonitorStatusTests(unittest.TestCase):
         self.assertIn("DESKTOP_MONITOR=AMBIGUOUS",SRC)
 
     def test_launcher_skips_existing_monitor(self):
-        self.assertIn('if "%MONITOR_STATUS_RC%"=="10"',LAUNCH)
-        self.assertIn("No duplicate window launched.",LAUNCH)
+        self.assertIn("START-CHATGPT-DESKTOP-NATIVE.cmd",LAUNCH)
+        native_launcher = (ROOT/"START-CHATGPT-DESKTOP-NATIVE.cmd").read_text(encoding="utf-8")
+        self.assertIn("check-running",native_launcher)
+        self.assertIn("Existing native relay retained",native_launcher)
 
     def test_read_only_and_no_browser_interaction(self):
         for forbidden in ("Invoke-RestMethod","Invoke-WebRequest","Set-Content",
