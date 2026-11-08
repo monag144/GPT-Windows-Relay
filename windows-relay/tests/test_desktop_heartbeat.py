@@ -18,7 +18,10 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("$composer.pattern.SetValue($script:wire)",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_SEND",SOURCE)
         self.assertIn("HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
-        self.assertIn("$send.pattern.Invoke()",SOURCE)
+        self.assertIn("[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')",SOURCE)
+        self.assertNotIn("$send.pattern.Invoke()",SOURCE)
+        self.assertIn("CHATGPT_COMPOSER_NOT_FOREGROUND_AND_FOCUSED",SOURCE)
+        self.assertIn("COMPOSER_CHANGED_BEFORE_ENTER",SOURCE)
 
     def test_placeholder_exception_requires_independent_disabled_send_gate(self):
         # A real message matching placeholder wording must not be overwritten
@@ -32,9 +35,9 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT", SOURCE)
 
     def test_send_attempt_is_reserved_before_side_effect(self):
-        mark = SOURCE.index("Write-Output 'UIA_SEND_INVOKE_BEGIN'")
+        mark = SOURCE.index("Write-Output 'UIA_FOCUSED_ENTER_BEGIN'")
         reserved = SOURCE.index("$script:submitted=$true", mark)
-        invoke = SOURCE.index("$send.pattern.Invoke()", mark)
+        invoke = SOURCE.index("[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')", mark)
         self.assertLess(reserved, invoke)
 
     def test_no_command_or_clipboard_transport(self):
@@ -44,6 +47,9 @@ class DesktopHeartbeatTests(unittest.TestCase):
             self.assertNotIn(unsafe,SOURCE)
         self.assertIn("command_execution='NOT_TESTED'",SOURCE)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND",SOURCE)
+        self.assertIn("Test-DisabledSendControlPresent $window",SOURCE)
+        self.assertIn("GetWindowThreadProcessId",SOURCE)
+        self.assertIn("HasKeyboardFocus",SOURCE)
 
 if __name__=="__main__":
     unittest.main()
