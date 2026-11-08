@@ -52,7 +52,7 @@ class NativeDesktopTests(unittest.TestCase):
         self.assertTrue(first["trust_visible_desktop_packets"])
         native.update_control("stop")
         self.assertFalse(native.configuration()["armed"])
-        self.assertFalse(native.stop_requested() is False)
+        self.assertTrue(native.stop_requested())
         native.update_control("arm")
         self.assertTrue(native.configuration()["armed"])
         native.update_control("off")
