@@ -4,9 +4,12 @@
 param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [ValidateRange(3,30)][int]$DeliveryTimeoutSeconds=15,
       [switch]$SmokeResult,
-      [ValidateSet(0,1)][int]$SmokeExitCode=1)
+      [ValidateSet(0,1)][int]$SmokeExitCode=1,
+      [string]$NativeResultPath='',
+      [string]$NativeActionId='',
+      [string]$NativeReceiptMarker='')
 $ErrorActionPreference='Stop'
-$canary=if($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
+$canary=if($NativeResultPath){$NativeActionId}elseif($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
 $script:wire=''
 $script:submitted=$false
 # Targeted keyboard event must never reach another app or CMD.
@@ -165,14 +168,18 @@ function Try-ClearOwnDraft($window){
         }
     }catch{}
 }
-Write-Output 'CHATGPT_DESKTOP_HEARTBEAT_V3'
-Write-Output 'MODE=CANNED_MESSAGE_ONLY_NO_COMMAND_EXECUTION_NO_BACKEND'
+Write-Output 'CHATGPT_DESKTOP_SENDER_V4'
+Write-Output 'MODE=CHATGPT_DESKTOP_OUTBOUND_ONLY_NO_COMMAND_EXECUTION'
 Write-Output ('DETECTION_CANARY='+$canary)
 $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
-    if($SmokeResult){
+    if($NativeResultPath){
+        $status='NATIVE_RESULT'
+        $level=0
+        Write-Output 'DETECTION=NATIVE_RESULT'
+    }elseif($SmokeResult){
         # Smoke executor has already validated an exact, fixed CMD canary.
         # No general UIA-origin authentication is implied.
         $status='NOT_APPLICABLE'
@@ -195,7 +202,42 @@ try{
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
     $eol=[Environment]::NewLine
-    if($SmokeResult){
+    if($NativeResultPath){
+        if($NativeActionId -cnotmatch '^[A-Za-z0-9._:-]{1,128}$'){
+            throw 'NATIVE_ACTION_ID_INVALID'
+        }
+        if($NativeReceiptMarker -cnotmatch '^NATIVE-RECEIPT-[0-9a-f]{32}$'){
+            throw 'NATIVE_RECEIPT_MARKER_INVALID'
+        }
+        $nativeDir=[IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayDesktop\outbox'))
+        $actual=[IO.Path]::GetFullPath($NativeResultPath)
+        if([IO.Path]::GetDirectoryName($actual) -cne $nativeDir -or
+           [IO.Path]::GetExtension($actual) -cne '.txt' -or
+           -not(Test-Path -LiteralPath $actual -PathType Leaf)){
+            throw 'NATIVE_RESULT_PATH_INVALID'
+        }
+        $bytes=[IO.File]::ReadAllBytes($actual)
+        if($bytes.Length -lt 30 -or $bytes.Length -gt 180000){
+            throw 'NATIVE_RESULT_SIZE_INVALID'
+        }
+        $utf8=New-Object System.Text.UTF8Encoding($false,$true)
+        $rawResult=$utf8.GetString($bytes)
+        if(-not $rawResult.StartsWith('[GPT_WINDOWS_RESULT]') -or
+           -not $rawResult.TrimEnd().EndsWith('[/GPT_WINDOWS_RESULT]') -or
+           $rawResult.IndexOf($NativeReceiptMarker,[StringComparison]::Ordinal) -lt 0){
+            throw 'NATIVE_RESULT_FRAME_INVALID'
+        }
+        $parsed=$rawResult.Substring('[GPT_WINDOWS_RESULT]'.Length)
+        $parsed=$parsed.Substring(0,$parsed.LastIndexOf('[/GPT_WINDOWS_RESULT]'))
+        try{$obj=$parsed.Trim() | ConvertFrom-Json -ErrorAction Stop}
+        catch{throw 'NATIVE_RESULT_JSON_INVALID'}
+        if($obj.id -cne $NativeActionId -or
+           $obj.native_delivery_receipt -cne $NativeReceiptMarker){
+            throw 'NATIVE_RESULT_BINDING_MISMATCH'
+        }
+        $id=$NativeReceiptMarker
+        $script:wire=$rawResult
+    }elseif($SmokeResult){
         $id='PCE18-KATANA-SMOKE-RESULT-003'
         $passed=($SmokeExitCode -eq 0)
         $payload=[ordered]@{
