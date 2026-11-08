@@ -1,0 +1,32 @@
+name: Native desktop relay checks
+on:
+  push:
+    branches:
+      - wip/windows-relay-rebuilt-resynced-2047-101026
+  workflow_dispatch:
+
+jobs:
+  native-windows:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native relay state, packet, delivery and entrypoint tests
+        shell: cmd
+        working-directory: windows-relay
+        run: python -B -m unittest discover -s tests -p test_desktop_native_full_relay.py -v
+      - name: Native launcher and UIA integration contracts
+        shell: cmd
+        working-directory: windows-relay
+        run: python -B -m unittest discover -s tests -p test_native_desktop_entrypoints.py -v
+      - name: Real Windows PowerShell parser gate
+        shell: cmd
+        working-directory: windows-relay
+        run: python -B -m unittest discover -s tests -p test_desktop_powershell_parse.py -v
+      - name: Legacy desktop smoke must remain regression-clean
+        shell: cmd
+        working-directory: windows-relay
+        run: python -B -m unittest discover -s tests -p test_desktop_exact_smoke.py -v
