@@ -12,9 +12,21 @@ using System;
 using System.Runtime.InteropServices;
 public static class DesktopHeartbeatForeground {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }
 '@
+# The desktop app transport shares STOP/OFF/KILL with the canonical relay.
+$canonicalRoot=Split-Path -Parent $PSScriptRoot
+$stopMarkers=@('.relay-paused','.relay-off','.relay-kill','.relay-kill-hud')
+function Assert-OperatorAllowsDesktopSend {
+    foreach($marker in $stopMarkers){
+        if(Test-Path -LiteralPath (Join-Path $canonicalRoot $marker)){
+            throw 'CANONICAL_OPERATOR_STOP_ACTIVE'
+        }
+    }
+}
 function Get-ChatGPTWindow {
     $root=[System.Windows.Automation.AutomationElement]::RootElement
     $windows=$root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)
@@ -158,6 +170,7 @@ try{
     $level=if($detected){100}else{50}
     Write-Output ('DETECTION='+$status)
     $window=Get-ChatGPTWindow
+    Assert-OperatorAllowsDesktopSend
     $doc=Get-AnchoredDocument $window $canary
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
@@ -192,6 +205,12 @@ try{
     if([string]$composer.pattern.Current.Value -cne $script:wire){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
     # UIA Invoke previously left a heartbeat in the composer unsent.
     # Focus this ChatGPT editor and send exactly one Enter keystroke.
+    Assert-OperatorAllowsDesktopSend
+    $chatHandle=[IntPtr]::new([int64]$window.Current.NativeWindowHandle)
+    if($chatHandle -eq [IntPtr]::Zero){throw 'CHATGPT_NATIVE_WINDOW_HANDLE_MISSING'}
+    [void][DesktopHeartbeatForeground]::ShowWindow($chatHandle,9)
+    [void][DesktopHeartbeatForeground]::SetForegroundWindow($chatHandle)
+    Start-Sleep -Milliseconds 200
     $composer.node.SetFocus()
     Start-Sleep -Milliseconds 250
     $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()
@@ -207,6 +226,7 @@ try{
     }
     $doc=Get-AnchoredDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
+    Assert-OperatorAllowsDesktopSend
     Write-Output 'UIA_FOCUSED_ENTER_BEGIN'
     # Reserve before keyboard injection; failures may be ambiguous.
     $script:submitted=$true
