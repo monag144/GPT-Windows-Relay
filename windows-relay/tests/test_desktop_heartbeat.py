@@ -18,10 +18,12 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("$composer.pattern.SetValue($script:wire)",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_SEND",SOURCE)
         self.assertIn("HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
-        self.assertIn("[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')",SOURCE)
+        self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN",SOURCE)
+        self.assertIn("mouse_event([uint32]0x0002",SOURCE)
+        self.assertIn("mouse_event([uint32]0x0004",SOURCE)
         self.assertNotIn("$send.pattern.Invoke()",SOURCE)
-        self.assertIn("CHATGPT_COMPOSER_NOT_FOREGROUND_AND_FOCUSED",SOURCE)
-        self.assertIn("COMPOSER_CHANGED_BEFORE_ENTER",SOURCE)
+        self.assertIn("CHATGPT_NOT_FOREGROUND_REFUSE_MOUSE_CLICK",SOURCE)
+        self.assertIn("COMPOSER_CHANGED_BEFORE_MOUSE_CLICK",SOURCE)
 
     def test_placeholder_exception_requires_independent_disabled_send_gate(self):
         # A real message matching placeholder wording must not be overwritten
@@ -35,9 +37,9 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT", SOURCE)
 
     def test_send_attempt_is_reserved_before_side_effect(self):
-        mark = SOURCE.index("Write-Output 'UIA_FOCUSED_ENTER_BEGIN'")
+        mark = SOURCE.index("Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'")
         reserved = SOURCE.index("$script:submitted=$true", mark)
-        invoke = SOURCE.index("[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')", mark)
+        invoke = SOURCE.index("mouse_event([uint32]0x0002", mark)
         self.assertLess(reserved, invoke)
 
     def test_no_command_or_clipboard_transport(self):
@@ -52,7 +54,11 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("HasKeyboardFocus",SOURCE)
         self.assertIn("CANONICAL_OPERATOR_STOP_ACTIVE",SOURCE)
         self.assertIn("SetForegroundWindow",SOURCE)
-        self.assertIn("SendWait('{ENTER}')",SOURCE)
+        self.assertIn("GetCursorPos",SOURCE)
+        self.assertIn("SetCursorPos",SOURCE)
+        self.assertIn("SEND_BUTTON_OUTSIDE_CHATGPT_WINDOW_REFUSE",SOURCE)
+        self.assertIn("SEND_BUTTON_NOT_ENABLED_REFUSE",SOURCE)
+        self.assertNotIn("[System.Windows.Forms.SendKeys]",SOURCE)
 
 if __name__=="__main__":
     unittest.main()
