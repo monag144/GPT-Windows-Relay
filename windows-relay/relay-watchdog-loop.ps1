@@ -33,7 +33,7 @@ function EnsureHud {
   if(-not (Test-Path -LiteralPath $hudPy) -or -not (Test-Path -LiteralPath $hud)){Log 'HUD_LAUNCH_FILES_MISSING';return}
   if((GenuineHudProcesses).Count -gt 0){return}
   Log 'HUD_MISSING starting HUD'
-  Start-Process -FilePath $hudPy -WindowStyle Hidden -WorkingDirectory $root -ArgumentList @(('"' + $hud + '"')) | Out-Null
+  Start-Process -FilePath $hudPy -WorkingDirectory $root -ArgumentList @(('"' + $hud + '"')) | Out-Null
 }
 $created=$false
 $mutex=[System.Threading.Mutex]::new($true,'Local\GPTWindowsRelayWatchdog',[ref]$created)
