@@ -83,8 +83,12 @@ foreach ($window in $top) {
                 }
                 Write-Output ('MATCH_'+$matches+'_SOURCE='+$source)
                 Write-Output ('MATCH_'+$matches+'_CHAIN='+(@($types) -join '>'))
-                Write-Output ('MATCH_'+$matches+'_SEMANTIC_HINTS='+(if($hints.Count){@($hints|Sort-Object) -join ','}else{'NONE'}))
-                Write-Output ('MATCH_'+$matches+'_NEARBY_ACTIONS='+(if($actions.Count){@($actions|Sort-Object) -join ','}else{'NONE'}))
+                # PowerShell 5.1 does not evaluate a bare if statement inside
+                # parenthesized concatenation. Compute each category first.
+                $hintText=if($hints.Count){@($hints|Sort-Object) -join ','}else{'NONE'}
+                $actionText=if($actions.Count){@($actions|Sort-Object) -join ','}else{'NONE'}
+                Write-Output ('MATCH_'+$matches+'_SEMANTIC_HINTS='+$hintText)
+                Write-Output ('MATCH_'+$matches+'_NEARBY_ACTIONS='+$actionText)
                 Write-Output ('MATCH_'+$matches+'_CENTER_X_PERCENT='+$center)
             }catch { $errors++ }
         }
