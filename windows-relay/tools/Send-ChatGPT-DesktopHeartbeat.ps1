@@ -145,11 +145,19 @@ function Assert-ComposableEmptyState($window,$composer){
     }
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
+# UIA ValuePattern may normalize CRLF to LF. Preserve all text bytes except
+# newline representation when proving the editor still contains OUR draft.
+function Test-OwnHeartbeatDraft([string]$value){
+    if([string]::IsNullOrEmpty($script:wire)){return $false}
+    $actual=$value.Replace("`r`n","`n").Replace("`r","`n")
+    $expected=$script:wire.Replace("`r`n","`n").Replace("`r","`n")
+    return $actual -ceq $expected
+}
 function Try-ClearOwnDraft($window){
     if($script:submitted -or [string]::IsNullOrEmpty($script:wire)){return}
     try{
         $c=Get-Composer $window
-        if([string]$c.pattern.Current.Value -ceq $script:wire){
+        if(Test-OwnHeartbeatDraft ([string]$c.pattern.Current.Value)){
             $c.pattern.SetValue('')
             Write-Output 'OWN_UNSENT_DRAFT_CLEARED=ATTEMPTED'
         }
@@ -196,15 +204,17 @@ try{
     for($i=0;$i -lt 25;$i++){
         Start-Sleep -Milliseconds 200
         $composer=Get-Composer $window
-        if([string]$composer.pattern.Current.Value -cne $script:wire){continue}
+        if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){continue}
         $send=Get-EnabledSend $window
         if($null -ne $send){break}
     }
     if($null -eq $send){throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'}
+    Write-Output 'UIA_COMPOSER_WRITE=ACCEPTED'
+    Write-Output 'UIA_SEND_BUTTON=ENABLED'
     $doc=Get-AnchoredDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $composer=Get-Composer $window
-    if([string]$composer.pattern.Current.Value -cne $script:wire){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
+    if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
     # Never activate an unverified button via a blind Enter keypress.
     # SendKeys and UIA Invoke did not yield a confirmed ChatGPT submission.
     # Instead, click exactly the enabled UIA Send button in this ChatGPT window.
@@ -220,7 +230,7 @@ try{
     $chatPid=[int]$window.Current.ProcessId
     if($foregroundPid -ne $chatPid){throw 'CHATGPT_NOT_FOREGROUND_REFUSE_MOUSE_CLICK'}
     $composer=Get-Composer $window
-    if([string]$composer.pattern.Current.Value -cne $script:wire){
+    if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){
         throw 'COMPOSER_CHANGED_BEFORE_MOUSE_CLICK'
     }
     $doc=Get-AnchoredDocument $window $canary
