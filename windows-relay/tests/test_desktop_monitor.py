@@ -24,6 +24,8 @@ class DesktopMonitorTests(unittest.TestCase):
         self.assertIn("desktop-heartbeat-ledger-v3.json",SCRIPT)
         self.assertIn("MONITOR_STOP=CANONICAL_OPERATOR_STOP",SCRIPT)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN",SCRIPT)
+        self.assertIn("UIA_COMPOSER_WRITE=",SCRIPT)
+        self.assertIn("UIA_SEND_BUTTON=",SCRIPT)
         self.assertIn("HEARTBEAT_JOURNAL_UNREADABLE_REFUSE_DUPLICATE",SCRIPT)
 
     def test_defers_user_draft_and_never_executes_commands(self):
