@@ -283,7 +283,7 @@ def run_ui():
             u32.MonitorFromPoint.restype=ctypes.c_void_p
             if not u32.MonitorFromPoint(HUDPoint(x+W//2,y+COMPACT_H//2),0):
                 x=max(12,sw-W-18); y=18
-        except (OSError,ValueError,OverflowError,AttributeError):
+        except (OSError,ValueError,OverflowError,AttributeError,TypeError):
             pass
     expanded=False
     root.geometry(f"{W}x{COMPACT_H}+{x}+{y}")
