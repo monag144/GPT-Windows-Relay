@@ -58,6 +58,8 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("SetCursorPos",SOURCE)
         self.assertIn("SEND_BUTTON_OUTSIDE_CHATGPT_WINDOW_REFUSE",SOURCE)
         self.assertIn("SEND_BUTTON_NOT_ENABLED_REFUSE",SOURCE)
+        self.assertIn("Test-OwnHeartbeatDraft",SOURCE)
+        self.assertIn("UIA_COMPOSER_WRITE=ACCEPTED",SOURCE)
         self.assertNotIn("[System.Windows.Forms.SendKeys]",SOURCE)
 
 if __name__=="__main__":
