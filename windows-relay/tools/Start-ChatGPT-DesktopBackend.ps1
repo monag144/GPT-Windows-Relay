@@ -97,7 +97,7 @@ Write-Output 'CANONICAL_BACKEND_READY=TRUE'
 Write-Output 'DESKTOP_AUTOMATIC_COMMAND_EXECUTION=DISABLED_PENDING_ASSISTANT_ATTRIBUTION'
 )){
                 Write-Output 'CANONICAL_HUD_DIRECT_START=ATTEMPTED'
-                Start-Process -FilePath $hudPython -WindowStyle Hidden -WorkingDirectory $root -ArgumentList @('"'+$hud+'"') | Out-Null
+                Start-Process -FilePath $hudPython -WorkingDirectory $root -ArgumentList @('"'+$hud+'"') | Out-Null
             }
             Start-Sleep -Milliseconds 800
             $hudFound=Has-CanonicalProcess $hud '^python(w)?(.exe)?
