@@ -270,6 +270,21 @@ def run_ui():
         x=int(pos.get("x",max(12,sw-W-18))); y=int(pos.get("y",18))
     else:
         x=max(12,sw-W-18); y=18
+    # A HUD location saved on a previous machine/monitor may be completely
+    # outside the present desktop. Preserve valid secondary-monitor positions.
+    # Only recover coordinates whose centre is outside every active monitor.
+    if os.name=="nt":
+        try:
+            from ctypes import wintypes
+            class HUDPoint(ctypes.Structure):
+                _fields_=[("x",wintypes.LONG),("y",wintypes.LONG)]
+            u32=ctypes.windll.user32
+            u32.MonitorFromPoint.argtypes=[HUDPoint,ctypes.c_uint]
+            u32.MonitorFromPoint.restype=ctypes.c_void_p
+            if not u32.MonitorFromPoint(HUDPoint(x+W//2,y+COMPACT_H//2),0):
+                x=max(12,sw-W-18); y=18
+        except (OSError,ValueError,OverflowError,AttributeError):
+            pass
     expanded=False
     root.geometry(f"{W}x{COMPACT_H}+{x}+{y}")
 
