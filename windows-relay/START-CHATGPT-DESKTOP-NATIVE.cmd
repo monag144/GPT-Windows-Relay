@@ -35,5 +35,5 @@ if exist "%PYTHONW%" (
 )
 echo Native commands: CMD, Python, PowerShell, pwsh, Base64 packets.
 echo ARM is persistent; STOP and OFF are controlled by the native HUD.
-echo Browser relay on 127.0.0.1:8766 is not modified.
+echo Existing browser relay components are not modified.
 exit /b 0
