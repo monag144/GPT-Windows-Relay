@@ -114,7 +114,7 @@ try {
             }
         }
         if(Operator-StopActive){Write-Output 'MONITOR_STOP=CANONICAL_OPERATOR_STOP';break}
-        $state=Read-Ledger
+        $state=if($EnableLegacyHeartbeat){Read-Ledger}else{$null}
         $terminal=@('SUBMISSION_ATTEMPTED','DELIVERED_LOCALLY','DELIVERY_UNCERTAIN','FAILED_NEEDS_REVIEW')
         if($EnableLegacyHeartbeat -and ($null -eq $state -or $state.status -eq 'BLOCKED_BY_DRAFT')){
             # First mark intent, then attempt. This is fail-closed after a crash;
