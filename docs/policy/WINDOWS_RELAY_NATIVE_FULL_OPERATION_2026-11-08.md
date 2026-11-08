@@ -30,9 +30,11 @@ Controls:
 
 `"C:\Users\p0pe0\Projects\Windows Relay\windows-relay\DESKTOP-NATIVE-CONTROL.cmd" off`
 
-The independent topmost HUD has ARM, STOP and OFF controls. The old browser HUD
-may still show DISARMED: that reflects the separate Firefox backend, **not** the
-native relay. Native HUD is the source of native ARM state.
+The native app now uses the **original top-right `hud.py`**, retaining the exact
+START / STOP / RESTART / OFF / KILL control surface and layout. The obsolete
+separate mini-HUD was removed. The original HUD switches its status and control
+actions to the independent native runtime when the native launcher selects it.
+Browser relay state remains separate and is not armed or modified by this HUD.
 
 ## Processing
 
