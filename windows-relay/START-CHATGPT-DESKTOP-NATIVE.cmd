@@ -2,7 +2,6 @@
 setlocal EnableExtensions
 set "ROOT=%~dp0"
 set "PYTHON=%ROOT%.venv\Scripts\python.exe"
-set "PYTHONW=%ROOT%.venv\Scripts\pythonw.exe"
 if not exist "%PYTHON%" (
   for %%P in (python.exe) do set "PYTHON=%%~$PATH:P"
 )
@@ -27,11 +26,17 @@ if "%RUNNING_RC%"=="10" (
   echo Starting native desktop command monitor.
   start "GPT Windows Native Relay" cmd.exe /k ""%PYTHON%" -B "%ROOT%desktop_native_relay.py" run"
 )
-if exist "%PYTHONW%" (
-  start "GPT Native Desktop HUD" "%PYTHONW%" -B "%ROOT%desktop_native_hud.py"
-) else (
-  echo HUD Pythonw missing; launch the HUD with the normal Python interpreter.
-  start "GPT Native Desktop HUD" "%PYTHON%" -B "%ROOT%desktop_native_hud.py"
+echo Selecting the existing upper-right Windows Relay HUD for native mode...
+"%PYTHON%" -B "%ROOT%desktop_native_relay.py" hud-mode
+if errorlevel 1 (
+  echo ERROR: Original HUD transport selection failed.
+  exit /b 5
+)
+echo Reconciling the original HUD; no separate mini HUD is permitted.
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\Reconcile-OriginalDesktopHUD.ps1"
+if errorlevel 1 (
+  echo ERROR: Original HUD reconciliation failed.
+  exit /b 6
 )
 echo Native commands: CMD, Python, PowerShell, pwsh, Base64 packets.
 echo ARM is persistent; STOP and OFF are controlled by the native HUD.
