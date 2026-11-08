@@ -248,6 +248,11 @@ def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
     body = json.loads(source[pos1:pos2])
     if not isinstance(body, dict) or body.get("id") != aid:
         raise RuntimeError("NATIVE_OUTBOUND_RESULT_INVALID")
+    # The historical browser wire adds an unrelated prose reminder.
+    # Do not inject that browser-era prompt into the native CMD result.
+    stdout = body.get("stdout")
+    if isinstance(stdout, str) and stdout.rstrip().endswith(wr.SANDWICH_REMINDER):
+        body["stdout"] = stdout.rstrip()[:-len(wr.SANDWICH_REMINDER)].rstrip()
     body["native_delivery_receipt"] = marker
     wire = wr.RO + "\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n" + wr.RC
     OUTBOX.mkdir(parents=True, exist_ok=True)
