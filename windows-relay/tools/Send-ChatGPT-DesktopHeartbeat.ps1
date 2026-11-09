@@ -200,11 +200,15 @@ function Assert-ComposableEmptyState($window,$composer){
     if(-not $looksLikeObservedPlaceholder){
         throw 'COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT'
     }
-    if($composer.node.Current.HasKeyboardFocus){
-        throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_FOCUSED_REFUSE'
-    }
     if(-not (Test-DisabledSendControlPresent $window)){
         throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
+    }
+    # A focused editor is normal when the operator opens the target chat.  The
+    # exact known placeholder plus an independently disabled Send control is a
+    # stronger empty-state proof than focus alone; any other text still refuses.
+    if($composer.node.Current.HasKeyboardFocus){
+        Write-Output 'COMPOSER_BASELINE=FOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
+        return
     }
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }

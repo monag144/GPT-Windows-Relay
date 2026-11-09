@@ -37,7 +37,7 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("$trimmed -ceq 'Ask ChatGPT'", SOURCE)
         self.assertIn("Test-DisabledSendControlPresent $window", SOURCE)
         self.assertIn("$composer.node.Current.HasKeyboardFocus", SOURCE)
-        self.assertIn("COMPOSER_PLACEHOLDER_AMBIGUOUS_FOCUSED_REFUSE", SOURCE)
+        self.assertIn("COMPOSER_BASELINE=FOCUSED_PLACEHOLDER_WITH_DISABLED_SEND", SOURCE)
         self.assertIn("COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE", SOURCE)
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT", SOURCE)
 
