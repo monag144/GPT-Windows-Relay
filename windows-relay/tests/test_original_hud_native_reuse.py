@@ -45,6 +45,8 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP", RECONCILE)
         self.assertIn("$label+'_ALREADY_EXITED_PID='", RECONCILE)
         self.assertIn("$label+'_STOP_FAILED_PID='", RECONCILE)
+        self.assertIn("ORIGINAL_HUD_VISIBLE_WINDOW_COUNT=", RECONCILE)
+        self.assertIn("ORIGINAL_HUD_HOST_PROCESS_COUNT=", RECONCILE)
         self.assertNotIn("relay-control.ps1", RECONCILE)
         self.assertNotIn("http://127.0.0.1", RECONCILE)
 

@@ -62,6 +62,13 @@ if($existing.Count -eq 0){
 Start-Sleep -Milliseconds 850
 $active=@(Find-HudProcesses $original)
 if($active.Count -eq 0){throw 'ORIGINAL_HUD_NOT_RUNNING_AFTER_START'}
-Write-Output ('ORIGINAL_HUD_RUNNING_COUNT='+$active.Count)
+# venv Python can retain a host parent plus the actual child interpreter.  The
+# acceptance invariant is one visible canonical HUD window, not one host PID.
+$visible=@($active | ForEach-Object {
+    Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+} | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })
+if($visible.Count -ne 1){throw ('ORIGINAL_HUD_VISIBLE_WINDOW_COUNT='+$visible.Count)}
+Write-Output ('ORIGINAL_HUD_RUNNING_COUNT='+$visible.Count)
+Write-Output ('ORIGINAL_HUD_HOST_PROCESS_COUNT='+$active.Count)
 Write-Output 'ORIGINAL_HUD_FILE=hud.py'
 Write-Output 'ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP'
