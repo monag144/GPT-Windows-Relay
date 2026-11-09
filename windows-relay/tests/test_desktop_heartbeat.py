@@ -9,6 +9,8 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("$proc.ProcessName -ieq 'ChatGPT'",SOURCE)
         self.assertIn("EXPECTED_ONE_CHATGPT_APP_WINDOW_FOUND",SOURCE)
         self.assertIn("EXPECTED_ONE_DOCUMENT_WITH_CANARY_FOUND",SOURCE)
+        self.assertIn("EXPECTED_ONE_VISIBLE_CONVERSATION_DOCUMENT_FOUND",SOURCE)
+        self.assertIn("if($NativeResultPath){return Get-ConversationDocument $window}",SOURCE)
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT",SOURCE)
 
     def test_ui_gates_before_send(self):
@@ -46,7 +48,7 @@ class DesktopHeartbeatTests(unittest.TestCase):
     def test_sender_has_stage_diagnostics_without_payload_echo(self):
         for marker in (
             "SENDER_STAGE=APP_WINDOW_FOUND",
-            "SENDER_STAGE=CONVERSATION_ANCHOR_FOUND",
+            "SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND",
             "SENDER_STAGE=COMPOSER_EMPTY_VERIFIED",
             "SENDER_STAGE=NATIVE_RESULT_BOUND",
             "SENDER_STAGE=INPUT_BEGIN",

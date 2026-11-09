@@ -97,6 +97,31 @@ function Get-AnchoredDocument($window,[string]$anchor){
     if($found.Count -ne 1){throw ('EXPECTED_ONE_DOCUMENT_WITH_CANARY_FOUND='+$found.Count)}
     return $found[0]
 }
+function Get-ConversationDocument($window){
+    # A native result's action ID is deliberately new to the conversation until
+    # this sender inserts it.  Requiring that ID as a precondition deadlocks
+    # result delivery.  The app window is already unique; require exactly one
+    # visible text document inside it so we still fail closed on ambiguity.
+    $nodes=Descendants $window
+    $found=New-Object System.Collections.ArrayList
+    for($i=0;$i -lt $nodes.Count;$i++){
+        try{
+            $node=$nodes.Item($i)
+            if([string]$node.Current.ControlType.ProgrammaticName -ne 'ControlType.Document'){continue}
+            if($node.Current.IsOffscreen){continue}
+            $pattern=$null
+            if($node.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){
+                [void]$found.Add($node)
+            }
+        }catch{}
+    }
+    if($found.Count -ne 1){throw ('EXPECTED_ONE_VISIBLE_CONVERSATION_DOCUMENT_FOUND='+$found.Count)}
+    return $found[0]
+}
+function Get-TargetDocument($window,[string]$anchor){
+    if($NativeResultPath){return Get-ConversationDocument $window}
+    return Get-AnchoredDocument $window $anchor
+}
 function Get-Composer($window){
     $nodes=Descendants $window
     $found=New-Object System.Collections.ArrayList
@@ -243,8 +268,8 @@ try{
     $window=Get-ChatGPTWindow
     Write-Output 'SENDER_STAGE=APP_WINDOW_FOUND'
     Assert-OperatorAllowsDesktopSend
-    $doc=Get-AnchoredDocument $window $canary
-    Write-Output 'SENDER_STAGE=CONVERSATION_ANCHOR_FOUND'
+    $doc=Get-TargetDocument $window $canary
+    Write-Output 'SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND'
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
     Write-Output 'SENDER_STAGE=COMPOSER_EMPTY_VERIFIED'
@@ -339,7 +364,7 @@ try{
     Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'
     Write-Output 'UIA_SEND_BUTTON=ENABLED'
     Write-Output 'SENDER_STAGE=SEND_BUTTON_ENABLED'
-    $doc=Get-AnchoredDocument $window $canary
+    $doc=Get-TargetDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $composer=Get-Composer $window
     if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
@@ -352,7 +377,7 @@ try{
     if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){
         throw 'COMPOSER_CHANGED_BEFORE_MOUSE_CLICK'
     }
-    $doc=Get-AnchoredDocument $window $canary
+    $doc=Get-TargetDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $send=Get-EnabledSend $window
     if($null -eq $send){throw 'SEND_BUTTON_UNAVAILABLE_BEFORE_MOUSE_CLICK'}
@@ -392,7 +417,7 @@ try{
     while([DateTime]::UtcNow -lt $deadline){
         Start-Sleep -Milliseconds 300
         try{
-            $doc=Get-AnchoredDocument $window $canary
+            $doc=Get-TargetDocument $window $canary
             $composer=Get-Composer $window
             $valueAfter=[string]$composer.pattern.Current.Value
             $composerCleared=($valueAfter.Length -eq 0 -or
