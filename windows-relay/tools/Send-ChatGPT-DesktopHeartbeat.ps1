@@ -139,6 +139,19 @@ function Get-Composer($window){
     if($found.Count -ne 1){throw ('EXPECTED_ONE_WRITABLE_COMPOSER_FOUND='+$found.Count)}
     return $found[0]
 }
+function Wait-ForComposer($window,[int]$TimeoutMilliseconds=3000){
+    # ChatGPT can briefly rebuild its UIA tree after a draft is cleared.  This
+    # is pre-input discovery only: wait for a unique writable editor rather
+    # than consuming a one-time delivery retry on that transient condition.
+    $deadline=[DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+    $last='COMPOSER_DISCOVERY_UNAVAILABLE'
+    while([DateTime]::UtcNow -lt $deadline){
+        try{return Get-Composer $window}
+        catch{$last=$_.Exception.Message}
+        Start-Sleep -Milliseconds 150
+    }
+    throw ('COMPOSER_DISCOVERY_TIMEOUT='+$last)
+}
 function Get-EnabledSend($window){
     $nodes=Descendants $window
     $found=New-Object System.Collections.ArrayList
@@ -270,8 +283,9 @@ try{
     Assert-OperatorAllowsDesktopSend
     $doc=Get-TargetDocument $window $canary
     Write-Output 'SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND'
-    $composer=Get-Composer $window
+    $composer=Wait-ForComposer $window
     Assert-ComposableEmptyState $window $composer
+    Write-Output 'SENDER_STAGE=COMPOSER_DISCOVERY_READY'
     Write-Output 'SENDER_STAGE=COMPOSER_EMPTY_VERIFIED'
     $eol=[Environment]::NewLine
     if($NativeResultPath){
