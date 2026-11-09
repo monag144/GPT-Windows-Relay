@@ -40,7 +40,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("auto-send-on", NATIVE)
         self.assertIn("auto-send-off", NATIVE)
         self.assertIn("FORCE COMMAND", HUD)
-        self.assertIn("FORCE ABORT", HUD)
+        self.assertIn("FORCE CLEAR", HUD)
         self.assertIn("CLEAR QUEUE", HUD)
         self.assertIn("abort-delivery", NATIVE)
         self.assertIn("clear-pending-deliveries", NATIVE)

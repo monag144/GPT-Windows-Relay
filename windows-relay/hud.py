@@ -389,13 +389,13 @@ def run_ui():
     off_btn=tk.Button(controls,text="OFF",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("off")); off_btn.pack(side="left",padx=3)
     kill_btn=tk.Button(controls,text="KILL",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("kill")); kill_btn.pack(side="left",padx=3)
     force_frame=tk.Frame(panel,bg=PANEL); force_frame.place(x=278,y=34,anchor="nw")
+    force_abort_btn=tk.Button(force_frame,text="FORCE CLEAR",font=("Segoe UI",7,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
+    force_abort_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
     force_command_btn=tk.Button(force_frame,text="FORCE COMMAND",font=("Segoe UI",7,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
-    force_command_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
-    force_abort_btn=tk.Button(force_frame,text="FORCE ABORT",font=("Segoe UI",7,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
-    force_abort_btn.grid(row=1,column=0,sticky="w")
+    force_command_btn.grid(row=1,column=0,sticky="w")
     clear_queue_var=tk.BooleanVar(value=False)
     clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",7,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=4,cursor="hand2")
-    clear_queue_check.grid(row=1,column=1,sticky="w")
+    clear_queue_check.grid(row=0,column=1,sticky="w")
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
@@ -411,6 +411,9 @@ def run_ui():
                             activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,
                             padx=8,pady=1,cursor="hand2")
     auto_send_btn.pack(side="right")
+    # The status labels are packed after this frame; keep both force controls
+    # visibly above them without changing the original compact HUD geometry.
+    force_frame.lift()
 
     details_frame=tk.Frame(panel,bg=PANEL)
     details=tk.Text(details_frame,height=10,wrap="word",font=("Consolas",8),bg="#17181a",fg=FG,
