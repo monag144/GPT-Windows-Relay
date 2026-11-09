@@ -173,6 +173,7 @@ def native_snapshot():
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
+        'auto_send':bool(report.get('auto_send')),
     }
 
 def native_control(action):
@@ -185,6 +186,15 @@ def native_control(action):
     native_action='arm' if action=='start' else action
     flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
     subprocess.Popen([str(python),'-B',str(Path(native.__file__).resolve()),native_action],
+                     cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+def native_auto_send(enabled):
+    import desktop_native_relay as native
+    python=Path(sys.executable)
+    if python.name.lower()=='pythonw.exe': python=python.with_name('python.exe')
+    action='auto-send-on' if enabled else 'auto-send-off'
+    flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
+    subprocess.Popen([str(python),'-B',str(Path(native.__file__).resolve()),action],
                      cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
 def relay_control(action):
@@ -378,6 +388,11 @@ def run_ui():
     action.pack(fill="x")
     preview=tk.Label(panel,text="…",font=("Consolas",8),bg=PANEL,fg=MUTED,anchor="w")
     preview.pack(fill="x")
+    footer=tk.Frame(panel,bg=PANEL); footer.pack(fill="x",pady=(2,0))
+    auto_send_btn=tk.Button(footer,text="Auto Send: OFF",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,
+                            activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,
+                            padx=8,pady=1,cursor="hand2")
+    auto_send_btn.pack(side="right")
 
     details_frame=tk.Frame(panel,bg=PANEL)
     details=tk.Text(details_frame,height=10,wrap="word",font=("Consolas",8),bg="#17181a",fg=FG,
@@ -440,6 +455,10 @@ def run_ui():
                 lock_results.put(("error",type(exc).__name__))
         threading.Thread(target=worker,daemon=True).start()
     owner_lock_btn.configure(command=change_owner_lock)
+    def toggle_auto_send():
+        if not native_mode():return
+        native_auto_send(not bool(auto_send_btn.cget('text')=='Auto Send: ON'))
+    auto_send_btn.configure(command=toggle_auto_send)
 
     colors={"OFFLINE":BAD,"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"REPLAY SUPPRESSED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
     def refresh():
@@ -454,12 +473,17 @@ def run_ui():
         snap=snapshot()
         if snap.get('native_mode'):
             owner_lock_btn.configure(text='OWNER LOCK: N/A',state='disabled',bg='#3c4043')
+            enabled=bool(snap.get('auto_send'))
+            auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
+                                    bg='#137333' if enabled else '#7f1d1d',
+                                    activebackground='#188038' if enabled else '#991b1b',state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
             relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
             phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
             preview.configure(text=snap['preview']); set_details(snap['exact'])
             root.after(1000,refresh)
             return
+        auto_send_btn.configure(text='Auto Send: OFF',bg='#7f1d1d',activebackground='#991b1b',state='disabled')
         if isinstance(snap.get("conversation_lock_enabled"),bool):
             lock_state["enabled"]=snap["conversation_lock_enabled"]
         elif not snap["online"]:

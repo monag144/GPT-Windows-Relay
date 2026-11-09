@@ -19,7 +19,6 @@ using System.Runtime.InteropServices;
 public static class DesktopHeartbeatForeground {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [StructLayout(LayoutKind.Sequential)] public struct MousePoint { public int X; public int Y; }
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out MousePoint pt);
@@ -223,7 +222,9 @@ function Test-OwnHeartbeatDraft([string]$value){
 function Assert-ChatGPTForeground($window){
     $chatHandle=[IntPtr]::new([int64]$window.Current.NativeWindowHandle)
     if($chatHandle -eq [IntPtr]::Zero){throw 'CHATGPT_NATIVE_WINDOW_HANDLE_MISSING'}
-    [void][DesktopHeartbeatForeground]::ShowWindow($chatHandle,9)
+    # Do not restore, resize, or rearrange the operator's desktop.  The target
+    # conversation must already be visible; foreground verification below
+    # fails closed if it is not.
     [void][DesktopHeartbeatForeground]::SetForegroundWindow($chatHandle)
     Start-Sleep -Milliseconds 250
     $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()

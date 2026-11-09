@@ -75,6 +75,7 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("HasKeyboardFocus",SOURCE)
         self.assertIn("CANONICAL_OPERATOR_STOP_ACTIVE",SOURCE)
         self.assertIn("SetForegroundWindow",SOURCE)
+        self.assertNotIn("ShowWindow(",SOURCE)
         self.assertIn("GetCursorPos",SOURCE)
         self.assertIn("SetCursorPos",SOURCE)
         self.assertIn("SEND_BUTTON_OUTSIDE_CHATGPT_WINDOW_REFUSE",SOURCE)

@@ -34,6 +34,11 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("DELIVERY BLOCKED", HUD)
         self.assertIn("last_delivery_error", HUD)
         self.assertIn("title='STALLED'", HUD)
+        self.assertIn("Auto Send: OFF", HUD)
+        self.assertIn("Auto Send: ON", HUD)
+        self.assertIn("def native_auto_send(enabled):", HUD)
+        self.assertIn("auto-send-on", NATIVE)
+        self.assertIn("auto-send-off", NATIVE)
 
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)

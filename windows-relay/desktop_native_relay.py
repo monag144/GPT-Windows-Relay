@@ -57,10 +57,16 @@ def configuration() -> dict:
     if not CONFIG.exists():
         # The operator explicitly requested persistent native arming.
         write_json(CONFIG, {"version": 1, "armed": True, "off": False,
+                            "auto_send": False,
                             "trust_visible_desktop_packets": True})
     data = json.loads(CONFIG.read_text(encoding="utf-8"))
+    # Add the HUD policy flag without invalidating an existing native install.
+    if "auto_send" not in data:
+        data["auto_send"] = False
+        write_json(CONFIG, data)
     if (data.get("version") != 1 or type(data.get("armed")) is not bool
             or type(data.get("off")) is not bool
+            or type(data.get("auto_send")) is not bool
             or data.get("trust_visible_desktop_packets") is not True):
         raise RuntimeError("DESKTOP_CONFIG_INVALID")
     return data
@@ -74,6 +80,10 @@ def update_control(command: str) -> dict:
         control["armed"] = False
     elif command == "off":
         control.update(armed=False, off=True)
+    elif command == "auto-send-on":
+        control["auto_send"] = True
+    elif command == "auto-send-off":
+        control["auto_send"] = False
     else:
         raise ValueError(command)
     write_json(CONFIG, control)
@@ -154,6 +164,7 @@ def get_status() -> dict:
         "native_armed": cfg["armed"] and not cfg["off"],
         "native_running": runner_active(),
         "native_off": cfg["off"],
+        "auto_send": cfg["auto_send"],
         "pid": live.get("pid"),
         "heartbeat_utc": live.get("updated_utc"),
         "phase": live.get("phase", "STOPPED"),
@@ -492,6 +503,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="run",
                         choices=("run", "arm", "stop", "off", "restart", "kill",
+                                 "auto-send-on", "auto-send-off",
                                  "hud-mode", "status", "check-running", "retry-delivery"))
     parser.add_argument("action_id", nargs="?")
 
