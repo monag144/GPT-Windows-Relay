@@ -25,7 +25,8 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         for name,value in {
             "HOME":root,"CONFIG":root/"desktop-control.json",
             "STATE":root/"state.json","STATUS":root/"runtime-status.json",
-            "OUTBOX":root/"outbox","DELIVERY_HOLDS":root/"delivery-holds"
+            "OUTBOX":root/"outbox","DELIVERY_HOLDS":root/"delivery-holds",
+            "LOCK":root/"desktop-runner.lock"
         }.items():
             patch=mock.patch.object(native,name,value)
             patch.start()
