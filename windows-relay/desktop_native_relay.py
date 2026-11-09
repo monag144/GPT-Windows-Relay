@@ -36,6 +36,7 @@ STATE = HOME / "state.json"
 OUTBOX = HOME / "outbox"
 STATUS = HOME / "runtime-status.json"
 LOCK = HOME / "desktop-runner.lock"
+DELIVERY_HOLDS = HOME / "delivery-holds"
 SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
 MAX_TRANSPORT_BYTES = 100_000
 
@@ -113,6 +114,36 @@ def runner_active() -> bool:
         return False
 
 
+def delivery_hold_path(aid: str) -> Path:
+    return DELIVERY_HOLDS / wr.safe_result_filename(aid)
+
+
+def delivery_held(aid: str) -> bool:
+    return delivery_hold_path(aid).is_file()
+
+
+def hold_failed_delivery(aid: str, stage: str, reason: str):
+    # One durable hold per action, without stdout, command bodies or credentials.
+    path = delivery_hold_path(aid)
+    write_json(path, {"id": aid, "stage": stage, "reason": reason,
+                      "held_utc": utc(), "retry_requires_operator": True})
+
+
+def release_failed_delivery(state: wr.State, aid: str):
+    if not wr.ID_RE.fullmatch(aid):
+        raise ValueError("invalid action ID")
+    record = state.outbound_lookup(aid)
+    if not record or record.get("phase") != "PRE_SUBMIT_FAILED":
+        raise RuntimeError("NATIVE_DELIVERY_NOT_SAFELY_RETRYABLE")
+    hold = delivery_hold_path(aid)
+    if not hold.is_file():
+        raise RuntimeError("NATIVE_DELIVERY_HOLD_NOT_FOUND")
+    hold.unlink()
+    status_update(delivery_blocked=False, last_delivery_error=None,
+                  last_delivery_stage="RETRY_AUTHORIZED")
+    note("NATIVE_DELIVERY_RETRY_AUTHORIZED=" + aid)
+
+
 def get_status() -> dict:
     cfg = configuration()
     try:
@@ -128,6 +159,9 @@ def get_status() -> dict:
         "phase": live.get("phase", "STOPPED"),
         "last_action": live.get("last_action"),
         "last_result": live.get("last_result"),
+        "delivery_blocked": live.get("delivery_blocked", False),
+        "last_delivery_error": live.get("last_delivery_error"),
+        "last_delivery_stage": live.get("last_delivery_stage"),
         "browser_relay": "SEPARATE",
     }
 
@@ -269,7 +303,7 @@ def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
 
 
 def deliver(state: wr.State, aid: str):
-    if stop_requested():
+    if stop_requested() or delivery_held(aid):
         return
     delivery = state.outbound_lookup(aid)
     if not delivery or delivery.get("phase") not in {"READY", "PRE_SUBMIT_FAILED"}:
@@ -286,22 +320,56 @@ def deliver(state: wr.State, aid: str):
            "-File", str(SENDER), "-NativeResultPath", str(path),
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
     phase = "SUBMIT_UNCERTAIN"
+    error_code = "SENDER_NO_RECEIPT"
+    stage = "STARTING"
     try:
         response = subprocess.run(cmd, capture_output=True, text=True,
                                   encoding="utf-8", errors="replace", timeout=70)
         output = response.stdout
+        for line in output.splitlines():
+            if line.startswith("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN"):
+                stage = "CLICK_BEGIN"
+            elif line.startswith("UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED"):
+                stage = "CLICK_COMPLETED"
+            elif line.startswith("COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED"):
+                stage = "INPUT_ACCEPTED"
+            elif line.startswith("COMPOSER_SENDINPUT_EVENTS="):
+                stage = "INPUT_ATTEMPTED"
+            elif line.startswith("COMPOSER_BASELINE="):
+                stage = "COMPOSER_CHECKED"
+            elif line.startswith("HEARTBEAT_ERROR="):
+                # Sender errors are metadata; never persist the result packet.
+                error_code = line.partition("=")[2][:180]
         if response.returncode == 0 and "RESULT=HEARTBEAT_SUBMITTED" in output:
             phase = "SUBMITTED"
         elif ("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN" not in output
               and "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY" in output):
             phase = "PRE_SUBMIT_FAILED"
+            if error_code == "SENDER_NO_RECEIPT":
+                error_code = "SENDER_FAILED_BEFORE_CLICK"
         for line in output.splitlines():
             if line.startswith(("RESULT=", "HEARTBEAT_ERROR=", "DELIVERY=")):
                 note("NATIVE_DELIVERY_" + line)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        note("NATIVE_DELIVERY_EXCEPTION=" + type(exc).__name__)
+        error_code = type(exc).__name__
+        note("NATIVE_DELIVERY_EXCEPTION=" + error_code)
+    # Persist the durable outbound phase before any native-only hold update.
     state.finish_outbound_delivery(aid, phase)
-    status_update(phase="IDLE", last_action=aid, last_result=phase)
+    if phase == "PRE_SUBMIT_FAILED":
+        hold_failed_delivery(aid, stage, error_code)
+        status_update(phase="DELIVERY_BLOCKED", last_action=aid, last_result=phase,
+                      delivery_blocked=True, last_delivery_stage=stage,
+                      last_delivery_error=error_code)
+        note("NATIVE_DELIVERY_BLOCKED_ID=" + aid)
+        note("NATIVE_DELIVERY_BLOCKED_STAGE=" + stage)
+        note("NATIVE_DELIVERY_BLOCKED_ERROR=" + error_code)
+        note("NATIVE_DELIVERY_RETRY=OPERATOR_REQUIRED_NO_AUTO_RETRY")
+    else:
+        status_update(phase=("IDLE" if phase == "SUBMITTED" else "DELIVERY_UNCERTAIN"),
+                      last_action=aid, last_result=phase,
+                      delivery_blocked=(phase != "SUBMITTED"),
+                      last_delivery_stage=stage,
+                      last_delivery_error=(None if phase == "SUBMITTED" else error_code))
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
@@ -353,12 +421,22 @@ def runner():
                     for aid in state.list_claimable_outbound_ids():
                         if stop_requested():
                             break
+                        if delivery_held(aid):
+                            continue
                         deliver(state, aid)
                 else:
                     # Commands seen while stopped must never auto-execute on
                     # a later arm, even if the app still displays them.
                     seen.update(aid for aid, _ in candidates)
-                status_update(pid=os.getpid(), phase="IDLE" if cfg["armed"] else "DISARMED")
+                if not cfg["armed"]:
+                    display_phase = "DISARMED"
+                else:
+                    prior = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
+                    display_phase = ("DELIVERY_BLOCKED" if prior.get("delivery_blocked")
+                                     and prior.get("last_result") == "PRE_SUBMIT_FAILED"
+                                     else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
+                                     else "IDLE")
+                status_update(pid=os.getpid(), phase=display_phase)
             except Exception as exc:
                 note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
                 status_update(pid=os.getpid(), phase="ERROR", error=type(exc).__name__)
@@ -410,10 +488,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="run",
                         choices=("run", "arm", "stop", "off", "restart", "kill",
-                                 "hud-mode", "status", "check-running"))
+                                 "hud-mode", "status", "check-running", "retry-delivery"))
+    parser.add_argument("action_id", nargs="?")
+
     args = parser.parse_args()
     if args.command == "run":
         return runner()
+    if args.command == "retry-delivery":
+        if not args.action_id:
+            raise SystemExit("retry-delivery requires an action ID")
+        release_failed_delivery(wr.State(STATE), args.action_id)
+        return 0
     if args.command == 'hud-mode':
         select_original_hud()
         return 0
