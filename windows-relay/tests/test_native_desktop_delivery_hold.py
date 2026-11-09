@@ -100,6 +100,19 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"NOT_SAFELY_RETRYABLE"):
             native.release_failed_delivery(self.state,self.id)
 
+    def test_operator_abort_and_clear_queue_never_change_executed_result(self):
+        native.hold_failed_delivery(self.id,"INPUT_BEGIN","TEST")
+        native.abort_failed_delivery(self.state,self.id)
+        self.assertEqual(self.state.outbound_lookup(self.id)["phase"],"ABORTED")
+        self.assertFalse(native.delivery_held(self.id))
+        self.assertEqual(self.state.lookup(self.id)["status"],"OK")
+        second="PCE18-NATIVE-SMOKE-20261109-005"
+        self.state.data["outbound_deliveries"][second]={"id":second,"phase":"READY"}; self.state.save()
+        native.hold_failed_delivery(second,"STARTING","TEST")
+        native.clear_pending_deliveries(self.state)
+        self.assertIsNone(self.state.outbound_lookup(second))
+        self.assertEqual(self.state.lookup(self.id)["status"],"OK")
+
 
 if __name__=="__main__":
     unittest.main()

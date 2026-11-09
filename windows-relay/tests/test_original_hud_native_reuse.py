@@ -39,6 +39,11 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("def native_auto_send(enabled):", HUD)
         self.assertIn("auto-send-on", NATIVE)
         self.assertIn("auto-send-off", NATIVE)
+        self.assertIn("FORCE COMMAND", HUD)
+        self.assertIn("FORCE ABORT", HUD)
+        self.assertIn("CLEAR QUEUE", HUD)
+        self.assertIn("abort-delivery", NATIVE)
+        self.assertIn("clear-pending-deliveries", NATIVE)
 
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)

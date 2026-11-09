@@ -154,6 +154,28 @@ def release_failed_delivery(state: wr.State, aid: str):
     note("NATIVE_DELIVERY_RETRY_AUTHORIZED=" + aid)
 
 
+def abort_failed_delivery(state: wr.State, aid: str):
+    if not wr.ID_RE.fullmatch(aid):
+        raise ValueError("invalid action ID")
+    state.abort_outbound_delivery(aid)
+    hold = delivery_hold_path(aid)
+    if hold.exists(): hold.unlink()
+    status_update(phase="IDLE", last_action=aid, last_result="ABORTED",
+                  delivery_blocked=False, last_delivery_error=None,
+                  last_delivery_stage="OPERATOR_ABORTED")
+    note("NATIVE_DELIVERY_ABORTED=" + aid)
+
+
+def clear_pending_deliveries(state: wr.State):
+    removed = state.clear_pending_outbound_deliveries()
+    for aid in removed:
+        hold = delivery_hold_path(aid)
+        if hold.exists(): hold.unlink()
+    status_update(phase="IDLE", delivery_blocked=False, last_delivery_error=None,
+                  last_delivery_stage="QUEUE_CLEARED", last_result="QUEUE_CLEARED")
+    note("NATIVE_PENDING_DELIVERY_QUEUE_CLEARED=" + str(len(removed)))
+
+
 def get_status() -> dict:
     cfg = configuration()
     try:
@@ -503,7 +525,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="run",
                         choices=("run", "arm", "stop", "off", "restart", "kill",
-                                 "auto-send-on", "auto-send-off",
+                                 "auto-send-on", "auto-send-off", "abort-delivery",
+                                 "clear-pending-deliveries",
                                  "hud-mode", "status", "check-running", "retry-delivery"))
     parser.add_argument("action_id", nargs="?")
 
@@ -514,6 +537,13 @@ def main():
         if not args.action_id:
             raise SystemExit("retry-delivery requires an action ID")
         release_failed_delivery(wr.State(STATE), args.action_id)
+        return 0
+    if args.command == "abort-delivery":
+        if not args.action_id: raise SystemExit("abort-delivery requires an action ID")
+        abort_failed_delivery(wr.State(STATE), args.action_id)
+        return 0
+    if args.command == "clear-pending-deliveries":
+        clear_pending_deliveries(wr.State(STATE))
         return 0
     if args.command == 'hud-mode':
         select_original_hud()

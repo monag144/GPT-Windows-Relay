@@ -132,7 +132,7 @@ class State:
         self.data.setdefault('last_action',None)
         outbound=self.data.setdefault('outbound_deliveries',{})
         if not isinstance(outbound,dict) or any(not isinstance(k,str) or not isinstance(v,dict) for k,v in outbound.items()): raise RelayError('corrupt outbound delivery state')
-        valid_phases={'READY','SUBMITTING','PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN'}
+        valid_phases={'READY','SUBMITTING','PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN','ABORTED'}
         for delivery in outbound.values():
             phase=delivery.get('phase')
             if phase not in valid_phases: raise RelayError('corrupt outbound delivery phase')
@@ -338,6 +338,32 @@ class State:
                 finished=copy.deepcopy(delivery)
             self._mutate_and_save(mutate)
             return finished
+
+    def abort_outbound_delivery(self,aid:str):
+        """Terminally cancel a pre-submit delivery without touching execution."""
+        with self.lock:
+            aborted=None
+            def mutate():
+                nonlocal aborted
+                delivery=self.data.get('outbound_deliveries',{}).get(aid)
+                if not isinstance(delivery,dict) or delivery.get('phase') not in {'READY','PRE_SUBMIT_FAILED'}:
+                    raise RelayError('outbound delivery is not safely abortable')
+                delivery['phase']='ABORTED'; delivery['aborted_at']=now(); delivery['updated_at']=delivery['aborted_at']
+                aborted=copy.deepcopy(delivery)
+            self._mutate_and_save(mutate)
+            return aborted
+
+    def clear_pending_outbound_deliveries(self):
+        """Remove only unsent/pre-submit delivery records, never executions/results."""
+        with self.lock:
+            removed=[]
+            def mutate():
+                deliveries=self.data.setdefault('outbound_deliveries',{})
+                for aid,delivery in list(deliveries.items()):
+                    if isinstance(delivery,dict) and delivery.get('phase') in {'READY','PRE_SUBMIT_FAILED'}:
+                        removed.append(aid); del deliveries[aid]
+            self._mutate_and_save(mutate)
+            return sorted(removed)
 
     def journal_mission(self,mission_id:str,phase:str,**detail):
         if not isinstance(mission_id,str) or not ID_RE.fullmatch(mission_id): return

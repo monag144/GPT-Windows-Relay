@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue,sys
+from tkinter import messagebox
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -197,6 +198,15 @@ def native_auto_send(enabled):
     subprocess.Popen([str(python),'-B',str(Path(native.__file__).resolve()),action],
                      cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+def native_delivery_control(command,action_id=None):
+    import desktop_native_relay as native
+    python=Path(sys.executable)
+    if python.name.lower()=='pythonw.exe': python=python.with_name('python.exe')
+    argv=[str(python),'-B',str(Path(native.__file__).resolve()),command]
+    if action_id:argv.append(action_id)
+    flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
+    subprocess.Popen(argv,cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
 def relay_control(action):
     if native_mode():
         native_control(action)
@@ -378,6 +388,14 @@ def run_ui():
     restart_btn=tk.Button(controls,text="RESTART",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("restart")); restart_btn.pack(side="left",padx=3)
     off_btn=tk.Button(controls,text="OFF",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("off")); off_btn.pack(side="left",padx=3)
     kill_btn=tk.Button(controls,text="KILL",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("kill")); kill_btn.pack(side="left",padx=3)
+    force_frame=tk.Frame(panel,bg=PANEL); force_frame.place(x=278,y=34,anchor="nw")
+    force_command_btn=tk.Button(force_frame,text="FORCE COMMAND",font=("Segoe UI",7,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
+    force_command_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
+    force_abort_btn=tk.Button(force_frame,text="FORCE ABORT",font=("Segoe UI",7,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
+    force_abort_btn.grid(row=1,column=0,sticky="w")
+    clear_queue_var=tk.BooleanVar(value=False)
+    clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",7,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=4,cursor="hand2")
+    clear_queue_check.grid(row=1,column=1,sticky="w")
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
@@ -455,6 +473,27 @@ def run_ui():
                 lock_results.put(("error",type(exc).__name__))
         threading.Thread(target=worker,daemon=True).start()
     owner_lock_btn.configure(command=change_owner_lock)
+    native_view={"snap":None}
+    def native_action_id():
+        snap=native_view.get("snap") or {}
+        return str(snap.get("action") or "").removeprefix("LAST ").removeprefix("CURRENT ").strip()
+    def show_force_command():
+        aid=native_action_id()
+        if not native_mode() or not aid or aid=='-':return
+        messagebox.showinfo("Force Command","Manual only; this HUD will not submit to ChatGPT.\n\nDESKTOP-NATIVE-CONTROL.cmd retry-delivery "+aid,parent=root)
+    def force_abort():
+        aid=native_action_id()
+        if not native_mode() or not aid or aid=='-':return
+        if messagebox.askyesno("Force Abort","Abort unsent delivery "+aid+"?\nThe saved result remains, but this delivery will not retry.",parent=root):
+            native_delivery_control("abort-delivery",aid)
+    def clear_pending_queue():
+        if not clear_queue_var.get():return
+        clear_queue_var.set(False)
+        if native_mode() and messagebox.askyesno("Clear Entire Queue","Delete all pending native delivery records and holds?\nExecuted command results are retained.",parent=root):
+            native_delivery_control("clear-pending-deliveries")
+    force_command_btn.configure(command=show_force_command)
+    force_abort_btn.configure(command=force_abort)
+    clear_queue_check.configure(command=clear_pending_queue)
     def toggle_auto_send():
         if not native_mode():return
         native_auto_send(not bool(auto_send_btn.cget('text')=='Auto Send: ON'))
@@ -472,11 +511,13 @@ def run_ui():
                 lock_state["error"]=value
         snap=snapshot()
         if snap.get('native_mode'):
+            native_view["snap"]=snap
             owner_lock_btn.configure(text='OWNER LOCK: N/A',state='disabled',bg='#3c4043')
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
                                     activebackground='#188038' if enabled else '#991b1b',state='normal')
+            force_command_btn.configure(state='normal'); force_abort_btn.configure(state='normal'); clear_queue_check.configure(state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
             relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
             phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
@@ -484,6 +525,7 @@ def run_ui():
             root.after(1000,refresh)
             return
         auto_send_btn.configure(text='Auto Send: OFF',bg='#7f1d1d',activebackground='#991b1b',state='disabled')
+        force_command_btn.configure(state='disabled'); force_abort_btn.configure(state='disabled'); clear_queue_check.configure(state='disabled')
         if isinstance(snap.get("conversation_lock_enabled"),bool):
             lock_state["enabled"]=snap["conversation_lock_enabled"]
         elif not snap["online"]:
