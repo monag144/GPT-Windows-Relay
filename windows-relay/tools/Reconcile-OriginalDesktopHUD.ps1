@@ -27,16 +27,16 @@ function Stop-HudProcess($process,[string]$label){
     # A Python parent/child pair can disappear while its CIM snapshot is being
     # walked.  A vanished target is already reconciled; do not abort startup or
     # leave the canonical HUD unavailable because Stop-Process raced its exit.
-    $pid=[int]$process.ProcessId
-    if(-not(Get-Process -Id $pid -ErrorAction SilentlyContinue)){
-        Write-Output ($label+'_ALREADY_EXITED_PID='+$pid)
+    $targetPid=[int]$process.ProcessId
+    if(-not(Get-Process -Id $targetPid -ErrorAction SilentlyContinue)){
+        Write-Output ($label+'_ALREADY_EXITED_PID='+$targetPid)
         return
     }
-    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-    if(Get-Process -Id $pid -ErrorAction SilentlyContinue){
-        throw ($label+'_STOP_FAILED_PID='+$pid)
+    Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
+    if(Get-Process -Id $targetPid -ErrorAction SilentlyContinue){
+        throw ($label+'_STOP_FAILED_PID='+$targetPid)
     }
-    Write-Output ($label+'_STOPPED_PID='+$pid)
+    Write-Output ($label+'_STOPPED_PID='+$targetPid)
 }
 Write-Output 'ORIGINAL_GPT_RELAY_HUD_RECONCILIATION_V1'
 Write-Output 'TARGET=EXISTING_TOP_RIGHT_HUD_PY'
