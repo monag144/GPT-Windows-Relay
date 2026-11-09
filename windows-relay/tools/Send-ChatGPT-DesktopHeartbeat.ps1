@@ -1,4 +1,4 @@
-# Native ChatGPT desktop heartbeat V3; operator-invoked; one UIA-targeted physical Send click.
+# Native ChatGPT desktop heartbeat V5; operator-invoked; one UIA-targeted physical Send click.
 # Never dispatches Windows shell commands or calls the backend executor.
 [CmdletBinding()]
 param([ValidateRange(2,30)][int]$DetectionSeconds=5,
@@ -25,6 +25,26 @@ public static class DesktopHeartbeatForeground {
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out MousePoint pt);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint buttons, UIntPtr extraInfo);
+    [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION U; }
+    [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT {
+        public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo;
+    }
+    [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
+    const uint INPUT_KEYBOARD=1, KEYEVENTF_UNICODE=0x0004, KEYEVENTF_KEYUP=0x0002;
+    public static uint TypeUnicode(string text) {
+        if (String.IsNullOrEmpty(text)) return 0;
+        INPUT[] inputs=new INPUT[text.Length*2];
+        for(int i=0;i<text.Length;i++) {
+            inputs[i*2].type=INPUT_KEYBOARD;
+            inputs[i*2].U.ki.wScan=text[i];
+            inputs[i*2].U.ki.dwFlags=KEYEVENTF_UNICODE;
+            inputs[i*2+1].type=INPUT_KEYBOARD;
+            inputs[i*2+1].U.ki.wScan=text[i];
+            inputs[i*2+1].U.ki.dwFlags=KEYEVENTF_UNICODE|KEYEVENTF_KEYUP;
+        }
+        return SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(INPUT)));
+    }
 }
 '@
 # The desktop app transport shares STOP/OFF/KILL with the canonical relay.
@@ -158,6 +178,30 @@ function Test-OwnHeartbeatDraft([string]$value){
     $expected=$script:wire.Replace("`r`n","`n").Replace("`r","`n")
     return $actual -ceq $expected
 }
+function Assert-ChatGPTForeground($window){
+    $chatHandle=[IntPtr]::new([int64]$window.Current.NativeWindowHandle)
+    if($chatHandle -eq [IntPtr]::Zero){throw 'CHATGPT_NATIVE_WINDOW_HANDLE_MISSING'}
+    [void][DesktopHeartbeatForeground]::ShowWindow($chatHandle,9)
+    [void][DesktopHeartbeatForeground]::SetForegroundWindow($chatHandle)
+    Start-Sleep -Milliseconds 250
+    $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()
+    $foregroundPid=[uint32]0
+    [void][DesktopHeartbeatForeground]::GetWindowThreadProcessId($foregroundHandle,[ref]$foregroundPid)
+    if($foregroundPid -ne [int]$window.Current.ProcessId){throw 'CHATGPT_NOT_FOREGROUND_REFUSE_INPUT'}
+}
+function Set-ComposerTextBySendInput($window,$composer,[string]$text){
+    # ValuePattern.SetValue made text visible but did not prove ChatGPT received an
+    # editor input/change event.  Use real Unicode keyboard input only after both
+    # the ChatGPT window and its composer have been independently verified.
+    Assert-ChatGPTForeground $window
+    $composer.node.SetFocus()
+    Start-Sleep -Milliseconds 120
+    if(-not $composer.node.Current.HasKeyboardFocus){throw 'COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT'}
+    $expected=[uint32]($text.Length*2)
+    $sent=[DesktopHeartbeatForeground]::TypeUnicode($text)
+    if($sent -ne $expected){throw ('SENDINPUT_PARTIAL_INPUT='+$sent+'/'+$expected)}
+    Write-Output ('COMPOSER_SENDINPUT_EVENTS='+$sent)
+}
 function Try-ClearOwnDraft($window){
     if($script:submitted -or [string]::IsNullOrEmpty($script:wire)){return}
     try{
@@ -272,7 +316,11 @@ try{
         $script:wire='[GPT_WINDOWS_HEARTBEAT]'+$eol+($payload|ConvertTo-Json -Compress)+$eol+'[/GPT_WINDOWS_HEARTBEAT]'
     }
     Write-Output ('HEARTBEAT_ID='+$id)
-    $composer.pattern.SetValue($script:wire)
+    # Newlines require Enter-like semantics in some Electron editors.  The result
+    # protocol accepts whitespace around its JSON, so keep the typed wire on one
+    # line and reserve the only click for the actual Send control below.
+    $script:wire=$script:wire.Replace("`r",'').Replace("`n",' ')
+    Set-ComposerTextBySendInput $window $composer $script:wire
     $send=$null
     for($i=0;$i -lt 25;$i++){
         Start-Sleep -Milliseconds 200
@@ -282,7 +330,7 @@ try{
         if($null -ne $send){break}
     }
     if($null -eq $send){throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'}
-    Write-Output 'UIA_COMPOSER_WRITE=ACCEPTED'
+    Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'
     Write-Output 'UIA_SEND_BUTTON=ENABLED'
     $doc=Get-AnchoredDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
@@ -292,16 +340,7 @@ try{
     # SendKeys and UIA Invoke did not yield a confirmed ChatGPT submission.
     # Instead, click exactly the enabled UIA Send button in this ChatGPT window.
     Assert-OperatorAllowsDesktopSend
-    $chatHandle=[IntPtr]::new([int64]$window.Current.NativeWindowHandle)
-    if($chatHandle -eq [IntPtr]::Zero){throw 'CHATGPT_NATIVE_WINDOW_HANDLE_MISSING'}
-    [void][DesktopHeartbeatForeground]::ShowWindow($chatHandle,9)
-    [void][DesktopHeartbeatForeground]::SetForegroundWindow($chatHandle)
-    Start-Sleep -Milliseconds 250
-    $foregroundHandle=[DesktopHeartbeatForeground]::GetForegroundWindow()
-    $foregroundPid=[uint32]0
-    [void][DesktopHeartbeatForeground]::GetWindowThreadProcessId($foregroundHandle,[ref]$foregroundPid)
-    $chatPid=[int]$window.Current.ProcessId
-    if($foregroundPid -ne $chatPid){throw 'CHATGPT_NOT_FOREGROUND_REFUSE_MOUSE_CLICK'}
+    Assert-ChatGPTForeground $window
     $composer=Get-Composer $window
     if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){
         throw 'COMPOSER_CHANGED_BEFORE_MOUSE_CLICK'

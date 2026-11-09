@@ -50,6 +50,9 @@ class NativeEntrypointTests(unittest.TestCase):
         self.assertIn("NativeReceiptMarker", SEND)
         self.assertIn("NATIVE_RESULT_BINDING_MISMATCH", SEND)
         self.assertIn("[GPT_WINDOWS_RESULT]", SEND)
+        self.assertIn("Set-ComposerTextBySendInput", SEND)
+        self.assertIn("SendInput", SEND)
+        self.assertNotIn("composer.pattern.SetValue($script:wire)", SEND)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN", SEND)
 
     def test_native_hud_does_not_arm_browser(self):

@@ -78,7 +78,7 @@ try{
     $reply=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $sender -SmokeResult -SmokeExitCode $reportedExit 2>&1)
     $replyExit=$LASTEXITCODE
     foreach($row in $reply){
-        if([string]$row -match '^(DETECTION=|COMPOSER_BASELINE=|HEARTBEAT_ID=|UIA_COMPOSER_WRITE=|UIA_SEND_BUTTON=|UIA_GUARDED_SEND_BUTTON_CLICK_|DELIVERY=|RESULT=|HEARTBEAT_ERROR=)'){
+        if([string]$row -match '^(DETECTION=|COMPOSER_BASELINE=|HEARTBEAT_ID=|COMPOSER_INPUT=|COMPOSER_SENDINPUT_EVENTS=|UIA_SEND_BUTTON=|UIA_GUARDED_SEND_BUTTON_CLICK_|DELIVERY=|RESULT=|HEARTBEAT_ERROR=)'){
             Write-Output ('SMOKE_SENDER_'+[string]$row)
         }
     }

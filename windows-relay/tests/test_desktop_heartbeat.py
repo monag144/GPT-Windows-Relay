@@ -15,14 +15,15 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("Watch-ChatGPT-ActionCandidates.ps1",SOURCE)
         self.assertIn("[GPT_WINDOWS_HEARTBEAT]",SOURCE)
         self.assertIn("pass_percent_if_received",SOURCE)
-        self.assertIn("$composer.pattern.SetValue($script:wire)",SOURCE)
+        self.assertIn("Set-ComposerTextBySendInput $window $composer $script:wire",SOURCE)
+        self.assertIn("COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_SEND",SOURCE)
         self.assertIn("HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN",SOURCE)
         self.assertIn("mouse_event([uint32]0x0002",SOURCE)
         self.assertIn("mouse_event([uint32]0x0004",SOURCE)
         self.assertNotIn("$send.pattern.Invoke()",SOURCE)
-        self.assertIn("CHATGPT_NOT_FOREGROUND_REFUSE_MOUSE_CLICK",SOURCE)
+        self.assertIn("CHATGPT_NOT_FOREGROUND_REFUSE_INPUT",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_MOUSE_CLICK",SOURCE)
 
     def test_placeholder_exception_requires_independent_disabled_send_gate(self):
@@ -59,7 +60,8 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("SEND_BUTTON_OUTSIDE_CHATGPT_WINDOW_REFUSE",SOURCE)
         self.assertIn("SEND_BUTTON_NOT_ENABLED_REFUSE",SOURCE)
         self.assertIn("Test-OwnHeartbeatDraft",SOURCE)
-        self.assertIn("UIA_COMPOSER_WRITE=ACCEPTED",SOURCE)
+        self.assertIn("COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED",SOURCE)
+        self.assertIn("COMPOSER_SENDINPUT_EVENTS=",SOURCE)
         self.assertNotIn("[System.Windows.Forms.SendKeys]",SOURCE)
 
 if __name__=="__main__":
