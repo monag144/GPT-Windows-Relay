@@ -29,6 +29,12 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("native_action=", HUD)
         self.assertIn("choices=(\"run\", \"arm\", \"stop\", \"off\", \"restart\", \"kill\"", NATIVE)
 
+    def test_native_hud_exposes_blocked_sender_without_new_window(self):
+        self.assertIn("delivery_blocked=bool(report.get('delivery_blocked'))", HUD)
+        self.assertIn("DELIVERY BLOCKED", HUD)
+        self.assertIn("last_delivery_error", HUD)
+        self.assertIn("title='STALLED'", HUD)
+
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)
         self.assertIn("Reconcile-OriginalDesktopHUD.ps1", LAUNCH)
