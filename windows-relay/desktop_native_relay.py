@@ -327,7 +327,11 @@ def deliver(state: wr.State, aid: str):
                                   encoding="utf-8", errors="replace", timeout=70)
         output = response.stdout
         for line in output.splitlines():
-            if line.startswith("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN"):
+            if line.startswith("SENDER_STAGE="):
+                stage_label = line.partition("=")[2]
+                if re.fullmatch(r"[A-Z_]{1,60}", stage_label):
+                    stage = stage_label
+            elif line.startswith("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN"):
                 stage = "CLICK_BEGIN"
             elif line.startswith("UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED"):
                 stage = "CLICK_COMPLETED"
@@ -348,7 +352,7 @@ def deliver(state: wr.State, aid: str):
             if error_code == "SENDER_NO_RECEIPT":
                 error_code = "SENDER_FAILED_BEFORE_CLICK"
         for line in output.splitlines():
-            if line.startswith(("RESULT=", "HEARTBEAT_ERROR=", "DELIVERY=")):
+            if line.startswith(("RESULT=", "HEARTBEAT_ERROR=", "DELIVERY=", "SENDER_STAGE=")):
                 note("NATIVE_DELIVERY_" + line)
     except (OSError, subprocess.TimeoutExpired) as exc:
         error_code = type(exc).__name__
