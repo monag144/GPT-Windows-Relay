@@ -43,6 +43,21 @@ class DesktopHeartbeatTests(unittest.TestCase):
         invoke = SOURCE.index("mouse_event([uint32]0x0002", mark)
         self.assertLess(reserved, invoke)
 
+    def test_sender_has_stage_diagnostics_without_payload_echo(self):
+        for marker in (
+            "SENDER_STAGE=APP_WINDOW_FOUND",
+            "SENDER_STAGE=CONVERSATION_ANCHOR_FOUND",
+            "SENDER_STAGE=COMPOSER_EMPTY_VERIFIED",
+            "SENDER_STAGE=NATIVE_RESULT_BOUND",
+            "SENDER_STAGE=INPUT_BEGIN",
+            "SENDER_STAGE=INPUT_COMPLETED",
+            "SENDER_STAGE=SEND_BUTTON_ENABLED",
+            "SENDER_STAGE=CLICK_BEGIN",
+            "SENDER_STAGE=CLICK_COMPLETED",
+            "SENDER_STAGE=CONFIRMED_IN_CONVERSATION",
+        ):
+            self.assertIn(marker, SOURCE)
+
     def test_no_command_or_clipboard_transport(self):
         for unsafe in ("Invoke-RestMethod","Invoke-WebRequest","Get-Clipboard",
                        "Set-Clipboard","windows_relay.py","/action",
