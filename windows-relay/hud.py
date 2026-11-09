@@ -146,11 +146,13 @@ def native_snapshot():
     armed=bool(report.get('native_armed'))
     off=bool(report.get('native_off'))
     phase=str(report.get('phase') or 'UNKNOWN').upper()
+    delivery_blocked=bool(report.get('delivery_blocked'))
+    delivery_error=str(report.get('last_delivery_error') or '-')
     if off: title='OFF'
     elif not live: title='OFFLINE'
     elif not armed: title='STOPPED'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
-    elif phase=='ERROR': title='STALLED'
+    elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
     else: title='READY'
     state=read_json(native.STATE,{})
     detail,active=action_detail(state)
@@ -159,11 +161,16 @@ def native_snapshot():
     cmd=command_preview(detail.get('command') if detail else '')
     exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
            if detail else 'ID: '+aid+'\nRESULT: '+result)
+    if delivery_blocked:
+        exact+='\nDELIVERY BLOCKED: '+delivery_error
+    phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
+    if delivery_blocked:
+        phase_line='DELIVERY BLOCKED • '+delivery_error[:75]
     return {
         'online':live,'title':title,'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':'ChatGPT Windows app • UI Automation • no browser extension',
-        'phase':phase+' • '+('running' if live else 'not running')+' • result '+result,
+        'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
     }
