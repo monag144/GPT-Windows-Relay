@@ -43,6 +43,8 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("StringComparison]::OrdinalIgnoreCase", RECONCILE)
         self.assertIn("ORIGINAL_HUD_FILE=hud.py", RECONCILE)
         self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP", RECONCILE)
+        self.assertIn("$label+'_ALREADY_EXITED_PID='", RECONCILE)
+        self.assertIn("$label+'_STOP_FAILED_PID='", RECONCILE)
         self.assertNotIn("relay-control.ps1", RECONCILE)
         self.assertNotIn("http://127.0.0.1", RECONCILE)
 

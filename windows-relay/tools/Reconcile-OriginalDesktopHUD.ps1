@@ -23,20 +23,33 @@ function Find-HudProcesses([string]$exact){
     })
     return @($processes)
 }
+function Stop-HudProcess($process,[string]$label){
+    # A Python parent/child pair can disappear while its CIM snapshot is being
+    # walked.  A vanished target is already reconciled; do not abort startup or
+    # leave the canonical HUD unavailable because Stop-Process raced its exit.
+    $pid=[int]$process.ProcessId
+    if(-not(Get-Process -Id $pid -ErrorAction SilentlyContinue)){
+        Write-Output ($label+'_ALREADY_EXITED_PID='+$pid)
+        return
+    }
+    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    if(Get-Process -Id $pid -ErrorAction SilentlyContinue){
+        throw ($label+'_STOP_FAILED_PID='+$pid)
+    }
+    Write-Output ($label+'_STOPPED_PID='+$pid)
+}
 Write-Output 'ORIGINAL_GPT_RELAY_HUD_RECONCILIATION_V1'
 Write-Output 'TARGET=EXISTING_TOP_RIGHT_HUD_PY'
 # The new native HUD was an unapproved duplicate, so stop that exact process.
 $mini=@(Find-HudProcesses $obsolete)
 foreach($p in $mini){
-    Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
-    Write-Output ('UNWANTED_MINI_HUD_STOPPED_PID='+$p.ProcessId)
+    Stop-HudProcess $p 'UNWANTED_MINI_HUD'
 }
 # Old hud.py processes contain pre-pull code and cannot hot-reload the new
 # native-status adapter. Restart only that exact file, preserving HUD position.
 $prior=@(Find-HudProcesses $original)
 foreach($p in $prior){
-    Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
-    Write-Output ('ORIGINAL_HUD_OLD_CODE_RESTARTED_PID='+$p.ProcessId)
+    Stop-HudProcess $p 'ORIGINAL_HUD_OLD_CODE_RESTARTED'
 }
 Start-Sleep -Milliseconds 400
 $existing=@(Find-HudProcesses $original)
