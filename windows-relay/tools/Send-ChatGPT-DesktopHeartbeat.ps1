@@ -241,10 +241,13 @@ try{
         Write-Output ('DETECTION='+$status)
     }
     $window=Get-ChatGPTWindow
+    Write-Output 'SENDER_STAGE=APP_WINDOW_FOUND'
     Assert-OperatorAllowsDesktopSend
     $doc=Get-AnchoredDocument $window $canary
+    Write-Output 'SENDER_STAGE=CONVERSATION_ANCHOR_FOUND'
     $composer=Get-Composer $window
     Assert-ComposableEmptyState $window $composer
+    Write-Output 'SENDER_STAGE=COMPOSER_EMPTY_VERIFIED'
     $eol=[Environment]::NewLine
     if($NativeResultPath){
         if($NativeActionId -cnotmatch '^[A-Za-z0-9._:-]{1,128}$'){
@@ -281,6 +284,7 @@ try{
         }
         $id=$NativeReceiptMarker
         $script:wire=$rawResult
+        Write-Output 'SENDER_STAGE=NATIVE_RESULT_BOUND'
     }elseif($SmokeResult){
         $id='PCE18-KATANA-SMOKE-RESULT-003'
         $passed=($SmokeExitCode -eq 0)
@@ -320,7 +324,9 @@ try{
     # protocol accepts whitespace around its JSON, so keep the typed wire on one
     # line and reserve the only click for the actual Send control below.
     $script:wire=$script:wire.Replace("`r",'').Replace("`n",' ')
+    Write-Output 'SENDER_STAGE=INPUT_BEGIN'
     Set-ComposerTextBySendInput $window $composer $script:wire
+    Write-Output 'SENDER_STAGE=INPUT_COMPLETED'
     $send=$null
     for($i=0;$i -lt 25;$i++){
         Start-Sleep -Milliseconds 200
@@ -332,6 +338,7 @@ try{
     if($null -eq $send){throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'}
     Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'
     Write-Output 'UIA_SEND_BUTTON=ENABLED'
+    Write-Output 'SENDER_STAGE=SEND_BUTTON_ENABLED'
     $doc=Get-AnchoredDocument $window $canary
     if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
     $composer=Get-Composer $window
@@ -366,6 +373,7 @@ try{
         throw 'CURSOR_POSITION_UNAVAILABLE_REFUSE'
     }
     Assert-OperatorAllowsDesktopSend
+    Write-Output 'SENDER_STAGE=CLICK_BEGIN'
     Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
     # Once pointer input begins, delivery may be ambiguous: no retries.
     $script:submitted=$true
@@ -378,6 +386,7 @@ try{
         [void][DesktopHeartbeatForeground]::SetCursorPos($priorCursor.X,$priorCursor.Y)
     }
     Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED'
+    Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     $confirmed=$false
     $deadline=[DateTime]::UtcNow.AddSeconds($DeliveryTimeoutSeconds)
     while([DateTime]::UtcNow -lt $deadline){
@@ -396,6 +405,7 @@ try{
         }catch{}
     }
     if($confirmed){
+        Write-Output 'SENDER_STAGE=CONFIRMED_IN_CONVERSATION'
         Write-Output 'DELIVERY=UIA_CONVERSATION_VISIBLE_AND_COMPOSER_CLEARED'
         Write-Output ('LOCAL_PASS_LEVEL='+$level)
         Write-Output 'GPT_RECEIPT_STILL_REQUIRED_FOR_END_TO_END_PROOF'
