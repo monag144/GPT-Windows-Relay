@@ -1,0 +1,387 @@
+{
+  "schema": "pce14-relay-behavior-v1",
+  "source_reference": "monag144/ClosedCode packages/app/e2e/performance/benchmark.ts (measurement discipline only)",
+  "scope": "Windows Relay / Firefox. Live effects require separately authorized isolated test profile; this evaluator never drives live UI.",
+  "minimum_trials": 3,
+  "forbidden_global": [
+    "relay:effect_replayed",
+    "relay:wrong_tab_effect",
+    "relay:draft_overwritten",
+    "relay:stop_ignored",
+    "relay:credential_leak",
+    "observer:manual_rescue"
+  ],
+  "cases": [
+    {
+      "id": "R01",
+      "title": "Read and preserve file bytes",
+      "category": "input",
+      "required": [
+        "relay:file_loaded",
+        "observer:payload_sha_verified"
+      ],
+      "forbidden": [],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 8000,
+      "az_links": []
+    },
+    {
+      "id": "R02",
+      "title": "Pin originating Firefox tab",
+      "category": "routing",
+      "required": [
+        "relay:origin_pinned",
+        "observer:origin_identity_verified"
+      ],
+      "forbidden": [
+        "relay:other_tab_activated"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 8000,
+      "az_links": []
+    },
+    {
+      "id": "R03",
+      "title": "New chat stays in same tab",
+      "category": "navigation",
+      "required": [
+        "relay:origin_pinned",
+        "relay:new_chat_clicked",
+        "observer:same_tab_home_verified"
+      ],
+      "forbidden": [
+        "relay:new_tab_opened",
+        "relay:new_window_opened"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 15000,
+      "az_links": []
+    },
+    {
+      "id": "R04",
+      "title": "Paste Unicode and multiline exactly",
+      "category": "composer",
+      "required": [
+        "relay:paste_invoked",
+        "observer:composer_exact"
+      ],
+      "forbidden": [
+        "relay:composer_mismatch"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 10000,
+      "az_links": [],
+      "payload_constraint": "unicode_and_multiline"
+    },
+    {
+      "id": "R05",
+      "title": "Paste long handoff without truncation",
+      "category": "composer",
+      "required": [
+        "relay:paste_invoked",
+        "observer:composer_exact"
+      ],
+      "forbidden": [
+        "relay:composer_truncated"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 18000,
+      "az_links": [],
+      "payload_constraint": "min_12000_bytes"
+    },
+    {
+      "id": "R06",
+      "title": "Send exactly once",
+      "category": "submission",
+      "required": [
+        "relay:send_intent_persisted",
+        "relay:send_invoked",
+        "observer:user_turn_verified"
+      ],
+      "forbidden": [
+        "relay:enter_fallback"
+      ],
+      "effects": 0,
+      "sends": 1,
+      "limit_ms": 30000,
+      "az_links": []
+    },
+    {
+      "id": "R07",
+      "title": "Actual user-role turn and exact ID",
+      "category": "receipt",
+      "required": [
+        "relay:send_invoked",
+        "observer:user_turn_verified"
+      ],
+      "forbidden": [
+        "observer:assistant_quote_only"
+      ],
+      "effects": 0,
+      "sends": 1,
+      "limit_ms": 30000,
+      "az_links": []
+    },
+    {
+      "id": "R08",
+      "title": "Result acknowledgment correlated to turn",
+      "category": "receipt",
+      "required": [
+        "relay:result_saved",
+        "observer:user_turn_verified",
+        "relay:ack_confirmed"
+      ],
+      "forbidden": [
+        "relay:ack_from_stale_turn"
+      ],
+      "effects": 0,
+      "sends": 1,
+      "limit_ms": 120000,
+      "az_links": [
+        "V"
+      ]
+    },
+    {
+      "id": "R09",
+      "title": "Existing draft aborts safely",
+      "category": "safety",
+      "required": [
+        "observer:preexisting_draft",
+        "relay:blocked_draft",
+        "observer:draft_preserved"
+      ],
+      "forbidden": [
+        "relay:paste_invoked",
+        "relay:send_invoked"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 8000,
+      "az_links": []
+    },
+    {
+      "id": "R10",
+      "title": "Wrong tab identity aborts safely",
+      "category": "safety",
+      "required": [
+        "observer:wrong_tab_detected",
+        "relay:blocked_identity"
+      ],
+      "forbidden": [
+        "relay:new_chat_clicked",
+        "relay:paste_invoked",
+        "relay:send_invoked"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 8000,
+      "az_links": []
+    },
+    {
+      "id": "R11",
+      "title": "STOP before send prevents submission",
+      "category": "safety",
+      "required": [
+        "relay:paste_invoked",
+        "observer:stop_latched",
+        "relay:send_blocked",
+        "observer:no_user_turn"
+      ],
+      "forbidden": [
+        "relay:send_invoked"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 8000,
+      "az_links": [
+        "O"
+      ]
+    },
+    {
+      "id": "R12",
+      "title": "Duplicate operation cannot repeat effect",
+      "category": "exact_once",
+      "required": [
+        "relay:effect_committed",
+        "relay:duplicate_detected",
+        "observer:one_effect_verified"
+      ],
+      "forbidden": [
+        "relay:effect_replayed"
+      ],
+      "effects": 1,
+      "sends": 0,
+      "limit_ms": 15000,
+      "az_links": [
+        "K"
+      ]
+    },
+    {
+      "id": "R13",
+      "title": "Lost reply recovers saved result",
+      "category": "exact_once",
+      "required": [
+        "relay:effect_committed",
+        "observer:reply_dropped",
+        "relay:result_recovered",
+        "observer:one_effect_verified"
+      ],
+      "forbidden": [
+        "relay:effect_replayed"
+      ],
+      "effects": 1,
+      "sends": 0,
+      "limit_ms": 30000,
+      "az_links": [
+        "L"
+      ]
+    },
+    {
+      "id": "R14",
+      "title": "Assistant quote never passes receipt check",
+      "category": "receipt",
+      "required": [
+        "observer:assistant_quote_only",
+        "relay:ack_rejected",
+        "observer:no_user_turn"
+      ],
+      "forbidden": [
+        "relay:ack_confirmed"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 10000,
+      "az_links": []
+    },
+    {
+      "id": "R15",
+      "title": "Delayed Send enablement is bounded",
+      "category": "resilience",
+      "required": [
+        "relay:paste_invoked",
+        "observer:send_ready_delayed",
+        "relay:send_intent_persisted",
+        "relay:send_invoked",
+        "observer:user_turn_verified"
+      ],
+      "forbidden": [
+        "relay:timeout_ignored"
+      ],
+      "effects": 0,
+      "sends": 1,
+      "limit_ms": 90000,
+      "az_links": []
+    },
+    {
+      "id": "R16",
+      "title": "Refresh resumes without duplicating action",
+      "category": "resilience",
+      "required": [
+        "relay:result_saved",
+        "observer:scoped_refresh",
+        "relay:result_recovered",
+        "observer:one_effect_verified"
+      ],
+      "forbidden": [
+        "relay:effect_replayed",
+        "relay:other_tab_refreshed"
+      ],
+      "effects": 1,
+      "sends": 0,
+      "limit_ms": 30000,
+      "az_links": []
+    },
+    {
+      "id": "R17",
+      "title": "Loaded Firefox runtime identity proved",
+      "category": "provenance",
+      "required": [
+        "observer:loaded_runtime_attested",
+        "relay:runtime_hash_matched"
+      ],
+      "forbidden": [
+        "relay:source_hash_assumed_loaded"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 10000,
+      "az_links": [
+        "E"
+      ]
+    },
+    {
+      "id": "R18",
+      "title": "Sensitive data stays out of benchmark report",
+      "category": "privacy",
+      "required": [
+        "relay:payload_sha_recorded",
+        "observer:no_secret_content_leaked"
+      ],
+      "forbidden": [
+        "relay:secret_exposed"
+      ],
+      "effects": 0,
+      "sends": 0,
+      "limit_ms": 10000,
+      "az_links": []
+    },
+    {
+      "id": "R19",
+      "title": "Unattended full round-trip without rescue",
+      "category": "end_to_end",
+      "required": [
+        "relay:packet_discovered",
+        "relay:effect_committed",
+        "relay:result_saved",
+        "relay:send_intent_persisted",
+        "relay:send_invoked",
+        "observer:user_turn_verified",
+        "relay:ack_confirmed"
+      ],
+      "forbidden": [
+        "observer:manual_rescue"
+      ],
+      "effects": 1,
+      "sends": 1,
+      "limit_ms": 120000,
+      "az_links": [
+        "J",
+        "K",
+        "V",
+        "Y"
+      ]
+    },
+    {
+      "id": "R20",
+      "title": "Successor handoff in originating tab",
+      "category": "rotation",
+      "required": [
+        "relay:origin_pinned",
+        "relay:new_chat_clicked",
+        "observer:same_tab_home_verified",
+        "relay:paste_invoked",
+        "observer:composer_exact",
+        "relay:send_intent_persisted",
+        "relay:send_invoked",
+        "observer:user_turn_verified"
+      ],
+      "forbidden": [
+        "relay:new_tab_opened",
+        "relay:new_window_opened",
+        "observer:other_tab_targeted"
+      ],
+      "effects": 0,
+      "sends": 1,
+      "limit_ms": 120000,
+      "az_links": [
+        "F",
+        "Y"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+name: PCE14 behavioral relay benchmarks (offline)
+on:
+  push:
+    branches:
+      - pce14/behavioral-relay-benchmarks
+  pull_request:
+    paths:
+      - "benchmarks/**"
+      - ".github/workflows/pce14-relay-behavioral.yml"
+  workflow_dispatch:
+
+jobs:
+  trace-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Behavioral benchmark and existing A-Z regression tests
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m unittest discover -s benchmarks/tests -p "test_*.py" -v
+      - name: Syntax and source-only provenance
+        shell: pwsh
+        run: |
+          python -B -m py_compile benchmarks/relay_behavioral.py
+          Write-Host "BENCHMARK_SOURCE_SHA=$(git rev-parse HEAD)"
+          Write-Host "OFFLINE_TESTS_ARE_NOT_LIVE_FIREFOX_ACCEPTANCE=true"
