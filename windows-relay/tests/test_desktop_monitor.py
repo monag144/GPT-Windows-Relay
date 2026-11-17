@@ -17,7 +17,7 @@ class DesktopMonitorTests(unittest.TestCase):
 
     def test_singleton_and_dedupe(self):
         self.assertIn("Local\\GPTWindowsDesktopMonitor",SCRIPT)
-        self.assertIn("$known.Add($id)",SCRIPT)
+        self.assertIn("$known.Add($currentCandidate)",SCRIPT)
         self.assertIn("SUBMISSION_ATTEMPTED",SCRIPT)
         self.assertIn("DELIVERY_UNCERTAIN",SCRIPT)
         self.assertIn("BLOCKED_BY_DRAFT",SCRIPT)
