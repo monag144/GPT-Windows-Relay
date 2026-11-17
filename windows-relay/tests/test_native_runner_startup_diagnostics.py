@@ -3,10 +3,10 @@
 These tests mock the Windows process; no local relay is started.
 """
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -36,9 +36,10 @@ class NativeRunnerReadinessTests(unittest.TestCase):
                 native.launch_runner_if_absent()
 
     def test_status_supports_loop_error_metadata(self):
-        with mock.patch.object(native, "configuration", return_value={"armed": True, "off": False, "auto_send": True}), \
-             mock.patch.object(native, "runner_active", return_value=False), \
-             mock.patch.object(native.STATUS, "exists", return_value=False):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(native, "STATUS", Path(tmp) / "status.json"), \
+             mock.patch.object(native, "configuration", return_value={"armed": True, "off": False, "auto_send": True}), \
+             mock.patch.object(native, "runner_active", return_value=False):
             status = native.get_status()
         self.assertIn("runner_error_type", status)
         self.assertIn("runner_error_stage", status)
