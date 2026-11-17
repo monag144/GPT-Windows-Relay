@@ -195,6 +195,8 @@ def get_status() -> dict:
         "delivery_blocked": live.get("delivery_blocked", False),
         "last_delivery_error": live.get("last_delivery_error"),
         "last_delivery_stage": live.get("last_delivery_stage"),
+        "runner_error_type": live.get("runner_error_type"),
+        "runner_error_stage": live.get("runner_error_stage"),
         "browser_relay": "SEPARATE",
     }
 
@@ -441,12 +443,14 @@ def runner():
         note("NATIVE_BASELINE_COMMANDS_SUPPRESSED=" + str(len(baseline)))
         seen = set(baseline)
         while not configuration()["off"]:
+            runner_stage = "SCANNING_CHATGPT_APP"
             try:
                 candidates = read_scan()
                 cfg = configuration()
                 if state.armed != cfg["armed"]:
                     state.set_armed(cfg["armed"])
                 if cfg["armed"] and not stop_requested():
+                    runner_stage = "PROCESSING_NEW_INSTRUCTIONS"
                     for aid, packet in candidates:
                         if aid in seen:
                             continue
@@ -455,6 +459,7 @@ def runner():
                             process_packet(packet, state)
                         except (ValueError, wr.RelayError, OSError) as exc:
                             note("NATIVE_ACTION_ERROR=" + aid, type(exc).__name__, str(exc)[:150])
+                    runner_stage = "DELIVERING_SAVED_RESULTS"
                     for aid in state.list_claimable_outbound_ids():
                         if stop_requested():
                             break
@@ -473,10 +478,13 @@ def runner():
                                      and prior.get("last_result") == "PRE_SUBMIT_FAILED"
                                      else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
                                      else "IDLE")
-                status_update(pid=os.getpid(), phase=display_phase)
+                status_update(pid=os.getpid(), phase=display_phase,
+                              runner_error_type=None, runner_error_stage=None)
             except Exception as exc:
                 note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
-                status_update(pid=os.getpid(), phase="ERROR", error=type(exc).__name__)
+                status_update(pid=os.getpid(), phase="ERROR",
+                              runner_error_type=type(exc).__name__,
+                              runner_error_stage=runner_stage)
             time.sleep(1)
         status_update(pid=None, phase="OFF")
         note("NATIVE_RELAY_OFF")
@@ -495,9 +503,17 @@ def launch_runner_if_absent():
         note('NATIVE_RUNNER=ALREADY_RUNNING')
         return
     flags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
-    subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), 'run'],
-                     cwd=str(ROOT), creationflags=flags)
+    child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), 'run'],
+                             cwd=str(ROOT), creationflags=flags)
     note('NATIVE_RUNNER=START_REQUESTED')
+    for _ in range(40):
+        if runner_active():
+            note('NATIVE_RUNNER=LOCK_CONFIRMED')
+            return
+        if child.poll() is not None:
+            raise RuntimeError('NATIVE_RUNNER_EXITED_BEFORE_STARTUP')
+        time.sleep(.25)
+    raise RuntimeError('NATIVE_RUNNER_STARTUP_NOT_CONFIRMED')
 
 def restart_runner():
     update_control('off')
