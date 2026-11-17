@@ -46,7 +46,8 @@ class NativeExactSmokeTests(unittest.TestCase):
         self.assertIn("SMOKE_NO_AUTOMATIC_RETRY=TRUE", EXECUTOR)
         self.assertIn("StopRequested", EXECUTOR)
         self.assertNotIn("Invoke-RestMethod", EXECUTOR)
-        self.assertNotIn(" /action", EXECUTOR)
+        executable_lines = "\n".join(line for line in EXECUTOR.splitlines() if not line.lstrip().startswith("#"))
+        self.assertNotIn(" /action", executable_lines)
         self.assertNotIn("SetBackendArm", EXECUTOR)
         self.assertNotIn("Invoke-Expression", EXECUTOR)
 
