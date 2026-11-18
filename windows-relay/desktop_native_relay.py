@@ -216,7 +216,7 @@ def get_status() -> dict:
     }
 
 
-def read_scan() -> list[tuple[str, str]]:
+def read_scan(*, require_app: bool = False) -> list[tuple[str, str]]:
     if not SCANNER.exists():
         raise RuntimeError("NATIVE_UIA_SCANNER_MISSING")
     ps = shutil.which("powershell.exe")
@@ -229,6 +229,19 @@ def read_scan() -> list[tuple[str, str]]:
                           encoding="utf-8", errors="replace", timeout=25)
     if proc.returncode:
         raise RuntimeError("UIA_SCANNER_EXIT_%s: %s" % (proc.returncode, proc.stderr[-300:]))
+    if require_app:
+        # At Windows sign-in the ChatGPT app/editor can start later than the
+        # engine. Never treat an absent app as an empty accepted baseline:
+        # old packets could otherwise be mistaken for newly issued commands.
+        report = set(proc.stdout.splitlines())
+        ready = "CHATGPT_APP_FOUND=True" in report
+        document_rows = [x for x in report if x.startswith("DOCUMENT_READS=")]
+        try:
+            documents = int(document_rows[0].partition("=")[2]) if len(document_rows) == 1 else 0
+        except ValueError:
+            documents = 0
+        if not ready or documents < 1:
+            raise RuntimeError("NATIVE_CHATGPT_APP_NOT_READY")
     items = []
     current_id = None
     for line in proc.stdout.splitlines():
@@ -459,14 +472,22 @@ def runner():
         note("CMD_PYTHON_POWERSHELL_BASE64=SUPPORTED")
         note("PERSISTENT_ARM=" + str(configuration()["armed"]).upper())
         status_update(pid=os.getpid(), phase="BASELINING")
-        # Don't execute commands that were already present before startup.
-        baseline = {aid for aid, _ in read_scan()}
-        note("NATIVE_BASELINE_COMMANDS_SUPPRESSED=" + str(len(baseline)))
-        seen = set(baseline)
+        # Keep the singleton alive at sign-in even if ChatGPT starts later.
+        # Establish the first baseline only after its UIA document is ready.
+        seen = set()
+        baseline_ready = False
         while not configuration()["off"]:
             runner_stage = "SCANNING_CHATGPT_APP"
             try:
-                candidates = read_scan()
+                candidates = read_scan(require_app=True)
+                if not baseline_ready:
+                    seen.update(aid for aid, _ in candidates)
+                    baseline_ready = True
+                    note("NATIVE_BASELINE_COMMANDS_SUPPRESSED=" + str(len(candidates)))
+                    status_update(pid=os.getpid(), phase="BASELINED",
+                                  runner_error_type=None, runner_error_stage=None)
+                    time.sleep(1)
+                    continue
                 cfg = configuration()
                 if state.armed != cfg["armed"]:
                     state.set_armed(cfg["armed"])
@@ -505,6 +526,16 @@ def runner():
                                      else "IDLE")
                 status_update(pid=os.getpid(), phase=display_phase,
                               runner_error_type=None, runner_error_stage=None)
+            except RuntimeError as exc:
+                if str(exc) == "NATIVE_CHATGPT_APP_NOT_READY":
+                    baseline_ready = False
+                    status_update(pid=os.getpid(), phase="WAITING_FOR_CHATGPT_APP",
+                                  runner_error_type=None, runner_error_stage=None)
+                else:
+                    note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
+                    status_update(pid=os.getpid(), phase="ERROR",
+                                  runner_error_type=type(exc).__name__,
+                                  runner_error_stage=runner_stage)
             except Exception as exc:
                 note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
                 status_update(pid=os.getpid(), phase="ERROR",
