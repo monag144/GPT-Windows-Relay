@@ -365,6 +365,47 @@ def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
     return path, marker
 
 
+def acknowledge_confirmed_receipt(aid: str, receipt: str):
+    """Reconcile an already received native result; never send or execute.
+
+    Require the operator to stop the singleton first.  This prevents a second
+    State instance racing against the live runner's in-memory journal.
+    Historical hold markers and saved result/outbox evidence are retained.
+    """
+    if runner_active() or not stop_requested():
+        raise RuntimeError("NATIVE_RECEIPT_ACK_REQUIRES_STOPPED_DISARMED_RUNNER")
+    if not wr.ID_RE.fullmatch(aid):
+        raise RuntimeError("NATIVE_RECEIPT_ACK_ACTION_INVALID")
+    if not re.fullmatch(r"NATIVE-RECEIPT-[0-9a-f]{32}", receipt):
+        raise RuntimeError("NATIVE_RECEIPT_ACK_MARKER_INVALID")
+    path = OUTBOX / (wr.safe_result_filename(aid).removesuffix(".json") + ".txt")
+    if not path.is_file():
+        raise RuntimeError("NATIVE_RECEIPT_ACK_OUTBOX_MISSING")
+    try:
+        wire = path.read_text(encoding="utf-8")
+        if (len(wire) > 250000 or not wire.startswith(wr.RO)
+                or not wire.rstrip().endswith(wr.RC)):
+            raise ValueError("invalid frame")
+        payload = json.loads(wire[wire.index(wr.RO) + len(wr.RO):wire.rindex(wr.RC)])
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise RuntimeError("NATIVE_RECEIPT_ACK_OUTBOX_INVALID") from exc
+    if (not isinstance(payload, dict) or payload.get("id") != aid
+            or payload.get("native_delivery_receipt") != receipt):
+        raise RuntimeError("NATIVE_RECEIPT_ACK_BINDING_MISMATCH")
+    state = wr.State(STATE)
+    before = state.outbound_lookup(aid)
+    after = state.reconcile_outbound_receipt(aid, receipt)
+    if before.get("phase") != "SUBMITTED":
+        status_update(phase="OFF", last_action=aid, last_result="SUBMITTED",
+                      delivery_blocked=False, last_delivery_error=None,
+                      last_delivery_stage="OPERATOR_RECEIPT_RECONCILED")
+        note("NATIVE_RECEIPT_ACK=RECONCILED", "ID=" + aid,
+             "RECEIPT=" + receipt, "ATTEMPTS_UNCHANGED=" + str(after.get("attempt_count", 0)))
+    else:
+        note("NATIVE_RECEIPT_ACK=ALREADY_SUBMITTED", "ID=" + aid)
+    return after
+
+
 def deliver(state: wr.State, aid: str):
     if stop_requested() or delivery_held(aid):
         return
@@ -599,12 +640,19 @@ def main():
                         choices=("run", "arm", "stop", "off", "restart", "kill",
                                  "auto-send-on", "auto-send-off", "abort-delivery",
                                  "clear-pending-deliveries",
-                                 "hud-mode", "status", "check-running", "retry-delivery", "force-delivery"))
+                                 "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
+                                 "acknowledge-receipt"))
     parser.add_argument("action_id", nargs="?")
+    parser.add_argument("receipt", nargs="?")
 
     args = parser.parse_args()
     if args.command == "run":
         return runner()
+    if args.command == "acknowledge-receipt":
+        if not args.action_id or not args.receipt:
+            raise SystemExit("acknowledge-receipt requires action ID and confirmed receipt")
+        acknowledge_confirmed_receipt(args.action_id, args.receipt)
+        return 0
     if args.command == "retry-delivery":
         if not args.action_id:
             raise SystemExit("retry-delivery requires an action ID")
