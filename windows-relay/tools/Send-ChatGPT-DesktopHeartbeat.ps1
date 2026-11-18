@@ -355,7 +355,7 @@ try{
                 $node=$nodes.Item($i)
                 if([string]$node.Current.ControlType.ProgrammaticName -ne 'ControlType.Button' -or $node.Current.IsOffscreen){continue}
                 $name=[string]$node.Current.Name
-                if($name -match '(?i)^(send|send message|send prompt|submit)(\\b|$)'){
+                if($name -match '(?i)^(send|send message|send prompt|submit)(\b|$)'){
                     $matchingSend++
                     if($node.Current.IsEnabled){$enabledSend++}else{$disabledSend++}
                 }elseif([string]::IsNullOrEmpty($name)){
