@@ -39,6 +39,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("def native_auto_send(enabled):", HUD)
         self.assertIn("auto-send-on", NATIVE)
         self.assertIn("auto-send-off", NATIVE)
+        self.assertIn('if not cfg["auto_send"] and not delivery_force_clear_path(aid).is_file():', NATIVE)
         self.assertIn("FORCE COMMAND", HUD)
         self.assertIn("FORCE CLEAR", HUD)
         self.assertIn("CLEAR QUEUE", HUD)
