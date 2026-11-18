@@ -25,6 +25,7 @@ LAUNCHER = ROOT / "COMMAND-COURIER.cmd"
 NATIVE = "native-desktop"
 DISABLED = "disabled"
 ALLOWED = {NATIVE, DISABLED}
+IS_WINDOWS = os.name == "nt"
 
 
 def runtime_mode() -> str:
@@ -67,7 +68,7 @@ def start() -> int:
     if mode == DISABLED:
         print("COURIER_START=DISABLED_BY_PROFILE")
         return 0
-    if os.name != "nt":
+    if not IS_WINDOWS:
         raise RuntimeError("COURIER_DESKTOP_LAUNCH_REQUIRES_WINDOWS_INTERACTIVE_SESSION")
 
     # The original engine owns the native singleton and arming settings.
@@ -117,7 +118,7 @@ def status() -> int:
 
 def startup(action: str) -> int:
     """Only the current user's Startup shortcut is changed, on explicit request."""
-    if os.name != "nt":
+    if not IS_WINDOWS:
         raise RuntimeError("COURIER_STARTUP_REQUIRES_WINDOWS")
     powershell = shutil.which("powershell.exe")
     if not powershell:
