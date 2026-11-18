@@ -52,3 +52,36 @@ editable. The original HUD controls continue to work exactly as before.
 **Acceptance:** run the new coordinator test and existing full sweep before
 installing the sign-in shortcut. Live end-to-end message delivery is a separate
 acceptance gate. An old `PRE_SUBMIT_FAILED` result remains held.
+
+## HUD controls (2026-11-17)
+
+The existing original top-right `hud.py` now contains a compact
+**Start with Windows** checkbox. Checking it explicitly installs the owned
+current-user sign-in shortcut **and** selects the implemented `native-desktop`
+runtime; unchecking it removes the owned shortcut only. These operations run
+on a worker thread and the checkbox reflects the **verified** shortcut and
+profile state, not a speculative local setting. If an existing shortcut with
+the same name points elsewhere, the manager refuses to replace it and the
+gear settings display an error.
+
+The **⚙** button opens a settings panel *inside the original HUD* using its
+existing expanded geometry. It provides the same startup checkbox, the actual
+startup status, and a selector for the **next-launch** runtime:
+`native-desktop` or `disabled`. The browser backend and the five original
+control buttons are unchanged. No duplicate HUD or extra top-level window is
+created.
+
+The native engine starts at user sign-in independently of when the ChatGPT
+desktop app appears. Until a ChatGPT UI Automation document is detected, the
+engine displays `WAITING_FOR_CHATGPT_APP` while keeping its singleton lock.
+Once the document exists it suppresses already-visible packets as its
+baseline before processing any newly visible command. A missing app must
+**never** count as an empty baseline. This is an admission precaution, not
+proof of assistant authorship; the current native transport still depends on
+explicit operator trust in the visible desktop content.
+
+**The checkbox does not start the engine immediately.** It controls future
+interactive Windows sign-in launches. STOP and OFF remain authoritative.
+Disabling the runtime while the shortcut exists makes subsequent sign-in
+startup inert without deleting the shortcut. Actual command-result delivery
+remains a separate live acceptance gate.
