@@ -153,8 +153,13 @@ def release_failed_delivery(state: wr.State, aid: str, *, force_clear_composer: 
     if not hold.is_file():
         raise RuntimeError("NATIVE_DELIVERY_HOLD_NOT_FOUND")
     hold.unlink()
+    # A normal retry must never inherit a stale force-clear authorization from
+    # a crashed sender. Only the explicit FORCE COMMAND can set this marker.
+    force_marker = delivery_force_clear_path(aid)
     if force_clear_composer:
-        write_json(delivery_force_clear_path(aid), {"id": aid, "authorized_utc": utc()})
+        write_json(force_marker, {"id": aid, "authorized_utc": utc()})
+    else:
+        force_marker.unlink(missing_ok=True)
     status_update(delivery_blocked=False, last_delivery_error=None,
                   last_delivery_stage=("FORCE_RETRY_AUTHORIZED" if force_clear_composer else "RETRY_AUTHORIZED"))
     note(("NATIVE_DELIVERY_FORCE_AUTHORIZED=" if force_clear_composer else "NATIVE_DELIVERY_RETRY_AUTHORIZED=") + aid)
@@ -480,6 +485,10 @@ def runner():
                         if stop_requested():
                             break
                         if delivery_held(aid):
+                            continue
+                        # OFF means no automatic send; FORCE COMMAND remains
+                        # the only explicit per-action manual send exception.
+                        if not cfg["auto_send"] and not delivery_force_clear_path(aid).is_file():
                             continue
                         deliver(state, aid)
                 else:
