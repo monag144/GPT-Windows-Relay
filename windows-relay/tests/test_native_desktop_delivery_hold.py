@@ -112,6 +112,60 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         self.assertFalse(native.delivery_held(self.id))
         self.assertEqual(self.state.lookup(self.id)["status"], "OK")
 
+    def test_operator_confirmed_receipt_reconciles_without_retry_or_evidence_loss(self):
+        outbox, receipt = native.outbox_result(self.state, self.id)
+        self.assertTrue(outbox.is_file())
+        record = self.state.data["outbound_deliveries"][self.id]
+        record["phase"] = "PRE_SUBMIT_FAILED"
+        record["attempt_count"] = 46
+        self.state.save()
+        native.hold_failed_delivery(self.id, "CONVERSATION_DOCUMENT_FOUND", "PLACEHOLDER")
+        hold = native.delivery_hold_path(self.id)
+        original_hold = hold.read_bytes()
+        original_outbox = outbox.read_bytes()
+        native.update_control("off")
+        with mock.patch.object(native, "runner_active", return_value=False), \
+             mock.patch.object(native.subprocess, "run") as never_send:
+            acknowledged = native.acknowledge_confirmed_receipt(self.id, receipt)
+            again = native.acknowledge_confirmed_receipt(self.id, receipt)
+        never_send.assert_not_called()
+        self.assertEqual(acknowledged["phase"], "SUBMITTED")
+        self.assertEqual(again["phase"], "SUBMITTED")
+        self.assertEqual(acknowledged["attempt_count"], 46)
+        self.assertEqual(hold.read_bytes(), original_hold)
+        self.assertEqual(outbox.read_bytes(), original_outbox)
+        current = wr.State(native.STATE)
+        self.assertEqual(current.outbound_lookup(self.id)["phase"], "SUBMITTED")
+        self.assertEqual(current.lookup(self.id)["status"], "OK")
+        self.assertNotIn(self.id, current.list_claimable_outbound_ids())
+        self.assertEqual(native.get_status()["last_result"], "SUBMITTED")
+        self.assertFalse(native.get_status()["delivery_blocked"])
+
+    def test_receipt_mismatch_and_running_engine_fail_without_mutation(self):
+        _, receipt = native.outbox_result(self.state, self.id)
+        record = self.state.data["outbound_deliveries"][self.id]
+        record["phase"] = "PRE_SUBMIT_FAILED"
+        self.state.save()
+        native.update_control("off")
+        original = native.STATE.read_bytes()
+        different = "NATIVE-RECEIPT-" + ("0" * 32)
+        with mock.patch.object(native, "runner_active", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "BINDING_MISMATCH"):
+                native.acknowledge_confirmed_receipt(self.id, different)
+        self.assertEqual(original, native.STATE.read_bytes())
+        with mock.patch.object(native, "runner_active", return_value=True):
+            with self.assertRaisesRegex(RuntimeError, "STOPPED_DISARMED_RUNNER"):
+                native.acknowledge_confirmed_receipt(self.id, receipt)
+        self.assertEqual(original, native.STATE.read_bytes())
+
+    def test_ready_result_cannot_be_falsely_reconciled(self):
+        _, receipt = native.outbox_result(self.state, self.id)
+        native.update_control("off")
+        with mock.patch.object(native, "runner_active", return_value=False):
+            with self.assertRaisesRegex(wr.RelayError, "not reconcilable"):
+                native.acknowledge_confirmed_receipt(self.id, receipt)
+        self.assertEqual(wr.State(native.STATE).outbound_lookup(self.id)["phase"], "READY")
+
     def test_operator_abort_and_clear_queue_never_change_executed_result(self):
         native.hold_failed_delivery(self.id,"INPUT_BEGIN","TEST")
         native.abort_failed_delivery(self.state,self.id)
