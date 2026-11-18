@@ -8,7 +8,8 @@ param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [string]$NativeResultPath='',
       [string]$NativeActionId='',
       [string]$NativeReceiptMarker='',
-      [switch]$ForceClearComposer)
+      [switch]$ForceClearComposer,
+      [switch]$ProbeComposerOnly)
 $ErrorActionPreference='Stop'
 $canary=if($NativeResultPath){$NativeActionId}elseif($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
 $script:wire=''
@@ -327,6 +328,58 @@ try{
     }
     $window=Get-ChatGPTWindow
     Write-Output 'SENDER_STAGE=APP_WINDOW_FOUND'
+    if($ProbeComposerOnly){
+        # Read-only UIA diagnostics. Never focus, clear, type, click, or print
+        # draft text. Used to validate ChatGPT's actual accessibility controls.
+        $probe=Wait-ForComposer $window
+        $value=[string]$probe.pattern.Current.Value
+        $valueClass=if($value.Length -eq 0){'EMPTY'}elseif($value.Trim() -ceq 'Ask ChatGPT'){'PLACEHOLDER_CANDIDATE'}else{'NONEMPTY_REDACTED'}
+        $textClass='UNAVAILABLE'
+        $textLength=-1
+        $textPattern=$null
+        if($probe.node.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern,[ref]$textPattern)){
+            try{
+                $textValue=[string]$textPattern.DocumentRange.GetText(-1)
+                $textLength=$textValue.Length
+                $textClass=if($textLength -eq 0){'EMPTY'}elseif($textValue.Trim() -ceq 'Ask ChatGPT'){'PLACEHOLDER_CANDIDATE'}else{'NONEMPTY_REDACTED'}
+            }catch{$textClass='UNREADABLE'}
+        }
+        $matchingSend=0
+        $disabledSend=0
+        $enabledSend=0
+        $unnamedNearby=0
+        $composerRect=$probe.node.Current.BoundingRectangle
+        $nodes=Descendants $window
+        for($i=0;$i -lt $nodes.Count;$i++){
+            try{
+                $node=$nodes.Item($i)
+                if([string]$node.Current.ControlType.ProgrammaticName -ne 'ControlType.Button' -or $node.Current.IsOffscreen){continue}
+                $name=[string]$node.Current.Name
+                if($name -match '(?i)^(send|send message|send prompt|submit)(\\b|$)'){
+                    $matchingSend++
+                    if($node.Current.IsEnabled){$enabledSend++}else{$disabledSend++}
+                }elseif([string]::IsNullOrEmpty($name)){
+                    $rect=$node.Current.BoundingRectangle
+                    if($rect.Left -ge ($composerRect.Left-80) -and $rect.Right -le ($composerRect.Right+80) -and
+                       $rect.Top -ge ($composerRect.Top-80) -and $rect.Top -le ($composerRect.Bottom+80)){
+                        $unnamedNearby++
+                    }
+                }
+            }catch{}
+        }
+        Write-Output 'UIA_COMPOSER_PROBE=READ_ONLY_NO_INPUT'
+        Write-Output ('PROBE_VALUE_CLASS='+$valueClass)
+        Write-Output ('PROBE_VALUE_LENGTH='+$value.Length)
+        Write-Output ('PROBE_TEXT_CLASS='+$textClass)
+        Write-Output ('PROBE_TEXT_LENGTH='+$textLength)
+        Write-Output ('PROBE_HAS_KEYBOARD_FOCUS='+$probe.node.Current.HasKeyboardFocus)
+        Write-Output ('PROBE_MATCHING_SEND='+$matchingSend)
+        Write-Output ('PROBE_DISABLED_SEND='+$disabledSend)
+        Write-Output ('PROBE_ENABLED_SEND='+$enabledSend)
+        Write-Output ('PROBE_UNNAMED_BUTTONS_NEAR_COMPOSER='+$unnamedNearby)
+        Write-Output 'RESULT=COMPOSER_PROBE_COMPLETED_NO_SEND'
+        exit 0
+    }
     Assert-OperatorAllowsDesktopSend
     $doc=Get-TargetDocument $window $canary
     Write-Output 'SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND'
