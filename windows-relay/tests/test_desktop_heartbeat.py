@@ -57,6 +57,17 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT", SOURCE)
         self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
 
+    def test_sendinput_union_uses_native_win32_input_size(self):
+        # Win32 INPUT is 40 bytes on x64, 28 on x86.  A union containing
+        # KEYBDINPUT only is too small and SendInput returns ERROR 87.
+        self.assertIn("public struct MOUSEINPUT", SOURCE)
+        self.assertIn("[FieldOffset(0)] public MOUSEINPUT mi;", SOURCE)
+        self.assertIn("[FieldOffset(0)] public KEYBDINPUT ki;", SOURCE)
+        self.assertIn("Marshal.SizeOf(typeof(INPUT))", SOURCE)
+        self.assertIn("$requiredSize=if([IntPtr]::Size -eq 8){40}else{28}", SOURCE)
+        self.assertIn("SENDINPUT_STRUCT_SIZE_INVALID=", SOURCE)
+        self.assertIn("WIN32_ERROR=", SOURCE)
+
     def test_send_attempt_is_reserved_before_side_effect(self):
         mark = SOURCE.index("Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'")
         reserved = SOURCE.index("$script:submitted=$true", mark)
