@@ -41,9 +41,9 @@ class DesktopPowerShellSyntaxTests(unittest.TestCase):
     def test_sender_pinvoke_input_struct_matches_windows_abi(self):
         sender = (ROOT / "tools" / "Send-ChatGPT-DesktopHeartbeat.ps1").read_text(encoding="utf-8")
         # Compile only the inert C# struct declarations, not the sender.
-        csharp = sender.split("Add-Type -TypeDefinition @'\\n", 1)[1].split("\\n'@", 1)[0]
+        csharp = sender.split("Add-Type -TypeDefinition @'\n", 1)[1].split("\n'@", 1)[0]
         command = (
-            "Add-Type -TypeDefinition @'\\n" + csharp + "\\n'@\\n"
+            "Add-Type -TypeDefinition @'\n" + csharp + "\n'@\n"
             "$expected=if([IntPtr]::Size -eq 8){40}else{28}; "
             "$actual=[DesktopHeartbeatForeground]::NativeInputSize(); "
             "if($actual -ne $expected){Write-Error ('BAD_INPUT_SIZE='+$actual+'/'+$expected); exit 11}; "
