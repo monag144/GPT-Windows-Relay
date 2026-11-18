@@ -25,11 +25,22 @@ public static class DesktopHeartbeatForeground {
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out MousePoint pt);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint buttons, UIntPtr extraInfo);
+    // SendInput requires the *native* INPUT size (40 bytes on x64, 28 on x86).
+    // The union must include MOUSEINPUT: KEYBDINPUT alone makes cbSize too small
+    // and SendInput returns zero with ERROR_INVALID_PARAMETER (87).
     [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION U; }
-    [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
+    [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT {
+        public int dx; public int dy; public uint mouseData; public uint dwFlags;
+        public uint time; public UIntPtr dwExtraInfo;
+    }
     [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT {
         public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo;
     }
+    public static int NativeInputSize() { return Marshal.SizeOf(typeof(INPUT)); }
     [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
     const uint INPUT_KEYBOARD=1, KEYEVENTF_UNICODE=0x0004, KEYEVENTF_KEYUP=0x0002;
     public static uint TypeUnicode(string text) {
@@ -264,6 +275,10 @@ function Set-ComposerTextBySendInput($window,$composer,[string]$text){
     $composer.node.SetFocus()
     Start-Sleep -Milliseconds 120
     if(-not $composer.node.Current.HasKeyboardFocus){throw 'COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT'}
+    $nativeSize=[DesktopHeartbeatForeground]::NativeInputSize()
+    $requiredSize=if([IntPtr]::Size -eq 8){40}else{28}
+    if($nativeSize -ne $requiredSize){throw ('SENDINPUT_STRUCT_SIZE_INVALID='+$nativeSize+'/'+$requiredSize)}
+    Write-Output ('SENDINPUT_STRUCT_SIZE='+$nativeSize)
     $expected=[uint32]($text.Length*2)
     $sent=[DesktopHeartbeatForeground]::TypeUnicode($text)
     if($sent -ne $expected){
