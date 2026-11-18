@@ -451,6 +451,7 @@ def run_ui():
         except (OSError,ValueError,OverflowError,AttributeError,TypeError):
             pass
     expanded=False
+    settings_open=False
     root.geometry(f"{W}x{COMPACT_H}+{x}+{y}")
 
     panel=tk.Frame(root,bg=PANEL,highlightbackground=BORDER,highlightthickness=1,padx=12,pady=7)
@@ -587,17 +588,30 @@ def run_ui():
         details.configure(state="normal"); details.delete("1.0","end"); details.insert("1.0",text or "No relay instruction available.")
         details.configure(state="disabled")
 
-    def toggle_details():
-        nonlocal expanded
-        expanded=not expanded
+    def redraw_expanded_pane():
+        details_frame.pack_forget()
+        settings_frame.pack_forget()
         if expanded:
-            details_frame.pack(fill="both",expand=True,pady=(7,0))
-            toggle.configure(text="▴")
-            root.geometry(f"{W}x{EXPANDED_H}+{root.winfo_x()}+{root.winfo_y()}")
-        else:
-            details_frame.pack_forget(); toggle.configure(text="▾")
-            root.geometry(f"{W}x{COMPACT_H}+{root.winfo_x()}+{root.winfo_y()}")
+            active_frame=settings_frame if settings_open else details_frame
+            active_frame.pack(fill="both",expand=True,pady=(7,0))
+        toggle.configure(text="▴" if expanded else "▾")
+        gear_btn.configure(bg="#3c4043" if settings_open else PANEL,
+                           fg=FG if settings_open else MUTED)
+        root.geometry(f"{W}x{EXPANDED_H if expanded else COMPACT_H}+{root.winfo_x()}+{root.winfo_y()}")
+    def toggle_details():
+        nonlocal expanded,settings_open
+        expanded=not expanded
+        if not expanded:settings_open=False
+        redraw_expanded_pane()
+    def toggle_settings():
+        nonlocal expanded,settings_open
+        if not native_mode():return
+        settings_open=not settings_open
+        if settings_open:expanded=True
+        redraw_expanded_pane()
+        if settings_open:request_courier_status()
     toggle.configure(command=toggle_details)
+    gear_btn.configure(command=toggle_settings)
 
     lock_state={"enabled":None,"busy":False,"error":None}
     lock_results=queue.Queue()
