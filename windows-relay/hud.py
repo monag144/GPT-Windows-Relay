@@ -426,7 +426,7 @@ def run_ui():
     # Keep the HUD available to show kill/offline state; only the relay is stopped by its latch.
     mutex=acquire_mutex()
     if os.name=="nt" and mutex is None:return 0
-    root=tk.Tk(); root.title("GPT Relay HUD"); root.overrideredirect(True); root.resizable(False,False)
+    root=tk.Tk(); root.title("Command Courier"); root.overrideredirect(True); root.resizable(False,False)
     root.attributes("-topmost",True); root.configure(bg=BG)
     try:root.attributes("-alpha",0.97)
     except tk.TclError:pass
@@ -795,7 +795,7 @@ def run_ui():
     refresh(); root.mainloop(); return 0
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description="GPT Windows Relay HUD")
+    ap=argparse.ArgumentParser(description="Command Courier — original Windows HUD")
     ap.add_argument("--once",action="store_true",help="print one JSON snapshot and exit")
     ns=ap.parse_args(argv)
     if ns.once:
