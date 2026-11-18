@@ -152,6 +152,7 @@ def native_snapshot():
     if off: title='OFF'
     elif not live: title='OFFLINE'
     elif not armed: title='STOPPED'
+    elif phase=='WAITING_FOR_CHATGPT_APP': title='WAITING'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
     elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
     else: title='READY'
