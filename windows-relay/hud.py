@@ -629,6 +629,71 @@ def run_ui():
                 lock_results.put(("error",type(exc).__name__))
         threading.Thread(target=worker,daemon=True).start()
     owner_lock_btn.configure(command=change_owner_lock)
+
+    # Startup is owned by Command Courier. The checkbox is a verified control,
+    # not an optimistic flag: never show checked before confirming the link and
+    # selected runtime. Do not wait for PowerShell on the Tk event loop.
+    courier_results=queue.Queue()
+    courier_state={"known":False,"installed":False,"runtime":"native-desktop",
+                   "busy":False,"error":None,"queried":False}
+    def update_courier_settings_widgets():
+        enabled=bool(courier_state["known"] and courier_state["installed"]
+                     and courier_state["runtime"]=="native-desktop")
+        startup_var.set(enabled)
+        editable=bool(native_mode() and courier_state["known"] and not courier_state["busy"])
+        startup_check.configure(state="normal" if editable else "disabled")
+        settings_startup_check.configure(state="normal" if editable else "disabled")
+        selection_state="normal" if editable else "disabled"
+        runtime_native.configure(state=selection_state)
+        runtime_disabled.configure(state=selection_state)
+        apply_runtime_btn.configure(state=selection_state)
+        if courier_state["busy"]:
+            status_line="Windows startup: checking / applying…"
+        elif courier_state["error"]:
+            status_line="Windows startup: ERROR • "+courier_state["error"][:110]
+        elif not courier_state["known"]:
+            status_line="Windows startup: status unavailable"
+        elif courier_state["installed"] and courier_state["runtime"]=="native-desktop":
+            status_line="Windows startup: ON • HUD + engine at user sign-in"
+        elif courier_state["installed"]:
+            status_line="Windows startup: shortcut installed; runtime disabled"
+        else:
+            status_line="Windows startup: OFF • no Command Courier shortcut"
+        settings_status.configure(text=status_line,fg=BAD if courier_state["error"] else MUTED)
+        gear_btn.configure(fg=BAD if courier_state["error"] else
+                           (FG if settings_open else MUTED))
+    def start_courier_worker(action,value=None):
+        if courier_state["busy"]:return
+        courier_state["queried"]=True
+        courier_state["busy"]=True
+        courier_state["error"]=None
+        update_courier_settings_widgets()
+        def worker():
+            try:
+                if action=="status":details=courier_hud_startup_details()
+                else:details=courier_hud_apply(action,value)
+                courier_results.put(("ok",details,None))
+            except Exception as exc:
+                # Mutations can fail after changing only one of profile/link.
+                # Re-read actual state rather than silently presenting success.
+                try:details=courier_hud_startup_details()
+                except Exception:details=None
+                courier_results.put(("error",details,str(exc)[:180]))
+        threading.Thread(target=worker,daemon=True).start()
+    def request_courier_status():
+        start_courier_worker("status")
+    def on_startup_check():
+        wanted=bool(startup_var.get())
+        # Do not treat Tk's immediate visual toggle as confirmation.
+        update_courier_settings_widgets()
+        if native_mode():start_courier_worker("startup",wanted)
+    def apply_runtime_selection():
+        if native_mode():start_courier_worker("runtime",runtime_choice.get())
+    startup_check.configure(command=on_startup_check)
+    settings_startup_check.configure(command=on_startup_check)
+    apply_runtime_btn.configure(command=apply_runtime_selection)
+    update_courier_settings_widgets()
+
     native_view={"snap":None}
     def native_action_id():
         snap=native_view.get("snap") or {}
