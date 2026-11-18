@@ -43,6 +43,20 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE", SOURCE)
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT", SOURCE)
 
+    def test_force_clear_accepts_empty_placeholder_without_mutation(self):
+        # FORCE COMMAND previously required UIA Value.Length == 0 even when
+        # ChatGPT had already replaced an empty draft with "Ask ChatGPT".
+        start = SOURCE.index("function Clear-ComposerForForcedDelivery(")
+        end = SOURCE.index("# UIA ValuePattern may normalize", start)
+        function = SOURCE[start:end]
+        self.assertIn("if(Test-ComposableEmptyState $window $composer){return $composer}", function)
+        self.assertIn("if(Test-ComposableEmptyState $window $current){return $current}", function)
+        self.assertLess(function.index("if(Test-ComposableEmptyState $window $composer)"),
+                        function.index("$composer.pattern.SetValue('')"))
+        self.assertNotIn("Write-Output", function)
+        self.assertIn("FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT", SOURCE)
+        self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
+
     def test_send_attempt_is_reserved_before_side_effect(self):
         mark = SOURCE.index("Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'")
         reserved = SOURCE.index("$script:submitted=$true", mark)
