@@ -239,6 +239,60 @@ def native_delivery_control(command,action_id=None):
     flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
     subprocess.Popen(argv,cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+def courier_hud_cli(*args):
+    """Run the existing Command Courier controller without blocking the Tk UI.
+
+    Called by a worker thread only. Never controls the browser relay or uses
+    a second HUD. Startup mutations require explicit HUD checkbox interaction.
+    """
+    controller=Path(__file__).resolve().with_name("command_courier.py")
+    if not controller.is_file():
+        raise RuntimeError("Command Courier coordinator missing")
+    python=Path(sys.executable)
+    if python.name.lower()=="pythonw.exe":python=python.with_name("python.exe")
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    result=subprocess.run(
+        [str(python),"-B",str(controller),*args],
+        cwd=str(controller.parent),capture_output=True,text=True,
+        encoding="utf-8",errors="replace",timeout=40,check=False,
+        creationflags=flags,
+    )
+    if result.returncode:
+        raise RuntimeError((result.stderr or result.stdout or "Courier command failed").strip()[-220:])
+    return result.stdout
+
+def courier_hud_startup_details():
+    """Read actual owned shortcut and future-launch runtime, never infer from HUD."""
+    shortcut=courier_hud_cli("startup","status")
+    if "COURIER_USER_STARTUP=INSTALLED_OWNED" in shortcut:
+        installed=True
+    elif "COURIER_USER_STARTUP=NOT_INSTALLED" in shortcut:
+        installed=False
+    else:
+        raise RuntimeError("COURIER_STARTUP_STATUS_UNRECOGNIZED")
+    profile=courier_hud_cli("profile").strip()
+    prefix="COURIER_RUNTIME="
+    matched=[line[len(prefix):] for line in profile.splitlines() if line.startswith(prefix)]
+    if len(matched)!=1 or matched[0] not in ("native-desktop","disabled"):
+        raise RuntimeError("COURIER_RUNTIME_STATUS_UNRECOGNIZED")
+    return {"installed":installed,"runtime":matched[0]}
+
+def courier_hud_apply(action, value):
+    """Mutate login startup or next-launch runtime, then verify real state."""
+    if action=="startup":
+        if value:
+            # A working shortcut is installed first; the runtime is enabled
+            # only after the link's ownership/target was safely verified.
+            courier_hud_cli("startup","install")
+            courier_hud_cli("profile","native-desktop")
+        else:
+            courier_hud_cli("startup","remove")
+    elif action=="runtime" and value in ("native-desktop","disabled"):
+        courier_hud_cli("profile",value)
+    else:
+        raise ValueError("COURIER_HUD_SETTINGS_ACTION_INVALID")
+    return courier_hud_startup_details()
+
 def relay_control(action):
     if native_mode():
         native_control(action)
