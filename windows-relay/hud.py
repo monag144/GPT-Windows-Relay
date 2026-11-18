@@ -461,6 +461,10 @@ def run_ui():
     toggle=tk.Button(top,text="▾",font=("Segoe UI",9,"bold"),bg=PANEL,fg=MUTED,activebackground="#303134",
                      activeforeground=FG,bd=0,highlightthickness=0,padx=5,pady=0,cursor="hand2")
     toggle.pack(side="right")
+    gear_btn=tk.Button(top,text="⚙",font=("Segoe UI Symbol",12),bg=PANEL,fg=MUTED,
+                       activebackground="#303134",activeforeground=FG,bd=0,
+                       highlightthickness=0,padx=5,pady=0,cursor="hand2")
+    gear_btn.pack(side="right",padx=(0,4))
     # Separate optional protection from START / STOP / RESTART / OFF / KILL.
     owner_lock_btn=tk.Button(top,text="OWNER LOCK: ?",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,
                              activebackground="#5f6368",activeforeground=FG,bd=0,
@@ -499,6 +503,15 @@ def run_ui():
                             activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,
                             padx=8,pady=1,cursor="hand2")
     auto_send_btn.pack(side="right")
+    # The HUD checkbox controls a single linked sign-in entry point:
+    # Command Courier starts/reuses the native engine and existing HUD.
+    startup_var=tk.BooleanVar(value=False)
+    startup_check=tk.Checkbutton(footer,text="Start with Windows",variable=startup_var,
+                                 font=("Segoe UI",8,"bold"),bg=PANEL,fg=FG,
+                                 activebackground=PANEL,activeforeground=FG,
+                                 disabledforeground=MUTED,selectcolor=PANEL,
+                                 highlightthickness=0,padx=3,cursor="hand2",state="disabled")
+    startup_check.pack(side="left")
     # The second force button shares the status area vertically.  Keep this
     # frame above the later-packed labels so FORCE COMMAND remains visible.
     force_frame.lift()
@@ -508,6 +521,44 @@ def run_ui():
                     insertbackground=FG,relief="flat",padx=7,pady=6)
     details.pack(fill="both",expand=True)
     details.configure(state="disabled")
+
+    # Settings are embedded into the same HUD window; no extra top-level UI.
+    settings_frame=tk.Frame(panel,bg=PANEL)
+    tk.Label(settings_frame,text="Command Courier • Settings",font=("Segoe UI",10,"bold"),
+             bg=PANEL,fg=FG,anchor="w").pack(fill="x",pady=(3,3))
+    settings_row=tk.Frame(settings_frame,bg=PANEL)
+    settings_row.pack(fill="x")
+    tk.Label(settings_row,text="Runtime at next sign-in:",font=("Segoe UI",9),
+             bg=PANEL,fg=FG).pack(side="left",padx=(0,8))
+    runtime_choice=tk.StringVar(value="native-desktop")
+    runtime_native=tk.Radiobutton(settings_row,text="Native desktop",variable=runtime_choice,
+                                  value="native-desktop",bg=PANEL,fg=FG,
+                                  activebackground=PANEL,activeforeground=FG,
+                                  selectcolor=PANEL,highlightthickness=0)
+    runtime_native.pack(side="left")
+    runtime_disabled=tk.Radiobutton(settings_row,text="Disabled",variable=runtime_choice,
+                                    value="disabled",bg=PANEL,fg=FG,
+                                    activebackground=PANEL,activeforeground=FG,
+                                    selectcolor=PANEL,highlightthickness=0)
+    runtime_disabled.pack(side="left")
+    apply_runtime_btn=tk.Button(settings_frame,text="Apply runtime for next launch",
+                                 font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,
+                                 activebackground="#5f6368",activeforeground=FG,
+                                 bd=0,padx=8,pady=3,cursor="hand2")
+    apply_runtime_btn.pack(anchor="w",pady=(6,3))
+    settings_startup_check=tk.Checkbutton(settings_frame,text="Start HUD and engine with Windows sign-in",
+                                           variable=startup_var,font=("Segoe UI",9),
+                                           bg=PANEL,fg=FG,activebackground=PANEL,
+                                           activeforeground=FG,disabledforeground=MUTED,
+                                           selectcolor=PANEL,highlightthickness=0,
+                                           state="disabled")
+    settings_startup_check.pack(anchor="w")
+    settings_status=tk.Label(settings_frame,text="Startup status: checking…",
+                              font=("Segoe UI",8),bg=PANEL,fg=MUTED,
+                              justify="left",anchor="w",wraplength=W-35)
+    settings_status.pack(fill="x",pady=(5,2))
+    tk.Label(settings_frame,text="At user sign-in, not before login. STOP/OFF remain authoritative.",
+             font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w").pack(fill="x")
 
     drag={"x":0,"y":0}
     def down(e):drag["x"]=e.x_root-root.winfo_x(); drag["y"]=e.y_root-root.winfo_y()
