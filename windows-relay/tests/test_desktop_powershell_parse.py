@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENTRIES = (
     ROOT / "tools" / "Start-ChatGPT-DesktopBackend.ps1",
     ROOT / "tools" / "Send-ChatGPT-DesktopHeartbeat.ps1",
+    ROOT / "tools" / "Manage-Command-CourierStartup.ps1",
     ROOT / "tools" / "Run-ChatGPT-DesktopMonitor.ps1",
     ROOT / "tools" / "Get-ChatGPT-DesktopMonitorStatus.ps1",
     ROOT / "tools" / "Reconcile-OriginalDesktopHUD.ps1",
