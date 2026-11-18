@@ -48,7 +48,7 @@ def one_suite(name: str, cwd: Path) -> dict:
     summary = re.search(r"Ran (\d+) tests? in ([0-9.]+)s", combined)
     failures = re.findall(r"(?m)^(?:FAIL|ERROR): ([^\r\n]+)", combined)
     traceback_endings = re.findall(
-        r"(?m)^(?:AssertionError|AttributeError|TypeError|ValueError|"
+        r"(?m)^(?:AssertionError|AttributeError|TypeError|ValueError|IndexError|KeyError|"
         r"RuntimeError|FileNotFoundError|PermissionError|ModuleNotFoundError|"
         r"ImportError|SyntaxError|windows_relay\.RelayError):[^\r\n]*",
         combined,
