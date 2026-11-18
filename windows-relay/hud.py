@@ -736,10 +736,25 @@ def run_ui():
                 lock_state["error"]=None
             else:
                 lock_state["error"]=value
+        while not courier_results.empty():
+            kind,details,error=courier_results.get_nowait()
+            courier_state["busy"]=False
+            courier_state["error"]=error
+            if isinstance(details,dict):
+                courier_state["known"]=True
+                courier_state["installed"]=bool(details["installed"])
+                courier_state["runtime"]=details["runtime"]
+                runtime_choice.set(details["runtime"])
+            elif kind=="error":
+                courier_state["known"]=False
+            update_courier_settings_widgets()
+        if native_mode() and not courier_state["queried"]:
+            request_courier_status()
         snap=snapshot()
         if snap.get('native_mode'):
             native_view["snap"]=snap
             owner_lock_btn.configure(text='OWNER LOCK: N/A',state='disabled',bg='#3c4043')
+            gear_btn.configure(state='normal')
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
@@ -751,6 +766,9 @@ def run_ui():
             preview.configure(text=snap['preview']); set_details(snap['exact'])
             root.after(1000,refresh)
             return
+        gear_btn.configure(state='disabled')
+        startup_check.configure(state='disabled')
+        settings_startup_check.configure(state='disabled')
         auto_send_btn.configure(text='Auto Send: OFF',bg='#7f1d1d',activebackground='#991b1b',state='disabled')
         force_command_btn.configure(state='disabled'); force_abort_btn.configure(state='disabled'); clear_queue_check.configure(state='disabled')
         if isinstance(snap.get("conversation_lock_enabled"),bool):
