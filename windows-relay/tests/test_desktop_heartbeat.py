@@ -43,6 +43,22 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE", SOURCE)
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT", SOURCE)
 
+    def test_read_only_probe_never_types_or_clicks(self):
+        self.assertIn("[switch]$ProbeComposerOnly", SOURCE)
+        segment = SOURCE.split("if($ProbeComposerOnly){", 1)[1].split(
+            "    Assert-OperatorAllowsDesktopSend", 1
+        )[0]
+        for marker in ("UIA_COMPOSER_PROBE=READ_ONLY_NO_INPUT",
+                       "PROBE_VALUE_CLASS=", "PROBE_TEXT_CLASS=",
+                       "PROBE_DISABLED_SEND=", "PROBE_ENABLED_SEND=",
+                       "PROBE_UNNAMED_BUTTONS_NEAR_COMPOSER=",
+                       "RESULT=COMPOSER_PROBE_COMPLETED_NO_SEND"):
+            self.assertIn(marker, segment)
+        for operation in ("SetValue(", "SetFocus(", "mouse_event(",
+                          "SetCursorPos(", "SendInput(", "TypeUnicode("):
+            self.assertNotIn(operation, segment)
+        self.assertIn("exit 0", segment)
+
     def test_force_clear_accepts_empty_placeholder_without_mutation(self):
         # FORCE COMMAND previously required UIA Value.Length == 0 even when
         # ChatGPT had already replaced an empty draft with "Ask ChatGPT".
