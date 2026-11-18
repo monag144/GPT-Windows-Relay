@@ -48,7 +48,7 @@ class CourierCoordinatorTests(unittest.TestCase):
             courier.runtime_mode()
 
     def test_disabled_runtime_does_not_start_engine_or_hud(self):
-        with mock.patch.object(courier.os, "name", "nt"), mock.patch("builtins.print"), \\
+        with mock.patch.object(courier, "IS_WINDOWS", True), mock.patch("builtins.print"), \
              mock.patch.object(courier.subprocess, "run") as runner:
             self.assertEqual(courier.start(), 0)
             runner.assert_not_called()
@@ -57,13 +57,13 @@ class CourierCoordinatorTests(unittest.TestCase):
         self._patch("PROFILE", self.folder / "profile.json")
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
         fake = SimpleNamespace(returncode=0, stdout="ORIGINAL_HUD_RUNNING_COUNT=1\\n", stderr="")
-        with mock.patch.object(courier.os, "name", "nt"), \\
-             mock.patch("desktop_native_relay.select_original_hud") as select, \\
-             mock.patch("desktop_native_relay.configuration", return_value={"off": False}), \\
-             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \\
-             mock.patch("desktop_native_relay.runner_active", return_value=True), \\
-             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \\
-             mock.patch.object(courier.subprocess, "run", return_value=fake) as start_hud, \\
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch("desktop_native_relay.select_original_hud") as select, \
+             mock.patch("desktop_native_relay.configuration", return_value={"off": False}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \
+             mock.patch("desktop_native_relay.runner_active", return_value=True), \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=fake) as start_hud, \
              mock.patch("builtins.print"):
             self.assertEqual(courier.start(), 0)
             select.assert_called_once()
@@ -74,21 +74,21 @@ class CourierCoordinatorTests(unittest.TestCase):
     def test_native_off_retained_without_rearming(self):
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
         fake = SimpleNamespace(returncode=0, stdout="ORIGINAL_HUD_RUNNING_COUNT=1\\n", stderr="")
-        with mock.patch.object(courier.os, "name", "nt"), \\
-             mock.patch("desktop_native_relay.select_original_hud"), \\
-             mock.patch("desktop_native_relay.configuration", return_value={"off": True}), \\
-             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \\
-             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \\
-             mock.patch.object(courier.subprocess, "run", return_value=fake), \\
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch("desktop_native_relay.select_original_hud"), \
+             mock.patch("desktop_native_relay.configuration", return_value={"off": True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=fake), \
              mock.patch("builtins.print"):
             self.assertEqual(courier.start(), 0)
             engine.assert_not_called()
 
     def test_startup_install_is_explicit_and_only_calls_manager(self):
         fake = SimpleNamespace(returncode=0, stdout="COURIER_USER_STARTUP=INSTALLED_OWNED\\n", stderr="")
-        with mock.patch.object(courier.os, "name", "nt"), \\
-             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \\
-             mock.patch.object(courier.subprocess, "run", return_value=fake) as call, \\
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=fake) as call, \
              mock.patch("builtins.print"):
             self.assertEqual(courier.startup("install"), 0)
             cmd = call.call_args.args[0]
