@@ -483,12 +483,12 @@ def run_ui():
     # Keep the recovery actions compact and distinct: CLEAR sits above COMMAND,
     # while the queue-wide checkbox remains to the right of CLEAR.
     force_frame=tk.Frame(panel,bg=PANEL); force_frame.place(x=278,y=34,anchor="nw")
-    force_abort_btn=tk.Button(force_frame,text="FORCE CLEAR",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_abort_btn=tk.Button(force_frame,text="ABORT SEND",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_abort_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
     clear_queue_var=tk.BooleanVar(value=False)
     clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",8,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=7,cursor="hand2")
     clear_queue_check.grid(row=0,column=1,sticky="w",padx=(7,0))
-    force_command_btn=tk.Button(force_frame,text="FORCE COMMAND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_command_btn=tk.Button(force_frame,text="FORCE RESEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_command_btn.grid(row=1,column=0,sticky="w")
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
@@ -702,9 +702,17 @@ def run_ui():
     def show_force_command():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return
-        # One operator-authorized saved-result retry; never re-executes CMD.
+        # This resubmits a saved result, not a CMD command.  A prior receipt
+        # may have reached the conversation even when the journal says failed.
+        if not messagebox.askyesno("Force Resend",
+            "Resend saved result " + aid + "?\n\n"
+            "This can duplicate a result already received by ChatGPT and may "
+            "overwrite an existing ChatGPT draft. Reconcile a known receipt "
+            "instead. Continue only if the result was not delivered.",
+            parent=root):
+            return
         if not focus_chatgpt_for_forced_delivery():
-            messagebox.showerror("Force Command","ChatGPT could not be brought to the foreground. No delivery retry was started.",parent=root)
+            messagebox.showerror("Force Resend","ChatGPT could not be brought to the foreground. No delivery retry was started.",parent=root)
             return
         # Let Windows finish foreground activation before the child sender
         # performs its independent foreground verification.
@@ -712,7 +720,7 @@ def run_ui():
     def force_abort():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return
-        if messagebox.askyesno("Force Abort","Abort unsent delivery "+aid+"?\nThe saved result remains, but this delivery will not retry.",parent=root):
+        if messagebox.askyesno("Abort Send","Abort unsent delivery "+aid+"?\nThe saved result remains, but this delivery will not retry.",parent=root):
             native_delivery_control("abort-delivery",aid)
     def clear_pending_queue():
         if not clear_queue_var.get():return
