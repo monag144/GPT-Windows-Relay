@@ -198,6 +198,38 @@ def native_auto_send(enabled):
     subprocess.Popen([str(python),'-B',str(Path(native.__file__).resolve()),action],
                      cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+
+def focus_chatgpt_for_forced_delivery():
+    """Hand the foreground from the clicked HUD directly to ChatGPT.
+
+    The sender itself is a child process and Windows may reject its focus
+    request.  This function runs in the foreground HUD click handler instead.
+    It neither restores, resizes nor moves the ChatGPT window.
+    """
+    if os.name != "nt": return False
+    user32=ctypes.windll.user32; kernel32=ctypes.windll.kernel32
+    QueryFullProcessImageNameW=kernel32.QueryFullProcessImageNameW
+    QueryFullProcessImageNameW.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_wchar_p,ctypes.POINTER(ctypes.c_uint)]
+    QueryFullProcessImageNameW.restype=ctypes.c_bool
+    kernel32.OpenProcess.argtypes=[ctypes.c_uint,ctypes.c_bool,ctypes.c_uint]
+    kernel32.OpenProcess.restype=ctypes.c_void_p
+    candidates=[]
+    CALLBACK=ctypes.WINFUNCTYPE(ctypes.c_bool,ctypes.c_void_p,ctypes.c_void_p)
+    def visit(hwnd,_):
+        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd): return True
+        pid=ctypes.c_uint(); user32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+        handle=kernel32.OpenProcess(0x1000,False,pid.value)  # QUERY_LIMITED_INFORMATION
+        if not handle: return True
+        try:
+            size=ctypes.c_uint(32768); image=ctypes.create_unicode_buffer(size.value)
+            if QueryFullProcessImageNameW(handle,0,image,ctypes.byref(size)) and Path(image.value).name.lower()=="chatgpt.exe":
+                candidates.append(hwnd)
+        finally:
+            kernel32.CloseHandle(handle)
+        return True
+    user32.EnumWindows(CALLBACK(visit),None)
+    return bool(candidates and user32.SetForegroundWindow(candidates[0]))
+
 def native_delivery_control(command,action_id=None):
     import desktop_native_relay as native
     python=Path(sys.executable)
@@ -388,14 +420,16 @@ def run_ui():
     restart_btn=tk.Button(controls,text="RESTART",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("restart")); restart_btn.pack(side="left",padx=3)
     off_btn=tk.Button(controls,text="OFF",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("off")); off_btn.pack(side="left",padx=3)
     kill_btn=tk.Button(controls,text="KILL",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("kill")); kill_btn.pack(side="left",padx=3)
+    # Keep the recovery actions compact and distinct: CLEAR sits above COMMAND,
+    # while the queue-wide checkbox remains to the right of CLEAR.
     force_frame=tk.Frame(panel,bg=PANEL); force_frame.place(x=278,y=34,anchor="nw")
-    force_abort_btn=tk.Button(force_frame,text="FORCE CLEAR",font=("Segoe UI",7,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
+    force_abort_btn=tk.Button(force_frame,text="FORCE CLEAR",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_abort_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
-    force_command_btn=tk.Button(force_frame,text="FORCE COMMAND",font=("Segoe UI",7,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=6,pady=1,cursor="hand2")
-    force_command_btn.grid(row=1,column=0,sticky="w")
     clear_queue_var=tk.BooleanVar(value=False)
-    clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",7,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=4,cursor="hand2")
-    clear_queue_check.grid(row=0,column=1,sticky="w")
+    clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",8,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=7,cursor="hand2")
+    clear_queue_check.grid(row=0,column=1,sticky="w",padx=(7,0))
+    force_command_btn=tk.Button(force_frame,text="FORCE COMMAND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_command_btn.grid(row=1,column=0,sticky="w")
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
@@ -411,8 +445,8 @@ def run_ui():
                             activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,
                             padx=8,pady=1,cursor="hand2")
     auto_send_btn.pack(side="right")
-    # The status labels are packed after this frame; keep both force controls
-    # visibly above them without changing the original compact HUD geometry.
+    # The second force button shares the status area vertically.  Keep this
+    # frame above the later-packed labels so FORCE COMMAND remains visible.
     force_frame.lift()
 
     details_frame=tk.Frame(panel,bg=PANEL)
@@ -483,7 +517,13 @@ def run_ui():
     def show_force_command():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return
-        messagebox.showinfo("Force Command","Manual only; this HUD will not submit to ChatGPT.\n\nDESKTOP-NATIVE-CONTROL.cmd retry-delivery "+aid,parent=root)
+        # One operator-authorized saved-result retry; never re-executes CMD.
+        if not focus_chatgpt_for_forced_delivery():
+            messagebox.showerror("Force Command","ChatGPT could not be brought to the foreground. No delivery retry was started.",parent=root)
+            return
+        # Let Windows finish foreground activation before the child sender
+        # performs its independent foreground verification.
+        root.after(180,lambda:native_delivery_control("force-delivery",aid))
     def force_abort():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return

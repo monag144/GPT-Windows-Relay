@@ -44,6 +44,10 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("CLEAR QUEUE", HUD)
         self.assertIn("abort-delivery", NATIVE)
         self.assertIn("clear-pending-deliveries", NATIVE)
+        self.assertIn("force-delivery", NATIVE)
+        self.assertIn('native_delivery_control("force-delivery",aid)', HUD)
+        self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
+        self.assertIn("ChatGPT could not be brought to the foreground", HUD)
 
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)

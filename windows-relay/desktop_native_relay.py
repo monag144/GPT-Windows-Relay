@@ -132,6 +132,10 @@ def delivery_held(aid: str) -> bool:
     return delivery_hold_path(aid).is_file()
 
 
+def delivery_force_clear_path(aid: str) -> Path:
+    return DELIVERY_HOLDS / (wr.safe_result_filename(aid) + ".force-clear")
+
+
 def hold_failed_delivery(aid: str, stage: str, reason: str):
     # One durable hold per action, without stdout, command bodies or credentials.
     path = delivery_hold_path(aid)
@@ -139,7 +143,7 @@ def hold_failed_delivery(aid: str, stage: str, reason: str):
                       "held_utc": utc(), "retry_requires_operator": True})
 
 
-def release_failed_delivery(state: wr.State, aid: str):
+def release_failed_delivery(state: wr.State, aid: str, *, force_clear_composer: bool = False):
     if not wr.ID_RE.fullmatch(aid):
         raise ValueError("invalid action ID")
     record = state.outbound_lookup(aid)
@@ -149,9 +153,11 @@ def release_failed_delivery(state: wr.State, aid: str):
     if not hold.is_file():
         raise RuntimeError("NATIVE_DELIVERY_HOLD_NOT_FOUND")
     hold.unlink()
+    if force_clear_composer:
+        write_json(delivery_force_clear_path(aid), {"id": aid, "authorized_utc": utc()})
     status_update(delivery_blocked=False, last_delivery_error=None,
-                  last_delivery_stage="RETRY_AUTHORIZED")
-    note("NATIVE_DELIVERY_RETRY_AUTHORIZED=" + aid)
+                  last_delivery_stage=("FORCE_RETRY_AUTHORIZED" if force_clear_composer else "RETRY_AUTHORIZED"))
+    note(("NATIVE_DELIVERY_FORCE_AUTHORIZED=" if force_clear_composer else "NATIVE_DELIVERY_RETRY_AUTHORIZED=") + aid)
 
 
 def abort_failed_delivery(state: wr.State, aid: str):
@@ -160,6 +166,8 @@ def abort_failed_delivery(state: wr.State, aid: str):
     state.abort_outbound_delivery(aid)
     hold = delivery_hold_path(aid)
     if hold.exists(): hold.unlink()
+    force = delivery_force_clear_path(aid)
+    if force.exists(): force.unlink()
     status_update(phase="IDLE", last_action=aid, last_result="ABORTED",
                   delivery_blocked=False, last_delivery_error=None,
                   last_delivery_stage="OPERATOR_ABORTED")
@@ -171,6 +179,8 @@ def clear_pending_deliveries(state: wr.State):
     for aid in removed:
         hold = delivery_hold_path(aid)
         if hold.exists(): hold.unlink()
+        force = delivery_force_clear_path(aid)
+        if force.exists(): force.unlink()
     status_update(phase="IDLE", delivery_blocked=False, last_delivery_error=None,
                   last_delivery_stage="QUEUE_CLEARED", last_result="QUEUE_CLEARED")
     note("NATIVE_PENDING_DELIVERY_QUEUE_CLEARED=" + str(len(removed)))
@@ -351,9 +361,12 @@ def deliver(state: wr.State, aid: str):
     note("NATIVE_DELIVERY_ATTEMPT=" + aid)
     status_update(phase="DELIVERING", last_action=aid)
     ps = shutil.which("powershell.exe")
+    force_clear_composer = delivery_force_clear_path(aid).is_file()
     cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
            "-File", str(SENDER), "-NativeResultPath", str(path),
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
+    if force_clear_composer:
+        cmd.append("-ForceClearComposer")
     phase = "SUBMIT_UNCERTAIN"
     error_code = "SENDER_NO_RECEIPT"
     stage = "STARTING"
@@ -392,6 +405,9 @@ def deliver(state: wr.State, aid: str):
     except (OSError, subprocess.TimeoutExpired) as exc:
         error_code = type(exc).__name__
         note("NATIVE_DELIVERY_EXCEPTION=" + error_code)
+    finally:
+        if force_clear_composer:
+            delivery_force_clear_path(aid).unlink(missing_ok=True)
     # Persist the durable outbound phase before any native-only hold update.
     state.finish_outbound_delivery(aid, phase)
     if phase == "PRE_SUBMIT_FAILED":
@@ -543,7 +559,7 @@ def main():
                         choices=("run", "arm", "stop", "off", "restart", "kill",
                                  "auto-send-on", "auto-send-off", "abort-delivery",
                                  "clear-pending-deliveries",
-                                 "hud-mode", "status", "check-running", "retry-delivery"))
+                                 "hud-mode", "status", "check-running", "retry-delivery", "force-delivery"))
     parser.add_argument("action_id", nargs="?")
 
     args = parser.parse_args()
@@ -553,6 +569,11 @@ def main():
         if not args.action_id:
             raise SystemExit("retry-delivery requires an action ID")
         release_failed_delivery(wr.State(STATE), args.action_id)
+        return 0
+    if args.command == "force-delivery":
+        if not args.action_id:
+            raise SystemExit("force-delivery requires an action ID")
+        release_failed_delivery(wr.State(STATE), args.action_id, force_clear_composer=True)
         return 0
     if args.command == "abort-delivery":
         if not args.action_id: raise SystemExit("abort-delivery requires an action ID")

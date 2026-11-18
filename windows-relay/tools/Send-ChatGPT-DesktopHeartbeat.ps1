@@ -7,7 +7,8 @@ param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [ValidateSet(0,1)][int]$SmokeExitCode=1,
       [string]$NativeResultPath='',
       [string]$NativeActionId='',
-      [string]$NativeReceiptMarker='')
+      [string]$NativeReceiptMarker='',
+      [switch]$ForceClearComposer)
 $ErrorActionPreference='Stop'
 $canary=if($NativeResultPath){$NativeActionId}elseif($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
 $script:wire=''
@@ -211,6 +212,23 @@ function Assert-ComposableEmptyState($window,$composer){
     }
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
+function Clear-ComposerForForcedDelivery($window,$composer){
+    # Reached only through the HUD's explicit FORCE COMMAND authorization.
+    # It replaces the editor contents with the current saved native result;
+    # no source CMD is ever re-executed here.
+    Assert-ChatGPTForeground $window
+    if($composer.pattern.Current.IsReadOnly){throw 'COMPOSER_READ_ONLY_REFUSE_FORCE_CLEAR'}
+    $composer.pattern.SetValue('')
+    for($i=0;$i -lt 10;$i++){
+        Start-Sleep -Milliseconds 100
+        $current=Get-Composer $window
+        if(([string]$current.pattern.Current.Value).Length -eq 0){
+            Write-Output 'COMPOSER_FORCED_CLEAR=COMPLETED'
+            return $current
+        }
+    }
+    throw 'COMPOSER_FORCE_CLEAR_NOT_CONFIRMED'
+}
 # UIA ValuePattern may normalize CRLF to LF. Preserve all text bytes except
 # newline representation when proving the editor still contains OUR draft.
 function Test-OwnHeartbeatDraft([string]$value){
@@ -242,7 +260,10 @@ function Set-ComposerTextBySendInput($window,$composer,[string]$text){
     if(-not $composer.node.Current.HasKeyboardFocus){throw 'COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT'}
     $expected=[uint32]($text.Length*2)
     $sent=[DesktopHeartbeatForeground]::TypeUnicode($text)
-    if($sent -ne $expected){throw ('SENDINPUT_PARTIAL_INPUT='+$sent+'/'+$expected)}
+    if($sent -ne $expected){
+        $win32=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw ('SENDINPUT_PARTIAL_INPUT='+$sent+'/'+$expected+';WIN32_ERROR='+$win32)
+    }
     Write-Output ('COMPOSER_SENDINPUT_EVENTS='+$sent)
 }
 function Try-ClearOwnDraft($window){
@@ -289,6 +310,10 @@ try{
     $doc=Get-TargetDocument $window $canary
     Write-Output 'SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND'
     $composer=Wait-ForComposer $window
+    if($ForceClearComposer){
+        $composer=Clear-ComposerForForcedDelivery $window $composer
+        Write-Output 'SENDER_STAGE=COMPOSER_FORCE_CLEARED'
+    }
     Assert-ComposableEmptyState $window $composer
     Write-Output 'SENDER_STAGE=COMPOSER_DISCOVERY_READY'
     Write-Output 'SENDER_STAGE=COMPOSER_EMPTY_VERIFIED'

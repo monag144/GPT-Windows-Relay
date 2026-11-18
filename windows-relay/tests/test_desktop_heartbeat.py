@@ -14,6 +14,8 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("function Wait-ForComposer",SOURCE)
         self.assertIn("COMPOSER_DISCOVERY_TIMEOUT=",SOURCE)
         self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT",SOURCE)
+        self.assertIn("[switch]$ForceClearComposer", SOURCE)
+        self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
 
     def test_ui_gates_before_send(self):
         self.assertIn("Watch-ChatGPT-ActionCandidates.ps1",SOURCE)
