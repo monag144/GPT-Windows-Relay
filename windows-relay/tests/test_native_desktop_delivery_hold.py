@@ -100,6 +100,18 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"NOT_SAFELY_RETRYABLE"):
             native.release_failed_delivery(self.state,self.id)
 
+    def test_plain_retry_cannot_inherit_stale_force_clear_authorization(self):
+        delivery = self.state.data["outbound_deliveries"][self.id]
+        delivery["phase"] = "PRE_SUBMIT_FAILED"
+        self.state.save()
+        native.hold_failed_delivery(self.id, "STARTING", "TEST")
+        marker = native.delivery_force_clear_path(self.id)
+        marker.write_text('{"authorized_utc":"OLD"}', encoding="utf-8")
+        native.release_failed_delivery(self.state, self.id)
+        self.assertFalse(marker.exists())
+        self.assertFalse(native.delivery_held(self.id))
+        self.assertEqual(self.state.lookup(self.id)["status"], "OK")
+
     def test_operator_abort_and_clear_queue_never_change_executed_result(self):
         native.hold_failed_delivery(self.id,"INPUT_BEGIN","TEST")
         native.abort_failed_delivery(self.state,self.id)
