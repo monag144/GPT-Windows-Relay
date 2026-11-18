@@ -189,6 +189,17 @@ function Test-DisabledSendControlPresent($window){
     }
     return ($found -ge 1)
 }
+# A UIA Value can contain the visible placeholder instead of actual input.
+# Keep the state check pure so calls from a function returning a composer do
+# not accidentally return diagnostic strings as part of that composer.
+function Test-ComposableEmptyState($window,$composer){
+    $value=[string]$composer.pattern.Current.Value
+    if($value.Length -eq 0){return $true}
+    $trimmed=$value.Trim()
+    $looksLikeObservedPlaceholder=($trimmed -ceq 'Ask ChatGPT' -and $value.Length -le 16)
+    if(-not $looksLikeObservedPlaceholder){return $false}
+    return (Test-DisabledSendControlPresent $window)
+}
 function Assert-ComposableEmptyState($window,$composer){
     $value=[string]$composer.pattern.Current.Value
     if($value.Length -eq 0){
@@ -203,9 +214,6 @@ function Assert-ComposableEmptyState($window,$composer){
     if(-not (Test-DisabledSendControlPresent $window)){
         throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
     }
-    # A focused editor is normal when the operator opens the target chat.  The
-    # exact known placeholder plus an independently disabled Send control is a
-    # stronger empty-state proof than focus alone; any other text still refuses.
     if($composer.node.Current.HasKeyboardFocus){
         Write-Output 'COMPOSER_BASELINE=FOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
         return
@@ -213,19 +221,17 @@ function Assert-ComposableEmptyState($window,$composer){
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
 function Clear-ComposerForForcedDelivery($window,$composer){
-    # Reached only through the HUD's explicit FORCE COMMAND authorization.
-    # It replaces the editor contents with the current saved native result;
-    # no source CMD is ever re-executed here.
+    # FORCE COMMAND applies only to an operator-released saved native result.
+    # An empty editor or verified placeholder needs NO mutation at all.
+    # A real draft may be cleared only under the explicit force authorization.
+    if(Test-ComposableEmptyState $window $composer){return $composer}
     Assert-ChatGPTForeground $window
     if($composer.pattern.Current.IsReadOnly){throw 'COMPOSER_READ_ONLY_REFUSE_FORCE_CLEAR'}
     $composer.pattern.SetValue('')
     for($i=0;$i -lt 10;$i++){
         Start-Sleep -Milliseconds 100
         $current=Get-Composer $window
-        if(([string]$current.pattern.Current.Value).Length -eq 0){
-            Write-Output 'COMPOSER_FORCED_CLEAR=COMPLETED'
-            return $current
-        }
+        if(Test-ComposableEmptyState $window $current){return $current}
     }
     throw 'COMPOSER_FORCE_CLEAR_NOT_CONFIRMED'
 }
@@ -311,7 +317,10 @@ try{
     Write-Output 'SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND'
     $composer=Wait-ForComposer $window
     if($ForceClearComposer){
+        if(-not $NativeResultPath){throw 'FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT'}
         $composer=Clear-ComposerForForcedDelivery $window $composer
+        # Return one composer object, never a mix of diagnostics and UIA nodes.
+        Write-Output 'COMPOSER_FORCED_CLEAR=COMPLETED'
         Write-Output 'SENDER_STAGE=COMPOSER_FORCE_CLEARED'
     }
     Assert-ComposableEmptyState $window $composer
