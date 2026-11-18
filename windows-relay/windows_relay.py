@@ -339,6 +339,38 @@ class State:
             self._mutate_and_save(mutate)
             return finished
 
+    def reconcile_outbound_receipt(self,aid:str,receipt:str):
+        """Record an operator-confirmed ChatGPT receipt without resending.
+
+        Callers must verify the saved native outbox frame/receipt and ensure
+        the native runner is stopped before opening State.  Never create a
+        delivery or alter execution, attempt_count, or saved result paths.
+        """
+        if not ID_RE.fullmatch(aid): raise RelayError('invalid reconciliation action ID')
+        if not isinstance(receipt,str) or not re.fullmatch(r'NATIVE-RECEIPT-[0-9a-f]{32}',receipt):
+            raise RelayError('invalid native reconciliation receipt')
+        with self.lock:
+            delivery=self.data.get('outbound_deliveries',{}).get(aid)
+            processed=self.data.get('processed',{}).get(aid)
+            if not isinstance(delivery,dict): raise RelayError('outbound delivery unavailable')
+            if not isinstance(processed,dict) or not processed.get('saved_result_path'):
+                raise RelayError('saved execution result required for reconciliation')
+            if delivery.get('phase')=='SUBMITTED':
+                previous=delivery.get('reconciled_receipt')
+                if previous and previous!=receipt: raise RelayError('conflicting reconciliation receipt')
+                return copy.deepcopy(delivery)
+            if delivery.get('phase') not in {'PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN'}:
+                raise RelayError('outbound delivery phase not reconcilable')
+            def mutate():
+                timestamp=now()
+                delivery['phase']='SUBMITTED'
+                delivery['updated_at']=timestamp
+                delivery['reconciled_at']=timestamp
+                delivery['reconciled_receipt']=receipt
+                delivery['reconciliation_evidence']='OPERATOR_CONFIRMED_CHATGPT_CONVERSATION_RECEIPT'
+            self._mutate_and_save(mutate)
+            return copy.deepcopy(delivery)
+
     def abort_outbound_delivery(self,aid:str):
         """Terminally cancel a pre-submit delivery without touching execution."""
         with self.lock:
