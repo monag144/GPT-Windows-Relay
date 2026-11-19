@@ -176,6 +176,7 @@ def native_snapshot():
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
         'auto_send':bool(report.get('auto_send')),
+        'native_armed':armed, 'native_off':off,
     }
 
 def native_control(action):
@@ -501,9 +502,15 @@ def run_ui():
     preview=tk.Label(panel,text="…",font=("Consolas",8),bg=PANEL,fg=MUTED,anchor="w")
     preview.pack(fill="x")
     footer=tk.Frame(panel,bg=PANEL); footer.pack(fill="x",pady=(2,0))
+    # GO is the primary launcher for the selected Command Courier runtime.
+    # Place it first to keep it on the far right of the existing compact footer.
+    go_btn=tk.Button(footer,text="GO",font=("Segoe UI",11,"bold"),bg="#188038",fg=FG,
+                     activebackground="#137333",activeforeground=FG,bd=0,highlightthickness=0,
+                     padx=17,pady=2,cursor="hand2")
+    go_btn.pack(side="right",padx=(5,0))
     auto_send_btn=tk.Button(footer,text="Auto Send: OFF",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,
                             activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,
-                            padx=8,pady=1,cursor="hand2")
+                            padx=6,pady=1,cursor="hand2")
     auto_send_btn.pack(side="right")
     # The HUD checkbox controls a single linked sign-in entry point:
     # Command Courier starts/reuses the native engine and existing HUD.
@@ -695,6 +702,27 @@ def run_ui():
     apply_runtime_btn.configure(command=apply_runtime_selection)
     update_courier_settings_widgets()
 
+    # The legacy consumer/GO.bat remains a separate browser-specific client.
+    # This HUD GO calls the Command Courier runtime adapter, never the browser
+    # backend, sender, or the original HUD reconciler (which could kill us).
+    go_results=queue.Queue()
+    go_state={"busy":False,"error":None}
+    def on_go():
+        if not native_mode() or go_state["busy"]:return
+        go_state["busy"]=True
+        go_state["error"]=None
+        go_btn.configure(text="GO…",state="disabled")
+        def worker():
+            try:
+                output=courier_hud_cli("go")
+                if "COURIER_GO=NATIVE_RUNTIME_READY" not in output:
+                    raise RuntimeError("Command Courier runtime was not confirmed")
+                go_results.put(("ok",None))
+            except Exception as exc:
+                go_results.put(("error",str(exc)[-220:]))
+        threading.Thread(target=worker,name="command-courier-go",daemon=True).start()
+    go_btn.configure(command=on_go)
+
     native_view={"snap":None}
     def native_action_id():
         snap=native_view.get("snap") or {}
@@ -757,6 +785,12 @@ def run_ui():
             elif kind=="error":
                 courier_state["known"]=False
             update_courier_settings_widgets()
+        while not go_results.empty():
+            kind,error=go_results.get_nowait()
+            go_state["busy"]=False
+            go_state["error"]=error if kind=="error" else None
+            if kind=="error":
+                messagebox.showerror("Command Courier GO",error,parent=root)
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
         snap=snapshot()
@@ -764,6 +798,14 @@ def run_ui():
             native_view["snap"]=snap
             owner_lock_btn.configure(text='OWNER LOCK: N/A',state='disabled',bg='#3c4043')
             gear_btn.configure(state='normal')
+            armed=bool(snap.get('native_armed'))
+            start_btn.configure(text="ARMED" if armed else "ARM",
+                                state="disabled" if armed else "normal",
+                                bg="#188038" if armed else "#174ea6",
+                                activebackground="#137333" if armed else "#1967d2")
+            go_btn.configure(text="GO…" if go_state["busy"] else "GO",
+                             state="disabled" if go_state["busy"] else "normal",
+                             bg="#188038",activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
@@ -776,6 +818,9 @@ def run_ui():
             root.after(1000,refresh)
             return
         gear_btn.configure(state='disabled')
+        start_btn.configure(text="START",state="normal",bg="#174ea6",
+                            activebackground="#1967d2")
+        go_btn.configure(text="GO",state="disabled",bg="#3c4043")
         startup_check.configure(state='disabled')
         settings_startup_check.configure(state='disabled')
         auto_send_btn.configure(text='Auto Send: OFF',bg='#7f1d1d',activebackground='#991b1b',state='disabled')
