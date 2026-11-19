@@ -19,6 +19,7 @@ class CourierCoordinatorTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.folder = Path(self.tmp.name)
         self._patch("HOME", self.folder)
+        self._patch("STARTUP_EVENTS", self.folder / "command-courier-startup-events.jsonl")
         self._patch("PROFILE", self.folder / "command-courier-runtime.json")
         self._patch("HUD_MODE", self.folder / "hud-mode.json")
 
@@ -83,6 +84,58 @@ class CourierCoordinatorTests(unittest.TestCase):
              mock.patch("builtins.print"):
             self.assertEqual(courier.start(), 0)
             engine.assert_not_called()
+
+    def test_engine_start_failure_does_not_prevent_original_hud(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        fake = SimpleNamespace(returncode=0, stdout="ORIGINAL_HUD_RUNNING_COUNT=1\\n", stderr="")
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch("desktop_native_relay.select_original_hud"), \
+             mock.patch("desktop_native_relay.configuration", return_value={"off": False}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent",
+                        side_effect=RuntimeError("NATIVE_RUNNER_STARTUP_NOT_CONFIRMED")), \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=fake) as hud, \
+             mock.patch("builtins.print"):
+            self.assertEqual(courier.main(["start"]), 1)
+        hud.assert_called_once()
+        events = [json.loads(line) for line in
+                  courier.STARTUP_EVENTS.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([event["event"] for event in events],
+                         ["START_REQUESTED", "ORIGINAL_HUD_RUNNING", "START_FAILED"])
+        self.assertIn("NATIVE_RUNNER_STARTUP_NOT_CONFIRMED", events[-1]["detail"])
+
+    def test_hud_failure_prevents_engine_start_and_records_event(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        fail = SimpleNamespace(returncode=1, stdout="ORIGINAL_HUD_VISIBLE_WINDOW_COUNT=0", stderr="")
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch("desktop_native_relay.select_original_hud"), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=fail), \
+             mock.patch("builtins.print"):
+            self.assertEqual(courier.main(["start"]), 1)
+        engine.assert_not_called()
+        events = [json.loads(line) for line in
+                  courier.STARTUP_EVENTS.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([event["event"] for event in events],
+                         ["START_REQUESTED", "START_FAILED"])
+        self.assertIn("COURIER_HUD_START_FAILED", events[-1]["detail"])
+
+    def test_off_mode_keeps_hud_up_without_false_linked_status(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        ok = SimpleNamespace(returncode=0, stdout="ORIGINAL_HUD_RUNNING_COUNT=1\\n", stderr="")
+        with mock.patch.object(courier, "IS_WINDOWS", True), \
+             mock.patch("desktop_native_relay.select_original_hud"), \
+             mock.patch("desktop_native_relay.configuration", return_value={"off": True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as engine, \
+             mock.patch.object(courier.shutil, "which", return_value="powershell.exe"), \
+             mock.patch.object(courier.subprocess, "run", return_value=ok), \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(courier.start(), 0)
+        engine.assert_not_called()
+        messages = [str(call.args[0]) for call in output.call_args_list]
+        self.assertIn("COURIER_START=HUD_RUNNING_ENGINE_OFF_RETAINED", messages)
+        self.assertNotIn("COURIER_START=ENGINE_AND_HUD_LINKED", messages)
 
     def test_startup_install_is_explicit_and_only_calls_manager(self):
         fake = SimpleNamespace(returncode=0, stdout="COURIER_USER_STARTUP=INSTALLED_OWNED\\n", stderr="")
