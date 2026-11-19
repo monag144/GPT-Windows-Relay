@@ -131,6 +131,35 @@ def start() -> int:
     return 0
 
 
+
+def go() -> int:
+    """Activate the selected runtime from an already-visible Command Courier HUD.
+
+    Unlike start(), never reconcile/restart the calling HUD.  This operation
+    does not create packets, execute instructions or force delivery.  Future
+    destination transports must provide their own explicit adapter.
+    """
+    mode = runtime_mode()
+    print("COURIER_GO_RUNTIME=" + mode, flush=True)
+    if mode != NATIVE:
+        raise RuntimeError("COURIER_GO_SELECTED_RUNTIME_UNAVAILABLE")
+    if not IS_WINDOWS:
+        raise RuntimeError("COURIER_GO_REQUIRES_WINDOWS_INTERACTIVE_SESSION")
+    import desktop_native_relay as native
+    config = native.configuration()
+    if config["off"]:
+        raise RuntimeError("COURIER_GO_OFF_USE_ARM_FIRST")
+    if not config["armed"]:
+        raise RuntimeError("COURIER_GO_DISARMED_USE_ARM_FIRST")
+    # Existing native singleton performs independent command admission,
+    # journal deduplication and delivery; GO never calls its sender.
+    native.launch_runner_if_absent()
+    if not native.runner_active():
+        raise RuntimeError("COURIER_GO_NATIVE_SINGLETON_NOT_CONFIRMED")
+    print("COURIER_GO=NATIVE_RUNTIME_READY")
+    return 0
+
+
 def status() -> int:
     mode = runtime_mode()
     print("COURIER_RUNTIME=" + mode)
@@ -167,6 +196,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Command Courier | relay and HUD linked, runtime selectable")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("start")
+    sub.add_parser("go")
     sub.add_parser("status")
     profile = sub.add_parser("profile")
     profile.add_argument("mode", nargs="?", choices=sorted(ALLOWED))
@@ -176,6 +206,8 @@ def main(argv=None) -> int:
     try:
         if args.command in (None, "start"):
             return start()
+        if args.command == "go":
+            return go()
         if args.command == "status":
             return status()
         if args.command == "profile":
