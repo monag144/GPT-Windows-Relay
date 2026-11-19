@@ -85,3 +85,45 @@ interactive Windows sign-in launches. STOP and OFF remain authoritative.
 Disabling the runtime while the shortcut exists makes subsequent sign-in
 startup inert without deleting the shortcut. Actual command-result delivery
 remains a separate live acceptance gate.
+
+
+## ARM / GO — original top-right HUD (2026-11-19)
+
+The **existing** leftmost START control remains the same handler. In native mode
+it displays **ARM** when disarmed/OFF and **ARMED** (disabled green confirmation)
+when armed. Pressing ARM calls the native `arm` control; it does not deliver,
+retry, or create a command packet. Browser mode retains its original START.
+
+A prominent green **GO** button is at the far right of the original compact
+HUD footer; the smaller Auto Send control remains immediately to its left.
+The original 560 × 184 (expanded 560 × 386) geometry, top-right placement,
+START/STOP/RESTART/OFF/KILL lifecycle handlers, Settings gear, sign-in checkbox,
+and recovery controls remain on the same existing HUD.
+
+GO invokes `command_courier.py go` on a worker thread. This uses the selected
+runtime profile, **does not call the HUD reconciler** (which would kill/restart
+the already-running HUD), and reuses the existing native singleton when the
+selected transport is `native-desktop`. It refuses `disabled`/unimplemented
+profiles, OFF, and disarmed states with an explicit message. ARM first after
+an intentional OFF/STOP. GO is an activation/attachment control: it does not
+create or submit a packet, force resend, abort, clear the queue, or change the
+selected destination. Automatic send remains controlled separately.
+
+**Future destinations:** Command Courier is intended to courier packets to
+selectable recipients, not to hardcode ChatGPT as a permanent product limitation.
+At this checkpoint only the native ChatGPT Windows app destination is
+implemented in the runtime profile. Add other destination adapters explicitly
+with their own dispatch, receipt/acknowledgement and deduplication contracts;
+do not claim that arbitrary endpoints are currently operational.
+
+**Separate existing client:** `consumer/GO.bat` is the historical one-click
+browser-based GUI with its own browser setup and mission submission path.
+It remains available independently and **is not launched by this native HUD
+button**: launching it here would activate a different transport and could
+create competing owners/sessions. No consumer client source was modified.
+
+**Validation gates:** source and regression tests on the branch; Windows
+user must run the repository sweep, open the HUD from the canonical launcher,
+verify native ARM/ARMED state, GO status, retention of Auto Send and the
+sign-in controls, and ensure no second HUD/consumer/backend appears.
+That check does not certify delivery to an arbitrary external destination.
