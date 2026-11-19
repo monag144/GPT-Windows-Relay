@@ -706,11 +706,12 @@ def run_ui():
     # This HUD GO calls the Command Courier runtime adapter, never the browser
     # backend, sender, or the original HUD reconciler (which could kill us).
     go_results=queue.Queue()
-    go_state={"busy":False,"error":None}
+    go_state={"busy":False,"error":None,"ready":False}
     def on_go():
         if not native_mode() or go_state["busy"]:return
         go_state["busy"]=True
         go_state["error"]=None
+        go_state["ready"]=False
         go_btn.configure(text="GO…",state="disabled")
         def worker():
             try:
@@ -789,6 +790,7 @@ def run_ui():
             kind,error=go_results.get_nowait()
             go_state["busy"]=False
             go_state["error"]=error if kind=="error" else None
+            go_state["ready"]=(kind=="ok")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
         if native_mode() and not courier_state["queried"]:
@@ -803,7 +805,8 @@ def run_ui():
                                 state="disabled" if armed else "normal",
                                 bg="#188038" if armed else "#174ea6",
                                 activebackground="#137333" if armed else "#1967d2")
-            go_btn.configure(text="GO…" if go_state["busy"] else "GO",
+            go_btn.configure(text="GO…" if go_state["busy"] else
+                             ("GO ✓" if go_state["ready"] and snap["online"] and armed else "GO"),
                              state="disabled" if go_state["busy"] else "normal",
                              bg="#188038",activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
