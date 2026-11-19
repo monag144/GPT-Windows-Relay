@@ -137,6 +137,57 @@ class CourierCoordinatorTests(unittest.TestCase):
         self.assertIn("COURIER_START=HUD_RUNNING_ENGINE_OFF_RETAINED", messages)
         self.assertNotIn("COURIER_START=ENGINE_AND_HUD_LINKED", messages)
 
+    def test_go_activates_existing_native_singleton_without_restarting_hud(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as activate, \
+             mock.patch("desktop_native_relay.runner_active",return_value=True), \
+             mock.patch.object(courier.subprocess,"run") as no_hud_reconcile, \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(courier.go(),0)
+        activate.assert_called_once_with()
+        no_hud_reconcile.assert_not_called()
+        self.assertIn("COURIER_GO=NATIVE_RUNTIME_READY",
+                      [str(x.args[0]) for x in output.call_args_list])
+
+    def test_go_respects_off_and_disarmed_without_launching(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch("desktop_native_relay.configuration",side_effect=[
+                 {"off":True,"armed":False},{"off":False,"armed":False}]), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as launch, \
+             mock.patch.object(courier.subprocess,"run") as subprocess_run, \
+             mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError,"COURIER_GO_OFF_USE_ARM_FIRST"):
+                courier.go()
+            with self.assertRaisesRegex(RuntimeError,"COURIER_GO_DISARMED_USE_ARM_FIRST"):
+                courier.go()
+        launch.assert_not_called()
+        subprocess_run.assert_not_called()
+
+    def test_go_refuses_unimplemented_or_disabled_transport(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"disabled"}', encoding="utf-8")
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch.object(courier.subprocess,"run") as runner, \
+             mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError,"COURIER_GO_SELECTED_RUNTIME_UNAVAILABLE"):
+                courier.go()
+        runner.assert_not_called()
+
+    def test_go_dispatch_does_not_use_start_or_force_delivery(self):
+        source=(ROOT/"command_courier.py").read_text(encoding="utf-8")
+        start=source.index("def go() -> int:")
+        end=source.index("def status() -> int:",start)
+        implementation=source[start:end]
+        self.assertIn("native.launch_runner_if_absent()",implementation)
+        self.assertNotIn("Reconcile-OriginalDesktopHUD.ps1",implementation)
+        self.assertNotIn("force-delivery",implementation)
+        self.assertNotIn("clear-pending-deliveries",implementation)
+        self.assertNotIn("consumer/GO.bat",implementation)
+        self.assertIn('sub.add_parser("go")',source)
+        self.assertIn('if args.command == "go":',source)
+
     def test_startup_install_is_explicit_and_only_calls_manager(self):
         fake = SimpleNamespace(returncode=0, stdout="COURIER_USER_STARTUP=INSTALLED_OWNED\\n", stderr="")
         with mock.patch.object(courier, "IS_WINDOWS", True), \
