@@ -52,6 +52,25 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
         self.assertIn("ChatGPT could not be brought to the foreground", HUD)
 
+    def test_native_arm_and_big_go_preserve_original_hud_controls(self):
+        self.assertIn("'native_armed':armed, 'native_off':off",HUD)
+        self.assertIn('start_btn.configure(text="ARMED" if armed else "ARM"',HUD)
+        self.assertIn('command=lambda:relay_control("start")',HUD)
+        self.assertIn('start_btn.configure(text="START",state="normal"',HUD)
+        self.assertIn('go_btn=tk.Button(footer,text="GO"',HUD)
+        self.assertIn('font=("Segoe UI",11,"bold")',HUD)
+        self.assertIn('go_btn.pack(side="right",padx=(5,0))',HUD)
+        self.assertIn('auto_send_btn.pack(side="right")',HUD)
+        self.assertLess(HUD.index('go_btn.pack(side="right"'),HUD.index('auto_send_btn.pack(side="right")'))
+        self.assertIn('go_btn.configure(command=on_go)',HUD)
+        self.assertIn('courier_hud_cli("go")',HUD)
+        self.assertIn('name="command-courier-go",daemon=True',HUD)
+        self.assertIn('GO…',HUD)
+        action=HUD.split('    def on_go():',1)[1].split('    go_btn.configure(command=on_go)',1)[0]
+        for forbidden in ('force-delivery','abort-delivery','clear-pending-deliveries',
+                          'native_delivery_control(','relay_control(','consumer/GO.bat'):
+            self.assertNotIn(forbidden,action)
+
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)
         self.assertIn("Reconcile-OriginalDesktopHUD.ps1", LAUNCH)
