@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parent
 HOME = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "GPTWindowsRelayDesktop"
@@ -62,30 +63,42 @@ def select_runtime(value: str):
     print("COURIER_PROFILE_APPLIES=NEXT_START_NO_RUNNING_PROCESS_MODIFIED")
 
 
+
+STARTUP_EVENTS = HOME / "command-courier-startup-events.jsonl"
+
+
+def record_startup_event(event: str, detail: str = ""):
+    """Durable, payload-free sign-in diagnostics; never block the application."""
+    try:
+        HOME.mkdir(parents=True, exist_ok=True)
+        entry = {"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                 "event": event}
+        if detail:
+            entry["detail"] = detail[:180]
+        with STARTUP_EVENTS.open("a", encoding="utf-8") as log:
+            log.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            log.flush()
+            os.fsync(log.fileno())
+    except OSError:
+        pass
+
+
 def start() -> int:
     mode = runtime_mode()
     print("COURIER_RUNTIME=" + mode, flush=True)
+    record_startup_event("START_REQUESTED", mode)
     if mode == DISABLED:
         print("COURIER_START=DISABLED_BY_PROFILE")
+        record_startup_event("DISABLED_BY_PROFILE")
         return 0
     if not IS_WINDOWS:
         raise RuntimeError("COURIER_DESKTOP_LAUNCH_REQUIRES_WINDOWS_INTERACTIVE_SESSION")
 
-    # The original engine owns the native singleton and arming settings.
-    # A stopped or OFF engine is never implicitly re-armed by login startup.
+    # Start the canonical HUD FIRST.  At sign-in the native runner's lock,
+    # ChatGPT readiness, or process startup can fail independently; none of
+    # those conditions should prevent the operator from seeing STOP/OFF.
     import desktop_native_relay as native
     native.select_original_hud()
-    config = native.configuration()
-    if config["off"]:
-        print("COURIER_ENGINE=OFF_RETAINED")
-    else:
-        native.launch_runner_if_absent()
-        if not native.runner_active():
-            raise RuntimeError("COURIER_ENGINE_NOT_RUNNING_AFTER_START")
-        print("COURIER_ENGINE=RUNNING_SINGLETON_VERIFIED")
-
-    # The existing PowerShell reconciler launches exactly the original HUD.
-    # It never modifies the Firefox/browser backend and never starts a mini HUD.
     powershell = shutil.which("powershell.exe")
     if not powershell:
         raise RuntimeError("COURIER_POWERSHELL_MISSING_FOR_HUD")
@@ -100,7 +113,21 @@ def start() -> int:
     if "ORIGINAL_HUD_RUNNING_COUNT=1" not in response.stdout:
         raise RuntimeError("COURIER_HUD_SINGLETON_NOT_CONFIRMED")
     print("COURIER_HUD=ORIGINAL_TOP_RIGHT_RUNNING")
+    record_startup_event("ORIGINAL_HUD_RUNNING")
+
+    # Engine startup follows verified HUD availability and respects OFF.
+    config = native.configuration()
+    if config["off"]:
+        print("COURIER_ENGINE=OFF_RETAINED")
+        print("COURIER_START=HUD_RUNNING_ENGINE_OFF_RETAINED")
+        record_startup_event("HUD_RUNNING_ENGINE_OFF_RETAINED")
+        return 0
+    native.launch_runner_if_absent()
+    if not native.runner_active():
+        raise RuntimeError("COURIER_ENGINE_NOT_RUNNING_AFTER_START")
+    print("COURIER_ENGINE=RUNNING_SINGLETON_VERIFIED")
     print("COURIER_START=ENGINE_AND_HUD_LINKED")
+    record_startup_event("ENGINE_AND_HUD_LINKED")
     return 0
 
 
@@ -160,6 +187,8 @@ def main(argv=None) -> int:
         if args.command == "startup":
             return startup(args.action)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        if args.command in (None, "start"):
+            record_startup_event("START_FAILED", type(exc).__name__ + ":" + str(exc))
         print("COURIER_ERROR=" + str(exc), file=sys.stderr)
         return 1
     return 2
