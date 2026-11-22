@@ -176,7 +176,7 @@ def native_snapshot():
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
         'auto_send':bool(report.get('auto_send')),
-        'native_armed':armed, 'native_off':off,
+        'native_armed':armed, 'native_off':off, 'native_phase':phase,
     }
 
 def native_control(action):
@@ -706,19 +706,23 @@ def run_ui():
     # This HUD GO calls the Command Courier runtime adapter, never the browser
     # backend, sender, or the original HUD reconciler (which could kill us).
     go_results=queue.Queue()
-    go_state={"busy":False,"error":None,"ready":False}
+    go_state={"busy":False,"error":None,"ready":False,"waiting":False}
     def on_go():
         if not native_mode() or go_state["busy"]:return
         go_state["busy"]=True
         go_state["error"]=None
         go_state["ready"]=False
+        go_state["waiting"]=False
         go_btn.configure(text="GO…",state="disabled")
         def worker():
             try:
                 output=courier_hud_cli("go")
-                if "COURIER_GO=NATIVE_RUNTIME_READY" not in output:
+                if "COURIER_GO=NATIVE_RUNTIME_READY" in output:
+                    go_results.put(("ok",None))
+                elif "COURIER_GO=WAITING_FOR_DESTINATION" in output:
+                    go_results.put(("waiting",None))
+                else:
                     raise RuntimeError("Command Courier runtime was not confirmed")
-                go_results.put(("ok",None))
             except Exception as exc:
                 go_results.put(("error",str(exc)[-220:]))
         threading.Thread(target=worker,name="command-courier-go",daemon=True).start()
@@ -791,6 +795,7 @@ def run_ui():
             go_state["busy"]=False
             go_state["error"]=error if kind=="error" else None
             go_state["ready"]=(kind=="ok")
+            go_state["waiting"]=(kind=="waiting")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
         if native_mode() and not courier_state["queried"]:
@@ -805,10 +810,16 @@ def run_ui():
                                 state="disabled" if armed else "normal",
                                 bg="#188038" if armed else "#174ea6",
                                 activebackground="#137333" if armed else "#1967d2")
+            destination_ready=(snap.get("native_phase") in
+                               ("BASELINED","IDLE","EXECUTING","DELIVERING"))
             go_btn.configure(text="GO…" if go_state["busy"] else
-                             ("GO ✓" if go_state["ready"] and snap["online"] and armed else "GO"),
-                             state="disabled" if go_state["busy"] else "normal",
-                             bg="#188038",activebackground="#137333")
+                             ("GO ✓" if go_state["ready"] and snap["online"] and
+                              armed and destination_ready else
+                              "WAIT" if go_state["waiting"] and not destination_ready else "GO"),
+                             state="disabled" if go_state["busy"] or not armed or snap.get("native_off")
+                                   else "normal",
+                             bg="#188038" if armed and not snap.get("native_off") else "#3c4043",
+                             activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
