@@ -372,8 +372,8 @@ class ForegroundResultTests(unittest.TestCase):
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
         self.state.save()
         self.assertEqual(self.state.list_claimable_submit_retries(), [])
-        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\\n")
-        with which, process as invoked, \\
+        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\n")
+        with which, process as invoked, \
              mock.patch.object(native, "process_packet") as no_exec:
             native.recover_submit_only(self.state, self.aid)
             native.recover_submit_only(self.state, self.aid)
