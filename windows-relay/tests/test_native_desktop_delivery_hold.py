@@ -69,6 +69,28 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         # The command result remains safely available; no execution replay.
         self.assertEqual(self.state.lookup(self.id)["status"],"OK")
 
+    def test_placeholder_ambiguity_is_held_before_click_without_reexecution(self):
+        fake=SimpleNamespace(returncode=1,
+            stdout=("SENDER_STAGE=APP_WINDOW_FOUND\n"
+                    "SENDER_STAGE=CONVERSATION_DOCUMENT_FOUND\n"
+                    "HEARTBEAT_ERROR=COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE\n"
+                    "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY\n"),
+            stderr="")
+        before=self.state.lookup(self.id).copy()
+        with mock.patch.object(native.shutil,"which",return_value="powershell.exe"), \
+             mock.patch.object(native.subprocess,"run",return_value=fake) as submit:
+            native.deliver(self.state,self.id)
+            native.deliver(self.state,self.id)
+        submit.assert_called_once()
+        delivery=self.state.outbound_lookup(self.id)
+        self.assertEqual(delivery["phase"],"PRE_SUBMIT_FAILED")
+        self.assertTrue(native.delivery_held(self.id))
+        self.assertEqual(self.state.lookup(self.id)["status"],before["status"])
+        status=native.get_status()
+        self.assertEqual(status["last_delivery_error"],
+                         "COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE")
+        self.assertEqual(status["last_delivery_stage"],"CONVERSATION_DOCUMENT_FOUND")
+
     def test_explicit_operator_release_allows_one_new_sender_attempt(self):
         failure=SimpleNamespace(returncode=1,
             stdout=("HEARTBEAT_ERROR=COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT\n"
