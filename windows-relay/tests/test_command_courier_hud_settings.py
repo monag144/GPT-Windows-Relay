@@ -164,7 +164,7 @@ class CourierHudStartupTests(unittest.TestCase):
                 self.assertEqual(native.read_scan(require_app=True), [])
         source = (ROOT / "desktop_native_relay.py").read_text(encoding="utf-8")
         self.assertIn("baseline_ready = False", source)
-        self.assertIn('phase = ("FORWARDING_NO_CHATGPT" if forward_report["active"]', source)
+        self.assertIn('else "FORWARDING_NO_CHATGPT" if forward_report["active"]', source)
         self.assertIn('else "WAITING_FOR_CHATGPT_APP")', source)
         self.assertIn('baseline_ready = False', source)
         self.assertIn("candidates = read_scan(require_app=True)", source)
