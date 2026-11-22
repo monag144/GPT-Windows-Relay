@@ -134,6 +134,47 @@ def _validated_routes(config) -> list[dict]:
     return routes
 
 
+def _delivery_key(route: dict, filename: str, body: bytes) -> str:
+    # A new source or target creates a different delivery identity. Reusing
+    # a route name must not silently redirect already queued messages.
+    dest = route["destination"]
+    target = str(dest.get("path") if dest["type"] == "directory" else dest["url"])
+    context = (route["id"] + "\0" + str(route["source"]) + "\0" +
+               dest["type"] + "\0" + target + "\0" + filename + "\0")
+    return hashlib.sha256(context.encode("utf-8") + body).hexdigest()
+
+
+def _baseline_existing_inputs(home: Path, route: dict):
+    """Never auto-forward historical input that predated route selection."""
+    source = route["source"]
+    if not source.is_dir():
+        return
+    ledger = _ledger(home)
+    changed = False
+    for entry in source.iterdir():
+        if not entry.is_file() or entry.is_symlink() or entry.suffix.lower() != ".txt":
+            continue
+        st = entry.stat()
+        if st.st_size > MAX_TEXT_BYTES:
+            continue
+        body = entry.read_bytes()
+        if not body or len(body) > MAX_TEXT_BYTES:
+            continue
+        try:
+            body.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            continue
+        key = _delivery_key(route, entry.name, body)
+        if key not in ledger["deliveries"]:
+            ledger["deliveries"][key] = {
+                "route": route["id"], "file": entry.name,
+                "phase": "BASELINED", "created_utc": timestamp(),
+            }
+            changed = True
+    if changed:
+        _persist(home, ledger)
+
+
 def configure_route(home: Path, route_id: str, source: str,
                     destination_type: str, value: str,
                     *, bearer_token_env: str | None = None):
@@ -161,7 +202,12 @@ def configure_route(home: Path, route_id: str, source: str,
         if isinstance(existing, dict) and existing.get("id") != route_id
     ] + [route]
     current["enabled"] = True
-    _validated_routes(current)
+    routes = _validated_routes(current)
+    # Baseline existing files for the newly selected route BEFORE publishing
+    # the config; the runner must never accidentally forward a historical
+    # result when the operator enables a new destination.
+    selected = next(route for route in routes if route["id"] == route_id)
+    _baseline_existing_inputs(home, selected)
     home.mkdir(parents=True, exist_ok=True)
     wr.atomic_json(home / "courier-forwarding.json", current)
 
@@ -290,8 +336,7 @@ def tick(home: Path, *, enabled: bool) -> dict:
                 body.decode("utf-8", errors="strict")
             except UnicodeDecodeError:
                 continue
-            ident = (route["id"] + "\0" + entry.name + "\0").encode("utf-8") + body
-            key = hashlib.sha256(ident).hexdigest()
+            key = _delivery_key(route, entry.name, body)
             record = state["deliveries"].get(key)
             if record is not None:
                 if not isinstance(record, dict):
