@@ -80,6 +80,20 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('W,COMPACT_H,EXPANDED_H=560,184,386', HUD_SOURCE)
         self.assertNotIn('tk.Toplevel(', HUD_SOURCE)
 
+    def test_hud_focus_for_send_recovery_never_resends_whole_result(self):
+        self.assertIn('text="FOCUS FOR SEND"', HUD_SOURCE)
+        self.assertNotIn('text="FORCE RESEND"', HUD_SOURCE)
+        self.assertIn('def focus_for_send_retry():', HUD_SOURCE)
+        helper=HUD_SOURCE.split('    def focus_for_send_retry():',1)[1].split(
+            '    # FORCE CLEAR is the operator',1)[0]
+        self.assertIn('snap.get("native_delivery_phase")!="SEND_PENDING"', helper)
+        self.assertIn('not snap.get("auto_send")', helper)
+        self.assertIn('focus_chatgpt_for_forced_delivery()', helper)
+        self.assertNotIn('native_delivery_control(', helper)
+        self.assertNotIn('force-delivery', helper)
+        self.assertIn('force_command_btn.configure(command=focus_for_send_retry)', HUD_SOURCE)
+        self.assertIn("delivery_phase=='SEND_PENDING' and enabled", HUD_SOURCE)
+
     def test_hud_toggle_does_not_claim_success_before_worker_receipt(self):
         self.assertIn('def on_startup_check():', HUD_SOURCE)
         self.assertIn('update_courier_settings_widgets()', HUD_SOURCE)
