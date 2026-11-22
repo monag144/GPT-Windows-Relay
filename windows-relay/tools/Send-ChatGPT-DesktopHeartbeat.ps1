@@ -554,15 +554,17 @@ try{
     # discovery without clearing the draft or trying a blind Enter click.
     for($i=0;$i -lt 50;$i++){
         Start-Sleep -Milliseconds 200
-        try{
-            $composer=Get-Composer $window
-            $draftMatches=Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value)
-            if(-not $draftMatches){continue}
-            $send=Get-EnabledSend $window
-            if($null -ne $send){break}
-        }catch{
+        try{$composer=Get-Composer $window}
+        catch{
             $readFailures++
+            continue
         }
+        $draftMatches=Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value)
+        if(-not $draftMatches){continue}
+        # Do not swallow AMBIGUOUS_ENABLED_SEND_BUTTONS or any other unsafe
+        # send-control state as a transient editor-discovery error.
+        $send=Get-EnabledSend $window
+        if($null -ne $send){break}
     }
     if($null -eq $send){
         Write-Output 'SENDER_STAGE=SEND_BUTTON_NOT_READY'
