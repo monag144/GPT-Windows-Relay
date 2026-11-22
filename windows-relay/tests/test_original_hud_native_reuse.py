@@ -131,7 +131,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('go_results.put(("waiting",None))',HUD)
 
     def test_go_does_not_hide_delivery_hold_when_new_commands_are_ready(self):
-        self.assertIn('COURIER_GO=EXECUTION_READY_DELIVERY_HELD',HUD)
+        self.assertIn('COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED',HUD)
         self.assertIn('go_results.put(("held",None))',HUD)
         self.assertIn('(snap.get("native_phase")=="DELIVERY_BLOCKED" and',HUD)
         self.assertIn('"FORWARDING_NO_CHATGPT") or',HUD)
