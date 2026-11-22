@@ -66,6 +66,19 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("Use ABORT SEND to cancel that result", HUD)
         self.assertIn("No saved result was resent, aborted or discarded.", HUD)
 
+    def test_historical_outbox_failures_do_not_override_running_engine_ready(self):
+        self.assertIn("outstanding_count=(sum(",HUD)
+        self.assertIn("'outbound_unresolved_count':outstanding_count",HUD)
+        self.assertIn("CHATGPT OUTBOX HISTORY • ",HUD)
+        self.assertIn("title='READY'",HUD)
+        self.assertIn("'title_phase':title",HUD)
+        self.assertIn('go_state["ready"]=(kind in ("ok","held"))',HUD)
+        self.assertIn('bg="#188038" if armed and not snap.get("native_off")',HUD)
+        self.assertNotIn('GO • HELD',HUD)
+        self.assertNotIn('READY • HELD',HUD)
+        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '",HUD)
+        self.assertIn("DELIVERY BLOCKED:",HUD)
+
     def test_force_clear_restored_as_separate_chatgpt_editor_action(self):
         self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
         self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
