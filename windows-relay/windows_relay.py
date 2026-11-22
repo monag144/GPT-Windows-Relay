@@ -320,6 +320,19 @@ class State:
             self._mutate_and_save(mutate)
             return outcome
 
+    def record_submit_only_evidence(self,aid:str,evidence:str):
+        """Identify a previously visible receipt, not a new auto-send."""
+        if evidence!='UIA_EXISTING_TRANSCRIPT_RECEIPT':
+            raise RelayError('unsupported submission evidence')
+        with self.lock:
+            def mutate():
+                d=self.data.get('outbound_deliveries',{}).get(aid)
+                if not isinstance(d,dict) or d.get('phase')!='SUBMITTED':
+                    raise RelayError('submission evidence requires confirmed receipt')
+                d['reconciliation_evidence']=evidence
+                d['updated_at']=now()
+            self._mutate_and_save(mutate)
+
     def reserve(self,a:Action):
         with self.lock:
             existing=self.data['processed'].get(a.id)
