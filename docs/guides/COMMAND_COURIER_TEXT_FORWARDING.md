@@ -347,3 +347,59 @@ deliveries are pending.
 branch. The accepted stable checkpoint branch
 `stable/command-courier-working-build-2026-11-22` and its full commit
 `821bd35477aed56cc1aa4d2f415c2f027cbc9a2e` are unchanged.
+
+
+### Automatic saved-result Send recovery (post-checkpoint reliability patch)
+
+A result typed into ChatGPT is **not** delivered merely because keyboard
+insertion completed. The sender now distinguishes:
+- `SUBMITTED`: saved receipt was observed in conversation outside the
+  writable composer;
+- `SEND_PENDING`: complete saved result is in a recognized chat composer,
+  but no unambiguous Send control could be activated;
+- `SUBMIT_UNCERTAIN`: Send was attempted or verification failed without a
+  confirmed receipt;
+- `TEXT_INSERTED`: non-chat editor such as Notepad accepted text; no
+  ChatGPT submission is claimed.
+
+The native singleton checks `SEND_PENDING` and `SUBMIT_UNCERTAIN` for
+**one durable send-only recovery allowance**, never rerunning the original
+`EXEC`, shell command, or text input. The same outbox path, action ID and
+unique native receipt are rebound before each recovery. No live writable
+State is opened by a second process.
+
+The recovery PowerShell mode (`-SubmitExistingOnly`) is deliberately
+limited to the native `ChatGPT.exe` foreground window. It must verify
+that its own exact saved frame (not a mixed user draft) is still present
+in the focused writable composer. It first checks for an already-posted
+receipt in an independent conversation Document, excluding the composer
+and its ancestors, and waits briefly for a preceding send to settle.
+Only then may it press Enter or click an individually identified Send
+control, with **at most two bounded Send actions per one recovery lease**,
+and checks the draft and conversation again between actions. It never
+retypes the result body and never presses Enter in Notepad or another
+application. If the draft disappears without a confirmed conversation
+receipt, it stops rather than risking a duplicate.
+
+No eligible target means a zero-keyboard deferral: the original delivery
+phase and retry allowance are restored. A real unsuccessful or ambiguous
+recovery consumes its one persisted allowance; after a crash the lease is
+treated as uncertain rather than repeated. The journal records
+`submit_only_attempt_count`, `send_only_retry_stage`, and bounded
+`last_sender_stage` / `last_sender_error` per result. When the receipt
+was already in the conversation before the recovery action, evidence is
+recorded as `UIA_EXISTING_TRANSCRIPT_RECEIPT`, not falsely described
+as a new automatic Send.
+
+**Historical limitation:** old results marked `TEXT_INSERTED` by an
+earlier build are not blindly retried: they could legitimately have been
+sent into Notepad. Determine the specific old result's journal phase
+before any targeted historical repair. The new `SEND_PENDING` phase
+prevents this ambiguity for future recognized chat composers.
+
+**Testing boundary:** Mocked sender/journal tests and source review do not
+establish actual Windows UIA reliability. Real Katana testing must
+demonstrate a fresh message completing `SUBMITTED` with no user input,
+and a separately simulated failed Send recovering exactly the saved
+message without re-executing the original action. Keep the pinned stable
+checkpoint at `821bd35477aed56cc1aa4d2f415c2f027cbc9a2e` unchanged.
