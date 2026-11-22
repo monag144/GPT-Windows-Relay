@@ -80,6 +80,19 @@ class TextForwarderTests(unittest.TestCase):
         self.assertNotIn("wr.execute(",source)
         self.assertNotIn("wr.extract(",source)
 
+    def test_concurrent_forward_ticks_claim_once_under_journal_lock(self):
+        from concurrent.futures import ThreadPoolExecutor
+        self.config()
+        (self.src/"exactly-once.txt").write_text("one body", encoding="utf-8")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            replies=list(pool.map(
+                lambda _: f.tick(self.home,enabled=True),range(2)
+            ))
+        self.assertEqual(sum(x["forwarded"] for x in replies),1)
+        self.assertEqual(len(list(self.dst.glob("*.txt"))),1)
+        self.assertEqual(len(self.entries()),1)
+        self.assertTrue((self.home/"courier-forwarding.lock").is_file())
+
     def test_modified_content_with_same_filename_is_distinct_delivery(self):
         self.config()
         path = self.src / "log.txt"
