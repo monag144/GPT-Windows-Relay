@@ -169,3 +169,46 @@ To choose a specific enabled file-to-file route:
 qualification and can be removed once target adapters and the continuous
 acceptance suite are established. This first test checks configured
 file-to-file delivery only, not ChatGPT UIA submission or remote HTTP POST.
+
+
+## Explicit ChatGPT/Notepad input test (no arbitrary screen scanning)
+
+Typing into ChatGPT or Notepad alone does **not** select those editors as
+automatic source adapters. The current route worker watches configured
+UTF-8 file-drop directories. The original TEST FIRE button generates its
+own file; CHECK ROUTES only reads route status. Neither button reads the
+focused application window.
+
+To qualify text copied from either application using the live, independent
+forwarder:
+
+1. Enter a **non-sensitive** test body into Notepad or an unsent ChatGPT
+   editor. Click into that editor, then select the intended body and press
+   **Ctrl+C**. Do **not** press Enter in ChatGPT as an attempt to relay it;
+   Enter may send it to ChatGPT instead.
+2. In Command Courier's original HUD, open **gear → Settings** and press
+   **SEND COPIED TEXT**. Only this explicit click reads the current clipboard
+   as text. It does not change or clear the source editor, send keyboard
+   events to either app, or execute pasted command-looking strings.
+3. The current configured local-test route (or the sole enabled local
+   file-to-file route) receives the exact UTF-8 body. **COPY PASS** appears
+   only after the real background worker has written the destination file,
+   persisted the matching DELIVERED record, and the file bytes match.
+   Debug receipts and route status also appear in a popup so Windows display
+   scaling cannot hide the result below the bottom of the 386px HUD.
+4. The diagnostic input and output files persist for inspection in the
+   selected local directories. Do not copy credentials or private data.
+
+Equivalent one-shot copy → CMD Enter workflow, after Ctrl+C:
+
+    cd /d "C:\Users\p0pe0\Projects\Windows Relay"
+    call "windows-relay\COMMAND-COURIER.cmd" test-fire --clipboard --route local-test
+
+The clipboard is read by a short-lived hidden Tk reader. The result receipt
+prints as COURIER_TEST_FIRE JSON; an empty/non-text clipboard or unavailable
+route fails visibly. This does not enable continuous monitoring of ChatGPT,
+Notepad or every other application's input field. Continuous source
+capture requires a separately configured, explicit app/window integration.
+
+The compact HUD and bookmarked pre-debug build remain unchanged. This is a
+temporary diagnostic input adapter, not a universal always-on clipboard spy.
