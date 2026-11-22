@@ -320,7 +320,7 @@ function Assert-RunnerAllowed {
 
 $script:autoFocused=$false
 $inputStarted=$false
-$clickStarted=$false
+$submitStarted=$false
 $script:wire=''
 try{
     if($NativeActionId -notmatch '^[A-Za-z0-9._:-]{1,128}$' -or
@@ -446,38 +446,57 @@ try{
     }
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    $box=$send.Current.BoundingRectangle
-    $rootBox=$target.window.Current.BoundingRectangle
-    $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
-    $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
-    if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
-       $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
-        throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
-    }
-    $cursor=New-Object CourierForegroundInput+POINT
-    if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
-        throw 'FOREGROUND_CURSOR_UNAVAILABLE'
-    }
-    Write-Output 'SENDER_STAGE=CLICK_BEGIN'
-    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
-    $clickStarted=$true
-    try{
-        if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
-            throw 'FOREGROUND_SEND_CURSOR_FAILURE'
+    $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
+    if($kind -eq 'ControlType.Edit'){
+        # Enter submits only when the same foreground window exposes
+        # exactly one enabled Send/Submit control. Notepad Documents and
+        # terminal editors are not eligible for this shortcut.
+        Write-Output 'SENDER_STAGE=SUBMIT_KEY_BEGIN'
+        Write-Output 'UIA_GUARDED_SUBMIT_ENTER_BEGIN'
+        $submitStarted=$true
+        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
+            throw 'FOREGROUND_SUBMIT_ENTER_INCOMPLETE'
         }
-        [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
-        Start-Sleep -Milliseconds 70
-        [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
-    }finally{
-        [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
+        Write-Output 'SENDER_STAGE=SUBMIT_KEY_COMPLETED'
+    }else{
+        # A rich Document uses an explicit Send control instead of Enter,
+        # which can insert a newline rather than submit.
+        $box=$send.Current.BoundingRectangle
+        $rootBox=$target.window.Current.BoundingRectangle
+        $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
+        $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
+        if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
+           $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
+            throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
+        }
+        $cursor=New-Object CourierForegroundInput+POINT
+        if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
+            throw 'FOREGROUND_CURSOR_UNAVAILABLE'
+        }
+        Write-Output 'SENDER_STAGE=CLICK_BEGIN'
+        Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
+        $submitStarted=$true
+        try{
+            if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
+                throw 'FOREGROUND_SEND_CURSOR_FAILURE'
+            }
+            [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 70
+            [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
+        }finally{
+            [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
+        }
+        Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     }
-    Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     $confirmed=$false
     for($i=0;$i -lt 50;$i++){
         Start-Sleep -Milliseconds 200
         try{
-            if((Read-EditorText $target).Contains($NativeReceiptMarker)){continue}
-            if(Test-TranscriptMarker $target $NativeReceiptMarker){
+            # Conversation documents may include an UNSENT composer.
+            # Confirm the draft marker disappeared before marking submitted.
+            if(Test-EditorContainsMarker $target $NativeReceiptMarker){continue}
+            if((Test-TranscriptMarker $target $NativeReceiptMarker) -and
+               $null -eq (Find-SendButton $target)){
                 $confirmed=$true
                 break
             }
@@ -505,7 +524,7 @@ try{
         Write-Output 'RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY'
         exit 1
     }
-    if($clickStarted){
+    if($submitStarted){
         Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
         exit 5
     }
