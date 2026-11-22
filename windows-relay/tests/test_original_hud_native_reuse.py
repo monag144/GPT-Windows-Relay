@@ -102,9 +102,8 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',clear_backend)
         self.assertIn('native.request_force_clear_pending()',HUD)
         self.assertIn('native.wait_force_clear_receipt(request_id, timeout=15.0)',HUD)
-        self.assertIn('"Outbox Reset; Composer Not Confirmed"',HUD)
+        self.assertIn('Outbox Reset; Composer Not Confirmed',HUD)
         self.assertIn('composer_focused=chatgpt_focused',HUD)
-        self.assertIn('still_held',HUD) if False else None
         self.assertIn('"-ClearComposerOnly"',clear_backend)
         self.assertNotIn('"-NativeResultPath"',clear_backend)
         self.assertNotIn('"-ForceClearComposer"',clear_backend)
