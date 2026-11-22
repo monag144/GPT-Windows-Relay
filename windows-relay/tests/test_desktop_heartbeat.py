@@ -17,6 +17,27 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("[switch]$ForceClearComposer", SOURCE)
         self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
 
+    def test_force_clear_only_never_reaches_sender_or_delivery_journal(self):
+        self.assertIn('[switch]$ClearComposerOnly',SOURCE)
+        self.assertIn('COMPOSER_CLEAR_INCOMPATIBLE_SEND_OR_PROBE_FLAGS',SOURCE)
+        self.assertIn('DETECTION=OPERATOR_CLEAR_COMPOSER_ONLY',SOURCE)
+        start=SOURCE.index('    if($ClearComposerOnly){', SOURCE.index('    $window=Get-ChatGPTWindow'))
+        end=SOURCE.index('    if($ProbeComposerOnly){',start)
+        branch=SOURCE[start:end]
+        self.assertIn('Get-ConversationDocument $window',branch)
+        self.assertIn('Wait-ForComposer $window',branch)
+        self.assertIn('Test-ComposableEmptyState $window $composer',branch)
+        self.assertIn('Clear-ComposerForForcedDelivery $window $composer',branch)
+        self.assertIn('Assert-ComposableEmptyState $window $composer',branch)
+        self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',branch)
+        self.assertIn('exit 0',branch)
+        self.assertNotIn('Set-ComposerTextBySendInput',branch)
+        self.assertNotIn('Get-EnabledSend',branch)
+        self.assertNotIn('click',branch.lower())
+        self.assertNotIn('NativeResultPath',branch)
+        self.assertIn('RESULT=COMPOSER_CLEAR_FAILED_NO_SEND',SOURCE)
+        self.assertIn('if($ClearComposerOnly){',SOURCE.split('}catch{',1)[-1] if False else SOURCE)
+
     def test_ui_gates_before_send(self):
         self.assertIn("Watch-ChatGPT-ActionCandidates.ps1",SOURCE)
         self.assertIn("[GPT_WINDOWS_HEARTBEAT]",SOURCE)
