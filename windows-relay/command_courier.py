@@ -169,12 +169,14 @@ def go() -> int:
             or report.get("delivery_blocked")):
         print("COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED")
         return 0
-    # Process singleton is not evidence that the selected receiver is ready.
-    if phase in {"BASELINING", "WAITING_FOR_CHATGPT_APP"}:
+    # The foreground-field adapter does NOT require ChatGPT to be open.
+    # Only actual runtime baselining is an activation-in-progress state.
+    if phase == "BASELINING":
         print("COURIER_GO=WAITING_FOR_DESTINATION")
         return 0
     if phase not in {"BASELINED", "IDLE", "EXECUTING", "DELIVERING",
-                     "FORWARDING_NO_CHATGPT", "AWAITING_TEXT_FIELD"}:
+                     "FORWARDING_NO_CHATGPT", "AWAITING_TEXT_FIELD",
+                     "WAITING_FOR_CHATGPT_APP"}:
         raise RuntimeError("COURIER_GO_UNVERIFIED_RUNTIME_PHASE")
     print("COURIER_GO=NATIVE_RUNTIME_READY")
     return 0
