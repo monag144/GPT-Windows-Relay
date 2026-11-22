@@ -733,6 +733,10 @@ def recover_submit_only(state: wr.State, aid: str):
     phase = "SUBMITTED" if submitted else "SUBMIT_UNCERTAIN"
     state.finish_submit_only_retry(aid, phase, no_target=no_target, stage=stage)
     if no_target:
+        status_update(phase="AWAITING_TEXT_FIELD", last_action=aid,
+                      last_result=previous, delivery_blocked=False,
+                      last_delivery_stage="SUBMIT_ONLY_NO_VERIFIED_DRAFT",
+                      last_delivery_error=None)
         note("NATIVE_SUBMIT_ONLY_WAITING_FOR_OWN_DRAFT=" + aid)
         return
     if submitted:
