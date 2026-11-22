@@ -218,37 +218,3 @@ class ForegroundResultTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-){", SENDER)
-        self.assertIn("$editor=[System.Windows.Automation.AutomationElement]::FocusedElement", SENDER)
-        self.assertIn("$inputText=$script:wire", SENDER)
-        self.assertIn("ControlType.Edit", SENDER)
-        self.assertIn('Replace("`r",\' \').Replace("`n",\' \')', SENDER)
-        self.assertEqual(SENDER.count("function Read-EditorText"), 1)
-        self.assertNotIn("\n}\n){\n", SENDER)
-        self.assertIn("AWAITING_TEXT_FIELD", NATIVE)
-        self.assertNotIn("Get-ChatGPTWindow", SENDER)
-        self.assertNotIn("ProcessName -ieq 'ChatGPT'", SENDER)
-        self.assertNotIn("VK_RETURN", SENDER)
-        self.assertNotIn("SendKeys", SENDER)
-        self.assertNotIn("subprocess.run(", SENDER)
-
-    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"),
-                         "PowerShell AST parser is Windows-only")
-    def test_sender_powershell_ast_is_parseable_without_running_it(self):
-        path = str(ROOT / "tools" / "Send-Foreground-TextResult.ps1")
-        escaped = path.replace("'", "''")
-        command = ("$tokens=$null;$errors=$null;"
-                   "[void][System.Management.Automation.Language.Parser]::"
-                   "ParseFile('" + escaped + "',[ref]$tokens,[ref]$errors);"
-                   "if($errors.Count){$errors | ForEach-Object {Write-Output $_.Message};"
-                   "exit 1};Write-Output 'POWERSHELL_AST_PARSE_OK'")
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
-            capture_output=True, text=True, timeout=20, encoding="utf-8",
-            errors="replace")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("POWERSHELL_AST_PARSE_OK", result.stdout)
-
-
-if __name__ == "__main__":
-    unittest.main()
