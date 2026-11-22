@@ -88,6 +88,31 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('courier_results.put(("error",details,str(exc)[:180]))', HUD_SOURCE)
         self.assertIn('startup_check.configure(state="normal" if editable else "disabled")', HUD_SOURCE)
 
+    def test_force_clear_runs_only_standalone_powershell_composer_action(self):
+        result=SimpleNamespace(returncode=0,stdout=(
+            "COMPOSER_CLEAR=VERIFIED_EMPTY\\n"
+            "RESULT=COMPOSER_CLEARED_NO_SEND\\n"),stderr="")
+        with mock.patch.object(hud.subprocess,"run",return_value=result) as run:
+            self.assertEqual(hud.native_composer_clear(),"COMPOSER_CLEARED_NO_SEND")
+        args=run.call_args.args[0]
+        self.assertIn("-ClearComposerOnly",args)
+        self.assertIn("-STA",args)
+        self.assertNotIn("-NativeResultPath",args)
+        self.assertNotIn("-ForceClearComposer",args)
+        self.assertNotIn("abort-delivery",args)
+        self.assertNotIn("force-delivery",args)
+        self.assertNotIn("clear-pending-deliveries",args)
+        self.assertEqual(run.call_args.kwargs["check"],False)
+        self.assertTrue(run.call_args.kwargs["capture_output"])
+
+    def test_force_clear_refuses_ambiguous_or_failed_composer_result(self):
+        result=SimpleNamespace(returncode=1,stdout=(
+            "HEARTBEAT_ERROR=EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2\\n"
+            "RESULT=COMPOSER_CLEAR_FAILED_NO_SEND\\n"),stderr="")
+        with mock.patch.object(hud.subprocess,"run",return_value=result):
+            with self.assertRaisesRegex(RuntimeError,"EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2"):
+                hud.native_composer_clear()
+
     def test_delayed_app_at_login_does_not_form_empty_execution_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             scanner = Path(temp) / "scanner.ps1"
