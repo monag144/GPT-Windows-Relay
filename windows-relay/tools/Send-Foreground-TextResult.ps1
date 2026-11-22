@@ -163,7 +163,7 @@ function Get-ForegroundEditable {
         elseif($all.Count -eq 1){$editor=$all[0]}
         else{return $null}  # Ambiguous fields: never type into a guess.
         if(-not (Focus-CandidateEditor $window $editor $hwnd)){return $null}
-        Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'
+        $script:autoFocused=$true
     }
     if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd -or
        -not $editor.Current.HasKeyboardFocus){return $null}
@@ -256,6 +256,7 @@ function Assert-RunnerAllowed {
     }
 }
 
+$script:autoFocused=$false
 $inputStarted=$false
 $clickStarted=$false
 $script:wire=''
@@ -295,6 +296,7 @@ try{
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
     }
+    if($script:autoFocused){Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'}
     Write-Output 'SENDER_STAGE=FOREGROUND_TEXT_FIELD_FOUND'
     $before=Read-EditorText $target
     if($before.Contains($NativeReceiptMarker)){
