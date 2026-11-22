@@ -299,7 +299,7 @@ class State:
                     removable=None
                     for candidate in self.data['processed']:
                         delivery=deliveries.get(candidate)
-                        if not isinstance(delivery,dict) or delivery.get('phase') in {'SUBMITTED','SUBMIT_UNCERTAIN'}:
+                        if not isinstance(delivery,dict) or delivery.get('phase') in {'SUBMITTED','SUBMIT_UNCERTAIN','TEXT_INSERTED'}:
                             removable=candidate; break
                     if removable is None: break
                     self.data['processed'].pop(removable,None)
