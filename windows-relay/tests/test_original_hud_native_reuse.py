@@ -117,6 +117,14 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('go_btn.configure(text="GO…" if go_state["busy"] else',HUD)
         self.assertIn('go_results.put(("waiting",None))',HUD)
 
+    def test_go_does_not_hide_delivery_hold_when_new_commands_are_ready(self):
+        self.assertIn('COURIER_GO=EXECUTION_READY_DELIVERY_HELD',HUD)
+        self.assertIn('go_results.put(("held",None))',HUD)
+        self.assertIn('prior_result_held=(snap.get("native_phase")=="DELIVERY_BLOCKED"',HUD)
+        self.assertIn('"GO • HELD" if prior_result_held else',HUD)
+        self.assertIn('bg=("#9a6700" if prior_result_held else "#188038")',HUD)
+        self.assertIn("An older result remains HELD",HUD)
+
     def test_recovery_buttons_follow_actual_last_delivery_phase(self):
         self.assertIn("'native_delivery_phase':delivery_phase",HUD)
         self.assertIn("delivery_phase=snap.get('native_delivery_phase')",HUD)
