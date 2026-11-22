@@ -340,7 +340,8 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         for key in affected:
             item=self.state.outbound_lookup(key)
             self.assertEqual(item["phase"],"ABORTED")
-            self.assertEqual(item["attempt_count"],snapshot[key].get("attempt_count",0))
+            self.assertEqual(item.get("attempt_count",0),
+                             snapshot[key].get("attempt_count",0))
             self.assertEqual(item["saved_result_path"],snapshot[key]["saved_result_path"])
             self.assertEqual(item["force_clear_request_id"],"a"*32)
             self.assertEqual(item["force_clear_disposition"],
