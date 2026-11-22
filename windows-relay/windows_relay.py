@@ -412,6 +412,20 @@ class State:
             self._mutate_and_save(mutate)
             return finished
 
+    def record_outbound_sender_diagnostic(self,aid:str,stage:str,error:str=''):
+        """Persist payload-free UIA delivery evidence per result, not globally."""
+        stage=str(stage or 'UNKNOWN')[:80]
+        error=str(error or '')[:160]
+        with self.lock:
+            def mutate():
+                d=self.data.get('outbound_deliveries',{}).get(aid)
+                if not isinstance(d,dict):
+                    raise RelayError('delivery missing for diagnostic')
+                d['last_sender_stage']=stage
+                d['last_sender_error']=error
+                d['last_sender_observed_at']=now()
+            self._mutate_and_save(mutate)
+
     def defer_outbound_delivery(self,aid:str):
         """No focused text field: return a zero-input attempt to READY.
 
