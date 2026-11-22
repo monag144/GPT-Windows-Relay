@@ -436,6 +436,8 @@ def reconcile_force_clear_requests(state: wr.State) -> int:
             if path.is_symlink():
                 raise RuntimeError("NATIVE_FORCE_CLEAR_REQUEST_SYMLINK_REFUSED")
             data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise RuntimeError("NATIVE_FORCE_CLEAR_REQUEST_INVALID")
             request_id = data.get("id")
             if (not isinstance(request_id, str)
                     or not re.fullmatch(r"[0-9a-f]{32}", request_id)
