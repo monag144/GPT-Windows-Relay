@@ -127,3 +127,38 @@ user must run the repository sweep, open the HUD from the canonical launcher,
 verify native ARM/ARMED state, GO status, retention of Auto Send and the
 sign-in controls, and ensure no second HUD/consumer/backend appears.
 That check does not certify delivery to an arbitrary external destination.
+
+
+## PC Engineer 19 — efficiency and correctness pass (2026-11-21)
+
+- **GO readiness:** green GO success is only reported after the native
+  singleton is running, ARM/OFF policy remains valid, and the scanner has
+  established a valid receiver state (BASELINED, IDLE, EXECUTING, DELIVERING).
+  WAITING_FOR_CHATGPT_APP / BASELINING reports a distinct waiting state.
+  ERROR, DELIVERY_BLOCKED, DELIVERY_UNCERTAIN and runtime errors refuse GO
+  readiness rather than promising success from a process lock alone. This is
+  *not* a remote acknowledgement or packet delivery receipt.
+- **Original HUD startup:** `Reconcile-OriginalDesktopHUD.ps1` checks the
+  visible original HUD's process start time against `hud.py` source mtime.
+  It reuses a current visible HUD; after a Git pull changes source, it
+  restarts only the canonical HUD once. The first visible-window check now
+  polls for up to about 3 seconds to absorb Windows sign-in GUI timing.
+  It neither touches the historical mini HUD elsewhere nor runs browser
+  backends or packet commands.
+- **GUI responsiveness:** unchanged details are no longer deleted and
+  reinserted every second, preserving an operator's selection; GO is
+  disabled when OFF or disarmed and reports waiting appropriately. The
+  native Force Resend button is enabled only for a PRE_SUBMIT_FAILED result,
+  and Abort Send only for READY or PRE_SUBMIT_FAILED records.
+- **Automation constraint:** the `native-desktop-ci.yml` workflow now has
+  a full Windows Relay/Consumer sweep, but automatic push triggering was
+  disabled after GitHub created jobs without allocating a runner (zero
+  steps and failure in ~2 s). The workflow remains manual-dispatch only.
+  No failed GitHub Actions check should be treated as a code-test failure;
+  run the full sweep locally on Katana and inspect GitHub Actions settings
+  separately. Do not claim the new source passes Windows tests until
+  Katana reports the post-change sweep.
+- **Further risk to resolve:** standalone abort/clear CLI opens a separate
+  `State` while the runner also retains a live `State` instance.
+  Concurrency and durable queue ownership need a dedicated design/test
+  before promising reliable simultaneous operator recovery.
