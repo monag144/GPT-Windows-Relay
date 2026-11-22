@@ -427,6 +427,12 @@ function Invoke-ExistingDraftSubmit($target,$send){
 }
 
 function Recover-ExistingChatDraft($target,[string]$marker){
+    # Never reconcile a receipt from the active non-ChatGPT editor.
+    if(-not (Test-ChatGPTSubmissionTarget $target)){
+        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NOT_NATIVE_CHAT_COMPOSER'
+        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        return
+    }
     # Read-only receipt reconciliation happens BEFORE any keyboard event.
     if(-not (Test-EditorContainsMarker $target $marker)){
         if(Test-ConversationReceiptNotComposer $target $marker){
@@ -436,11 +442,6 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NO_OWN_DRAFT'
             Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         }
-        return
-    }
-    if(-not (Test-ChatGPTSubmissionTarget $target)){
-        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NOT_NATIVE_CHAT_COMPOSER'
-        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         return
     }
     if(-not (Test-ExactOwnDraft $target $marker)){
