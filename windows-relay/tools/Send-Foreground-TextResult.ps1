@@ -637,13 +637,9 @@ try{
     if([CourierForegroundInput]::InputSize() -ne $requiredSize){
         throw 'FOREGROUND_INPUT_STRUCT_SIZE_INVALID'
     }
-    # A chat Document may interpret newline keystrokes as Send.
-    # Flatten chat frames to prevent multiple partial messages.
-    $inputText=$script:wire
-    if($isChatComposer -or
-       [string]$target.editor.Current.ControlType.ProgrammaticName -eq 'ControlType.Edit'){
-        $inputText=$inputText.Replace("`r",' ').Replace("`n",' ')
-    }
+    # CR/LF keystrokes can submit partial results in rich chat editors.
+    # Insert one compact line regardless of which foreground app is selected.
+    $inputText=$script:wire.Replace("`r",' ').Replace("`n",' ')
     Assert-CurrentTarget $target
     $inputStarted=$true
     # Chunk large Unicode writes while checking exact focused editor.
