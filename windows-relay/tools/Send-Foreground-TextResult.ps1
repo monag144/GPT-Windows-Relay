@@ -310,8 +310,13 @@ try{
     if($reason -notmatch '^[A-Z0-9_]{3,90}$'){$reason='FOREGROUND_UNCLASSIFIED_ERROR'}
     Write-Output ('HEARTBEAT_ERROR='+$reason)
     if(-not $inputStarted){
-        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
-        exit 0
+        if($reason -in @('FOREGROUND_TARGET_CHANGED_DURING_INPUT',
+                        'FOCUSED_EDITOR_CHANGED_DURING_INPUT')){
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+            exit 0
+        }
+        Write-Output 'RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY'
+        exit 1
     }
     if($clickStarted){
         Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
