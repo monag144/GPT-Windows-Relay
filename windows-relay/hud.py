@@ -153,6 +153,8 @@ def native_snapshot():
     elif not live: title='OFFLINE'
     elif not armed: title='STOPPED'
     elif phase=='AWAITING_TEXT_FIELD': title='READY'
+    elif (phase=='DELIVERY_UNCERTAIN' and
+          report.get('last_result')=='SEND_PENDING'): title='READY'
     elif phase=='WAITING_FOR_CHATGPT_APP': title='READY'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
     elif phase=='FORWARDING_NO_CHATGPT':
@@ -187,6 +189,8 @@ def native_snapshot():
         phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif phase=='WAITING_FOR_CHATGPT_APP':
         phase_line='UI SOURCE NOT OPEN • foreground sender READY'
+    elif report.get('last_result')=='SEND_PENDING':
+        phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
     elif outstanding_count:
         phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
     return {
