@@ -6,7 +6,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$NativeResultPath,
     [Parameter(Mandatory=$true)][string]$NativeActionId,
-    [Parameter(Mandatory=$true)][string]$NativeReceiptMarker
+    [Parameter(Mandatory=$true)][string]$NativeReceiptMarker,
+    [switch]$SubmitExistingOnly
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -318,6 +319,147 @@ function Assert-RunnerAllowed {
     }
 }
 
+
+function Test-ExactOwnDraft($target,[string]$marker){
+    if(-not (Test-EditorContainsMarker $target $marker)){return $false}
+    # Do not submit a mixed human draft: both frame delimiters and the
+    # matching unique receipt must be visible in the same writable editor.
+    try{
+        $body=Read-EditorText $target
+        return ($body.Contains('[GPT_WINDOWS_RESULT]') -and
+                $body.Contains('[/GPT_WINDOWS_RESULT]') -and
+                $body.Contains($marker))
+    }catch{return $false}
+}
+
+function Test-ChatGPTSubmissionTarget($target){
+    # Auto-resend is *only* for a proven native ChatGPT composer. Other
+    # editors (including Notepad and terminals) never receive Enter.
+    try{
+        $proc=Get-Process -Id ([int]$target.window.Current.ProcessId) -ErrorAction Stop
+        if($proc.ProcessName -ine 'ChatGPT'){return $false}
+        $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
+        return ($kind -in @('ControlType.Edit','ControlType.Document'))
+    }catch{return $false}
+}
+
+function Invoke-ExistingDraftSubmit($target,$send){
+    Assert-RunnerAllowed
+    Assert-CurrentTarget $target
+    $type=[string]$target.editor.Current.ControlType.ProgrammaticName
+    if($type -eq 'ControlType.Edit' -or $null -eq $send){
+        # Named native ChatGPT composer and exact own receipt are
+        # independently required by the caller. No blind Enter.
+        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_BEGIN'
+        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
+            throw 'SUBMIT_ONLY_ENTER_INCOMPLETE'
+        }
+        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_COMPLETED'
+        return
+    }
+    $bounds=$send.Current.BoundingRectangle
+    $root=$target.window.Current.BoundingRectangle
+    $x=[int][Math]::Round(($bounds.Left+$bounds.Right)/2)
+    $y=[int][Math]::Round(($bounds.Top+$bounds.Bottom)/2)
+    if($x -lt $root.Left -or $x -ge $root.Right -or
+       $y -lt $root.Top -or $y -ge $root.Bottom){
+        throw 'SUBMIT_ONLY_BUTTON_OUTSIDE_WINDOW'
+    }
+    $cursor=New-Object CourierForegroundInput+POINT
+    if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
+        throw 'SUBMIT_ONLY_CURSOR_UNAVAILABLE'
+    }
+    Write-Output 'SENDER_STAGE=SUBMIT_ONLY_CLICK_BEGIN'
+    try{
+        if(-not [CourierForegroundInput]::SetCursorPos($x,$y)){
+            throw 'SUBMIT_ONLY_CURSOR_MOVE_FAILED'
+        }
+        [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 70
+        [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
+    }finally{
+        [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
+    }
+    Write-Output 'SENDER_STAGE=SUBMIT_ONLY_CLICK_COMPLETED'
+}
+
+function Recover-ExistingChatDraft($target,[string]$marker){
+    # Read-only receipt reconciliation happens BEFORE any keyboard event.
+    if(-not (Test-EditorContainsMarker $target $marker)){
+        if(Test-TranscriptMarker $target $marker){
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT'
+            Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
+        }else{
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NO_OWN_DRAFT'
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        }
+        return
+    }
+    if(-not (Test-ChatGPTSubmissionTarget $target)){
+        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NOT_NATIVE_CHAT_COMPOSER'
+        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        return
+    }
+    if(-not (Test-ExactOwnDraft $target $marker)){
+        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_DRAFT_NOT_EXACT'
+        Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+        return
+    }
+    # A valid draft can be sent at most twice in this invocation: the
+    # original input is NEVER retyped or passed to any process executor.
+    for($attempt=1;$attempt -le 2;$attempt++){
+        if(-not (Test-ExactOwnDraft $target $marker)){
+            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            return
+        }
+        if(Test-TranscriptMarker $target $marker){
+            # Transcript may still include composer; never click if both
+            # show the same receipt, because server state is ambiguous.
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_TRANSCRIPT_AMBIGUOUS'
+            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            return
+        }
+        $send=Find-SendButton $target
+        $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
+        $name=[string]$target.editor.Current.Name
+        if($null -eq $send -and $name -notmatch
+            '(?i)ask chatgpt|ask anything|message|prompt|compose'){
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'
+            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            return
+        }
+        Write-Output ('SENDER_STAGE=SUBMIT_ONLY_ATTEMPT_'+$attempt)
+        Invoke-ExistingDraftSubmit $target $send
+        for($tick=0;$tick -lt 45;$tick++){
+            Start-Sleep -Milliseconds 200
+            try{
+                $draftPresent=Test-EditorContainsMarker $target $marker
+                if(-not $draftPresent -and (Test-TranscriptMarker $target $marker)){
+                    Write-Output 'SENDER_STAGE=CONFIRMED_IN_CONVERSATION'
+                    Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
+                    return
+                }
+                if(-not $draftPresent){
+                    # Draft cleared but UIA transcript not yet caught up:
+                    # this is uncertain, and another Enter may create a
+                    # duplicate or send an unrelated draft.
+                    Write-Output 'SENDER_STAGE=SUBMIT_ONLY_DRAFT_CLEARED_UNCONFIRMED'
+                    Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+                    return
+                }
+            }catch{
+                Write-Output 'SENDER_STAGE=SUBMIT_ONLY_VERIFICATION_UNAVAILABLE'
+                Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+                return
+            }
+        }
+        # Retry another Send ONLY if the exact original receipt is STILL
+        # visible in the composer, and no transcript receipt appeared.
+    }
+    Write-Output 'SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED'
+    Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+}
+
 $script:autoFocused=$false
 $inputStarted=$false
 $submitStarted=$false
@@ -360,6 +502,10 @@ try{
     }
     if($script:autoFocused){Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'}
     Write-Output 'SENDER_STAGE=FOREGROUND_TEXT_FIELD_FOUND'
+    if($SubmitExistingOnly){
+        Recover-ExistingChatDraft $target $NativeReceiptMarker
+        exit 0
+    }
     $before=Read-EditorText $target
     $sendBefore=Find-SendButton $target
     if(Test-EditorContainsMarker $target $NativeReceiptMarker){
@@ -441,7 +587,14 @@ try{
     Write-Output 'SENDER_STAGE=TEXT_INSERTION_VERIFIED'
     $send=if($allowSubmit){Find-SendButton $target}else{$null}
     if($null -eq $send){
-        Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
+        if($isChatComposer){
+            # In a known chat composer, typed != submitted. The native
+            # runner schedules a SEND ONLY recovery with this same nonce.
+            Write-Output 'SENDER_STAGE=CHAT_DRAFT_PENDING_SEND'
+            Write-Output 'RESULT=CHAT_SEND_PENDING'
+        }else{
+            Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
+        }
         exit 0
     }
     Assert-RunnerAllowed
