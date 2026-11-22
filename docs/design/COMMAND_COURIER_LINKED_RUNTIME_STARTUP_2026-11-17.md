@@ -266,3 +266,73 @@ can block the **ChatGPT UI destination's send attempt**, but cannot logically
 be a prerequisite for Command Courier's general detection, execution, or
 API/non-UI forwarding. Keep the failed ChatGPT delivery held and test an
 independent destination separately when its adapter exists.
+
+## Director's corrected zero-configuration UI-target contract (2026-11-21)
+
+**Supersedes the earlier suggestion that a configured input directory,
+selected clipboard source, explicit ChatGPT target, or API route is required
+for ordinary desktop Command Courier operation.**
+
+**SOURCE OF PAYLOAD:** The relay already owns the body of output from the
+command/script/API operation it processed (e.g. the durable outbound result
+stored by `outbox_result()`). No directory watcher, text copy, CTRL+C,
+operator-selected input folder or additional input-source configuration is
+needed to send **that** result. In particular, a text field in Notepad or
+ChatGPT is an OUTPUT DESTINATION, not an INPUT SOURCE.
+
+**OUTPUT TARGET:** On the armed/Auto Send path, discover the foreground
+interactive application's focused usable text entry field at runtime using
+Windows UI Automation. No allowlist of application names or manually
+configured input-source/recipient folders. A detected target must be
+foreground/keyboard-focused, enabled, writable, visible, and not a password
+or protected input. Deliver the pending body to that text field without
+overwriting unrelated user text or executing the delivered body.
+
+**COMMIT / SEND SEMANTICS:** There is no single app-independent action that
+always submits a text field. For an editor like Notepad, typing into the field
+is the intended text-delivery event; pressing Enter merely adds a line break
+and is **not** proof that a message was transmitted. For chat apps, first
+discover an unambiguous accessible Send/Submit control belonging to that
+foreground window (or a known destination-specific adapter), activate it,
+and verify its receipt independently. Never blindly press Enter when the
+receiving control's semantics are unknown: doing so in a terminal could run
+a command, and in Notepad could change content. A successful write to an
+editor must be recorded distinctly from an acknowledged message submission.
+This is a **destination protocol distinction**, not a configured-source
+requirement.
+
+**WHEN NO TARGET EXISTS:** Retain the output once in the durable outbox and
+report "AWAITING_TEXT_FIELD" rather than erasing it, crashing, or marking it
+sent. Re-probe when an eligible foreground field becomes available; never
+rerun the original command just to deliver it. The recipient-control state
+must be verified immediately before injecting text because users may switch
+windows between scan and send. Avoid forwarding stale historical results
+merely because a new unrelated window appeared; establish an eligible
+result-delivery identity and operator arming boundary.
+
+**EXISTING CODE STATUS:** The current `Send-ChatGPT-DesktopHeartbeat.ps1`
+targets a ChatGPT-specific window, named composer and Send button. The
+independent `courier_forwarder.py` and copied-text TEST FIRE implement
+optional, explicit file/API/clipboard diagnostics, NOT the above universal
+foreground editable-field egress. They are retained as optional test
+infrastructure, not the default conceptual relay workflow. The generic UIA
+target adapter is **not yet implemented or Windows-validated**; do not claim
+this design amendment makes auto-target forwarding work today.
+
+**ACCEPTANCE CRITERIA:**
+1. Newly produced unique result forwarded to a focused Notepad document
+   without any configured file input, clipboard action or ChatGPT process;
+   body preserved byte-equivalently where the UI supports it; no Enter/command
+   execution.
+2. Newly produced result forwarded to a focused chat composer in a different
+   application with no ChatGPT process-name dependency; a real sender receipt
+   is required before marking chat delivery completed.
+3. No visible or focused editable field: result stays pending, no silent loss,
+   no fake SUBMITTED status and no duplicate command execution.
+4. Switching focus to another window during delivery does not send into the
+   wrong field; password, protected, disabled and ambiguous fields are not
+   targets.
+5. Original native ChatGPT flow, old delivery holds, original HUD controls
+   and bookmarked baseline remain intact; tests must be run on Katana.
+
+**This is the authoritative target for the next engineering slice.**
