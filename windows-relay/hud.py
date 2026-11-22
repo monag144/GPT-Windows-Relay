@@ -860,6 +860,19 @@ def run_ui():
             clear_busy["value"]=False
             if kind=="error":
                 messagebox.showerror("Force Clear",value,parent=root)
+            else:
+                # A verified empty composer is not a delivery receipt. Keep
+                # the historical failed result and its durable hold visible.
+                current=native_snapshot() if native_mode() else {}
+                still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")
+                messagebox.showinfo("Force Clear",
+                    "ChatGPT composer verified empty.\\n\\n"
+                    + ("The last result remains HELD. The relay can accept new commands. "
+                       "Use ABORT SEND to cancel that result, or FORCE RESEND only after "
+                       "confirming it never reached ChatGPT."
+                       if still_held else
+                       "No saved result was resent, aborted or discarded."),
+                    parent=root)
         while not go_results.empty():
             kind,error=go_results.get_nowait()
             go_state["busy"]=False
