@@ -111,6 +111,23 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertTrue(snap["online"])
         self.assertIn("DELIVERY BLOCKED:",snap["exact"])
 
+    def test_pending_chat_send_does_not_mislabel_running_engine_stalled(self):
+        aid="PCE19-RECOVERABLE-SEND-PENDING-001"
+        report={"native_running":True,"native_armed":True,"native_off":False,
+                "auto_send":True,"phase":"DELIVERY_UNCERTAIN",
+                "delivery_blocked":True,"last_action":aid,"last_result":"SEND_PENDING",
+                "last_delivery_error":"SENDER_NO_RECEIPT"}
+        persisted={"outbound_deliveries":{
+            aid:{"phase":"SEND_PENDING","attempt_count":1}}}
+        with mock.patch.object(native,"get_status",return_value=report), \
+             mock.patch.object(hud,"read_json",return_value=persisted), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            snap=hud.native_snapshot()
+        self.assertEqual(snap["title"],"READY")
+        self.assertEqual(snap["outbound_unresolved_count"],1)
+        self.assertIn("CHAT SEND PENDING",snap["phase"])
+        self.assertTrue(snap["online"])
+
     def test_force_clear_runs_only_standalone_powershell_composer_action(self):
         result=SimpleNamespace(returncode=0,stdout=(
             "COMPOSER_CLEAR=VERIFIED_EMPTY\\n"
