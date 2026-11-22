@@ -45,13 +45,40 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("Set-ComposerTextBySendInput $window $composer $script:wire",SOURCE)
         self.assertIn("COMPOSER_NOT_FOCUSED_REFUSE_SENDINPUT",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_SEND",SOURCE)
-        self.assertIn("HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
+        self.assertIn("RESULT_RECEIPT_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN",SOURCE)
         self.assertIn("mouse_event([uint32]0x0002",SOURCE)
         self.assertIn("mouse_event([uint32]0x0004",SOURCE)
         self.assertNotIn("$send.pattern.Invoke()",SOURCE)
         self.assertIn("CHATGPT_NOT_FOREGROUND_REFUSE_INPUT",SOURCE)
         self.assertIn("COMPOSER_CHANGED_BEFORE_MOUSE_CLICK",SOURCE)
+
+    def test_native_result_duplicate_guard_uses_receipt_before_typing_not_action_id(self):
+        # Katana 003: the instruction ID is already visible in its original
+        # action packet, so an ID-only Document search after typing our draft
+        # falsely reports that its result has already been submitted.
+        self.assertIn(
+            '$conversationResultMarker=if($NativeResultPath){$NativeReceiptMarker}else{$id}',
+            SOURCE)
+        self.assertIn("SENDER_STAGE=PRIOR_RESULT_ABSENCE_VERIFIED",SOURCE)
+        self.assertIn("RESULT_RECEIPT_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
+        preinput=SOURCE.index("SENDER_STAGE=PRIOR_RESULT_ABSENCE_VERIFIED")
+        typed=SOURCE.index("SENDER_STAGE=INPUT_BEGIN")
+        click=SOURCE.index("SENDER_STAGE=CLICK_BEGIN")
+        self.assertLess(preinput,typed)
+        self.assertLess(typed,click)
+        self.assertNotIn("Has-Marker $doc $id",SOURCE)
+        self.assertNotIn("HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE",SOURCE)
+        before_click=SOURCE[typed:click]
+        self.assertNotIn("Has-Marker $doc",before_click)
+        self.assertIn("Test-OwnHeartbeatDraft",before_click)
+        self.assertIn("Get-EnabledSend $window",before_click)
+        after_click=SOURCE[click:]
+        self.assertIn("Has-Marker $doc $conversationResultMarker",after_click)
+        self.assertIn("and $composerCleared",after_click)
+        # No error branch in this repair can release a hold or auto-resend.
+        self.assertNotIn("release_failed_delivery",SOURCE)
+        self.assertNotIn("force-delivery",before_click)
 
     def test_placeholder_exception_requires_independent_disabled_send_gate(self):
         # A real message matching placeholder wording must not be overwritten
