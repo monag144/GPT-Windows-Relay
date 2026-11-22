@@ -145,6 +145,45 @@ class TextForwarderTests(unittest.TestCase):
             f.tick(self.home, enabled=True)
         self.assertFalse((self.home / "courier-forwarding-state.json").exists())
 
+    def test_previously_delivered_files_never_starve_new_inputs(self):
+        self.config()
+        for i in range(f.MAX_FILES_PER_TICK + 5):
+            (self.src / ("file-%03d.txt" % i)).write_text(str(i), encoding="utf-8")
+        self.assertEqual(f.tick(self.home, enabled=True)["forwarded"],
+                         f.MAX_FILES_PER_TICK)
+        self.assertEqual(f.tick(self.home, enabled=True)["forwarded"], 5)
+        self.assertEqual(f.tick(self.home, enabled=True)["forwarded"], 0)
+        self.assertEqual(len(list(self.dst.glob("*.txt"))), f.MAX_FILES_PER_TICK+5)
+
+    def test_operator_can_configure_and_disable_forwarding_without_ui(self):
+        import command_courier as courier
+        with mock.patch.object(courier, "HOME", self.home), \
+             mock.patch("builtins.print") as output:
+            result=courier.main([
+                "route","set","--id","application-results",
+                "--source",str(self.src),"--to-dir",str(self.dst)
+            ])
+            self.assertEqual(result,0)
+            self.assertEqual(courier.main(["route","status"]),0)
+            self.assertEqual(courier.main(["route","disable"]),0)
+        config=json.loads((self.home/"courier-forwarding.json").read_text())
+        self.assertFalse(config["enabled"])
+        self.assertEqual(config["routes"][0]["id"],"application-results")
+        self.assertEqual(f.tick(self.home,enabled=True)["active"],False)
+        with mock.patch.object(courier,"HOME",self.home), \
+             mock.patch("builtins.print"):
+            self.assertEqual(courier.main(["route","enable"]),0)
+        self.assertEqual(f.status(self.home)["routes"],1)
+
+    def test_configure_one_named_route_atomically(self):
+        f.configure_route(self.home,"existing",str(self.src),
+                          "directory",str(self.dst))
+        f.configure_route(self.home,"existing",str(self.src),
+                          "http","https://api.example.test/in")
+        routes=f.load_routes(self.home)
+        self.assertEqual(len(routes),1)
+        self.assertEqual(routes[0]["destination"]["type"],"http")
+
     def test_no_redirect_accepted_for_selected_http_destination(self):
         handler = f._NoRedirect()
         self.assertIsNone(handler.redirect_request(None, None, 302, "redirect",
