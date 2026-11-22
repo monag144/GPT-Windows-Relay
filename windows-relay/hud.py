@@ -173,7 +173,7 @@ def native_snapshot():
     delivery_phase=str(delivery.get('phase') or '') if isinstance(delivery,dict) else ''
     outstanding_count=(sum(1 for item in deliveries.values()
                            if isinstance(item,dict) and item.get('phase')
-                           in ('READY','PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN'))
+                           in ('READY','PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN','SEND_PENDING'))
                        if isinstance(deliveries,dict) else 0)
     cmd=command_preview(detail.get('command') if detail else '')
     exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
