@@ -9,6 +9,7 @@ The journal is independent of native command/result delivery holds.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from contextlib import contextmanager
 from pathlib import Path
 from urllib import request, error, parse
 import hashlib
@@ -16,6 +17,15 @@ import json
 import os
 import re
 import tempfile
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 import windows_relay as wr
 
@@ -28,6 +38,33 @@ ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]{0,79}$")
 
 class ForwardingError(RuntimeError):
     pass
+
+
+@contextmanager
+def _route_lock(home: Path):
+    """Cross-process courier journal owner for runner and operator CLI."""
+    home.mkdir(parents=True, exist_ok=True)
+    with (home / "courier-forwarding.lock").open("a+b") as handle:
+        if os.name == "nt":
+            if msvcrt is None:
+                raise ForwardingError("FORWARDING_LOCK_UNAVAILABLE")
+            if handle.seek(0, os.SEEK_END) == 0:
+                handle.write(b"x")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        elif fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        else:
+            raise ForwardingError("FORWARDING_LOCK_UNAVAILABLE")
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def timestamp():
@@ -178,6 +215,15 @@ def _baseline_existing_inputs(home: Path, route: dict):
 def configure_route(home: Path, route_id: str, source: str,
                     destination_type: str, value: str,
                     *, bearer_token_env: str | None = None):
+    with _route_lock(home):
+        return _configure_route_unlocked(
+            home, route_id, source, destination_type, value,
+            bearer_token_env=bearer_token_env)
+
+
+def _configure_route_unlocked(home: Path, route_id: str, source: str,
+                              destination_type: str, value: str,
+                              *, bearer_token_env: str | None = None):
     """Explicit operator action; replaces one named route atomically."""
     current = _json(home / "courier-forwarding.json", None)
     if current is None:
@@ -213,6 +259,11 @@ def configure_route(home: Path, route_id: str, source: str,
 
 
 def set_enabled(home: Path, value: bool):
+    with _route_lock(home):
+        return _set_enabled_unlocked(home, value)
+
+
+def _set_enabled_unlocked(home: Path, value: bool):
     current = _json(home / "courier-forwarding.json", None)
     if current is None:
         raise ForwardingError("FORWARDING_NOT_CONFIGURED")
@@ -295,6 +346,13 @@ def _dispatch(route: dict, body: bytes, key: str):
 
 
 def tick(home: Path, *, enabled: bool) -> dict:
+    if not enabled or not (home / "courier-forwarding.json").is_file():
+        return {"active": False, "forwarded": 0, "held": 0}
+    with _route_lock(home):
+        return _tick_unlocked(home, enabled=enabled)
+
+
+def _tick_unlocked(home: Path, *, enabled: bool) -> dict:
     """Process a bounded batch; never depend on ChatGPT composer availability.
 
     Every body is forwarded once per route, filename and content hash. A
