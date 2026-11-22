@@ -617,6 +617,25 @@ def run_ui():
     settings_status.pack(fill="x",pady=(5,2))
     tk.Label(settings_frame,text="At user sign-in, not before login. STOP/OFF remain authoritative.",
              font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w").pack(fill="x")
+    # Temporary diagnostics live only in the original expanded Settings pane.
+    # No second HUD and no changes to compact 560×184 controls.
+    debug_row=tk.Frame(settings_frame,bg=PANEL)
+    debug_row.pack(fill="x",pady=(5,1))
+    debug_test_btn=tk.Button(debug_row,text="TEST FIRE",font=("Segoe UI",8,"bold"),
+                             bg="#174ea6",fg=FG,activebackground="#1967d2",
+                             activeforeground=FG,bd=0,padx=10,pady=2,cursor="hand2")
+    debug_test_btn.pack(side="left",padx=(0,6))
+    debug_routes_btn=tk.Button(debug_row,text="CHECK ROUTES",font=("Segoe UI",8,"bold"),
+                               bg="#3c4043",fg=FG,activebackground="#5f6368",
+                               activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
+    debug_routes_btn.pack(side="left")
+    tk.Label(debug_row,text="Temporary debug • local file route only",
+             font=("Segoe UI",8),bg=PANEL,fg=MUTED).pack(side="left",padx=(8,0))
+    debug_status=tk.Label(settings_frame,
+                          text="Test Fire verifies the real background forwarder and saved receipt.",
+                          font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w",
+                          justify="left",wraplength=W-35)
+    debug_status.pack(fill="x",pady=(1,0))
 
     drag={"x":0,"y":0}
     def down(e):drag["x"]=e.x_root-root.winfo_x(); drag["y"]=e.y_root-root.winfo_y()
@@ -785,6 +804,45 @@ def run_ui():
     go_btn.configure(command=on_go)
 
     native_view={"snap":None}
+    debug_results=queue.Queue()
+    debug_state={"busy":False}
+    def run_debug_action(action):
+        if not native_mode() or debug_state["busy"]:return
+        snap=native_view.get("snap") or {}
+        if action=="fire" and (not snap.get("online") or not snap.get("native_armed")
+                or snap.get("native_off") or not snap.get("auto_send")):
+            debug_status.configure(text="TEST FIRE requires running, ARMED, Auto Send ON.",
+                                   fg=WARN)
+            return
+        debug_state["busy"]=True
+        debug_test_btn.configure(state="disabled")
+        debug_routes_btn.configure(state="disabled")
+        debug_status.configure(text="TEST FIRE in progress…" if action=="fire"
+                               else "Checking forwarding routes…",fg=WARN)
+        def debug_worker():
+            try:
+                if action=="fire":
+                    result=courier_hud_cli("test-fire")
+                    line=next((item for item in result.splitlines()
+                               if item.startswith("COURIER_TEST_FIRE=")),None)
+                    if not line:raise RuntimeError("TEST_FIRE_RECEIPT_MISSING")
+                    receipt=json.loads(line.partition("=")[2])
+                    if receipt.get("result")!="PASS":
+                        raise RuntimeError("TEST_FIRE_UNVERIFIED")
+                    debug_results.put(("fire",receipt))
+                else:
+                    result=courier_hud_cli("route","status")
+                    line=next((item for item in result.splitlines()
+                               if item.startswith("COURIER_TEXT_FORWARDING_STATUS=")),None)
+                    if not line:raise RuntimeError("ROUTE_STATUS_UNAVAILABLE")
+                    debug_results.put(("routes",json.loads(line.partition("=")[2])))
+            except Exception as exc:
+                debug_results.put(("error",str(exc)[-200:]))
+        threading.Thread(target=debug_worker,
+                         name="courier-debug-test-fire" if action=="fire"
+                              else "courier-debug-route-check",daemon=True).start()
+    debug_test_btn.configure(command=lambda:run_debug_action("fire"))
+    debug_routes_btn.configure(command=lambda:run_debug_action("routes"))
     def native_action_id():
         snap=native_view.get("snap") or {}
         return str(snap.get("action") or "").removeprefix("LAST ").removeprefix("CURRENT ").strip()
@@ -849,6 +907,23 @@ def run_ui():
 
     colors={"OFFLINE":BAD,"DISCONNECTED":BAD,"KILL FAILED":BAD,"KILLING RELAY":BAD,"KILLING HUD":BAD,"OFF":MUTED,"STOPPED":WARN,"STALLED":BAD,"RECOVERING":WARN,"APPROVAL REQUIRED":BAD,"RECOVERY ADVICE":WARN,"RECOVERY INVALID":BAD,"WAITING":WARN,"WAITING FOR GPT TURN END":WARN,"DELIVERING":WARN,"RESULT READY":WARN,"STARTING":WARN,"DISCOVERED":WARN,"REPLAY SUPPRESSED":WARN,"RUNNING":GOOD,"READY":GOOD,"PAUSED":WARN}
     def refresh():
+        while not debug_results.empty():
+            kind,data=debug_results.get_nowait()
+            debug_state["busy"]=False
+            debug_routes_btn.configure(state="normal")
+            if kind=="fire":
+                debug_status.configure(
+                    text="PASS • "+str(data["route"])+" • "+str(data["bytes"])+
+                         " bytes • "+str(data["receipt"])+" • nonce "+str(data["nonce"])[:8],
+                    fg=GOOD)
+            elif kind=="routes":
+                debug_status.configure(
+                    text="Routes: "+str(data.get("routes",0))+
+                         " • delivered "+str(data.get("delivered",0))+
+                         " • held "+str(data.get("held",0))+
+                         " • enabled "+str(data.get("enabled",False)),fg=FG)
+            else:
+                debug_status.configure(text="TEST FIRE / ROUTE ERROR • "+str(data),fg=BAD)
         while not lock_results.empty():
             kind,value=lock_results.get_nowait()
             lock_state["busy"]=False
@@ -923,6 +998,11 @@ def run_ui():
                              bg="#188038" if armed and not snap.get("native_off") else "#3c4043",
                              activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
+            debug_test_btn.configure(
+                state="normal" if not debug_state["busy"] and armed and snap["online"]
+                                  and not snap.get("native_off") and enabled else "disabled")
+            debug_routes_btn.configure(
+                state="normal" if not debug_state["busy"] else "disabled")
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
                                     activebackground='#188038' if enabled else '#991b1b',state='normal')
@@ -940,6 +1020,8 @@ def run_ui():
             root.after(1000,refresh)
             return
         gear_btn.configure(state='disabled')
+        debug_test_btn.configure(state='disabled')
+        debug_routes_btn.configure(state='disabled')
         start_btn.configure(text="START",state="normal",bg="#174ea6",
                             activebackground="#1967d2")
         go_btn.configure(text="GO",state="disabled",bg="#3c4043")
