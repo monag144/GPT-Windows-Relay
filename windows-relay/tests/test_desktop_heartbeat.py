@@ -151,13 +151,22 @@ class DesktopHeartbeatTests(unittest.TestCase):
         end = SOURCE.index("# UIA ValuePattern may normalize", start)
         function = SOURCE[start:end]
         self.assertIn("if(Test-ComposableEmptyState $window $composer){return $composer}", function)
-        self.assertIn("if(Test-ComposableEmptyState $window $current){return $current}", function)
+        self.assertIn("if(Test-ComposerClearPostInput $window $current){return $current}", function)
         self.assertLess(function.index("if(Test-ComposableEmptyState $window $composer)"),
                         function.index("[DesktopHeartbeatForeground]::ClearFocusedComposer()"))
         self.assertIn("COMPOSER_CLEAR_NOT_FOCUSED_REFUSE_KEYBOARD", function)
         self.assertIn("COMPOSER_CLEAR_KEYBOARD_INCOMPLETE=", function)
         self.assertIn("if($sent -ne 6)", function)
         self.assertIn("COMPOSER_FORCE_CLEAR_NOT_CONFIRMED", function)
+        independent=SOURCE.split("function Test-ComposerClearPostInput($window,$composer){",1)[1].split(
+            "function Clear-ComposerForForcedDelivery",1)[0]
+        self.assertIn("if(Test-ComposableEmptyState $window $composer){return $true}",independent)
+        self.assertIn("Test-DisabledSendControlPresent $window",independent)
+        self.assertIn("Test-ComposerTextPatternEmpty $composer",independent)
+        self.assertIn("Get-EnabledSend $window",independent)
+        self.assertIn("return $false",independent)
+        self.assertNotIn("SetValue(",independent)
+        self.assertNotIn("ClearFocusedComposer()",independent)
         self.assertNotIn("$composer.pattern.SetValue('')", function)
         self.assertNotIn("Write-Output", function)
         self.assertIn("FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT", SOURCE)
@@ -178,7 +187,7 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("$composer.node.SetFocus()",clear)
         self.assertIn("HasKeyboardFocus",clear)
         self.assertIn("ClearFocusedComposer()",clear)
-        self.assertIn("Test-ComposableEmptyState $window $current",clear)
+        self.assertIn("Test-ComposerClearPostInput $window $current",clear)
         self.assertNotIn("SetValue(",clear)
         clear_start=SOURCE.index("    if($ClearComposerOnly){",
                                  SOURCE.index("SENDER_STAGE=APP_WINDOW_FOUND"))
