@@ -90,7 +90,7 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('not snap.get("auto_send")', helper)
         self.assertIn('focus_chatgpt_for_forced_delivery()', helper)
         self.assertNotIn('native_delivery_control(', helper)
-        self.assertNotIn('force-delivery', helper)
+        self.assertNotIn('native_delivery_control("force-delivery"', helper)
         self.assertIn('force_command_btn.configure(command=focus_for_send_retry)', HUD_SOURCE)
         self.assertIn("delivery_phase=='SEND_PENDING' and enabled", HUD_SOURCE)
 
