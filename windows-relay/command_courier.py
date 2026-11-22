@@ -217,6 +217,21 @@ def routes(action: str, *, route_id: str | None = None,
     return 0
 
 
+def test_fire(route_id: str | None = None) -> int:
+    """Manually exercise one configured local file route end to end.
+
+    The native singleton must forward the packet. This command never ticks
+    the router itself, uses ChatGPT UI, or sends to an HTTP destination.
+    """
+    if runtime_mode() != NATIVE:
+        raise RuntimeError("COURIER_TEST_FIRE_NATIVE_PROFILE_REQUIRED")
+    import desktop_native_relay as native
+    import courier_test_fire as debug
+    report = debug.fire(HOME, native.get_status(), route_id=route_id)
+    print("COURIER_TEST_FIRE=" + json.dumps(report, sort_keys=True))
+    return 0
+
+
 def startup(action: str) -> int:
     """Only the current user's Startup shortcut is changed, on explicit request."""
     if not IS_WINDOWS:
@@ -242,6 +257,8 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("start")
     sub.add_parser("go")
+    fire = sub.add_parser("test-fire", help="Temporary debug: real file-route test with receipt")
+    fire.add_argument("--route", dest="fire_route", help="Explicit configured directory route")
     sub.add_parser("status")
     profile = sub.add_parser("profile")
     profile.add_argument("mode", nargs="?", choices=sorted(ALLOWED))
@@ -267,6 +284,8 @@ def main(argv=None) -> int:
             return go()
         if args.command == "status":
             return status()
+        if args.command == "test-fire":
+            return test_fire(args.fire_route)
         if args.command == "profile":
             if args.mode is not None:
                 select_runtime(args.mode)
