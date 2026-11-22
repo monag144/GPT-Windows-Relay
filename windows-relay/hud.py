@@ -790,7 +790,7 @@ def run_ui():
     def force_clear_composer():
         if not native_mode() or clear_busy["value"]:return
         if not messagebox.askyesno("Force Clear ChatGPT Composer",
-                "Discard the current unsent ChatGPT composer text?\\n\\n"
+                "Discard the current unsent ChatGPT composer text?\n\n"
                 "This cannot be undone. No relay packet will be sent, retried "
                 "or deleted. Continue?",parent=root):
             return
