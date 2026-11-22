@@ -318,15 +318,25 @@ function Set-ComposerTextBySendInput($window,$composer,[string]$text){
     }
     Write-Output ('COMPOSER_SENDINPUT_EVENTS='+$sent)
 }
-function Try-ClearOwnDraft($window){
+function Report-UnsentDraftState($window){
+    # If a pre-click submission fails, keep OUR unsent packet in the composer
+    # for operator inspection. Force Clear is an explicit separate control;
+    # a failed sender must never silently discard a visible result.
+    # Report metadata only: never log message text or clipboard contents.
     if($script:submitted -or [string]::IsNullOrEmpty($script:wire)){return}
     try{
         $c=Get-Composer $window
-        if(Test-OwnHeartbeatDraft ([string]$c.pattern.Current.Value)){
-            $c.pattern.SetValue('')
-            Write-Output 'OWN_UNSENT_DRAFT_CLEARED=ATTEMPTED'
+        $value=[string]$c.pattern.Current.Value
+        if(Test-OwnHeartbeatDraft $value){
+            Write-Output 'OWN_UNSENT_DRAFT=PRESERVED_IN_COMPOSER'
+        }elseif(Test-ComposableEmptyState $window $c){
+            Write-Output 'OWN_UNSENT_DRAFT=NO_DRAFT_VISIBLE'
+        }else{
+            Write-Output 'OWN_UNSENT_DRAFT=CHANGED_OR_UNVERIFIED_NO_MUTATION'
         }
-    }catch{}
+    }catch{
+        Write-Output 'OWN_UNSENT_DRAFT=COMPOSER_UNREADABLE_NO_MUTATION'
+    }
 }
 Write-Output 'CHATGPT_DESKTOP_SENDER_V4'
 Write-Output 'MODE=CHATGPT_DESKTOP_OUTBOUND_ONLY_NO_COMMAND_EXECUTION'
@@ -538,14 +548,28 @@ try{
     Set-ComposerTextBySendInput $window $composer $script:wire
     Write-Output 'SENDER_STAGE=INPUT_COMPLETED'
     $send=$null
-    for($i=0;$i -lt 25;$i++){
+    $draftMatches=$false
+    $readFailures=0
+    # ChatGPT can rebuild UIA nodes after a long Unicode input. Retry transient
+    # discovery without clearing the draft or trying a blind Enter click.
+    for($i=0;$i -lt 50;$i++){
         Start-Sleep -Milliseconds 200
-        $composer=Get-Composer $window
-        if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){continue}
-        $send=Get-EnabledSend $window
-        if($null -ne $send){break}
+        try{
+            $composer=Get-Composer $window
+            $draftMatches=Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value)
+            if(-not $draftMatches){continue}
+            $send=Get-EnabledSend $window
+            if($null -ne $send){break}
+        }catch{
+            $readFailures++
+        }
     }
-    if($null -eq $send){throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'}
+    if($null -eq $send){
+        Write-Output 'SENDER_STAGE=SEND_BUTTON_NOT_READY'
+        Write-Output ('UIA_SEND_READY_DRAFT_MATCH='+$draftMatches)
+        Write-Output ('UIA_SEND_READY_READ_FAILURES='+$readFailures)
+        throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'
+    }
     Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'
     Write-Output 'UIA_SEND_BUTTON=ENABLED'
     Write-Output 'SENDER_STAGE=SEND_BUTTON_ENABLED'
@@ -629,7 +653,7 @@ try{
         Write-Output 'RESULT=COMPOSER_CLEAR_FAILED_NO_SEND'
         exit 1
     }
-    if($null -ne $window){Try-ClearOwnDraft $window}
+    if($null -ne $window){Report-UnsentDraftState $window}
     Write-Output 'RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY'
     exit 1
 }
