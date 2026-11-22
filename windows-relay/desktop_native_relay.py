@@ -695,11 +695,11 @@ def deliver(state: wr.State, aid: str):
 
 
 def recover_submit_only(state: wr.State, aid: str):
-    """One bounded saved-draft submit retry, never command execution."""
+    """At most one saved-draft Send click; never retry ambiguous submissions or EXEC."""
     if stop_requested():
         return
     record = state.outbound_lookup(aid)
-    if (not record or record.get("phase") not in {"SEND_PENDING", "SUBMIT_UNCERTAIN"}
+    if (not record or record.get("phase") != "SEND_PENDING"
             or int(record.get("submit_only_attempt_count", 0) or 0) >= 1
             or record.get("has_attachments") is not False):
         return
