@@ -87,6 +87,10 @@ def fire(home: Path, native: dict, *, route_id: str | None = None,
         record = ledger.get(key)
         phase = record.get("phase") if isinstance(record, dict) else None
         if phase == "DELIVERED":
+            if record.get("route") != route["id"] or record.get("file") != name:
+                raise TestFireError("TEST_FIRE_RECEIPT_IDENTITY_MISMATCH")
+            if record.get("receipt") not in {"FILE_WRITTEN", "FILE_ALREADY_MATCHES"}:
+                raise TestFireError("TEST_FIRE_RECEIPT_NOT_VERIFIED")
             if not target_file.is_file() or target_file.is_symlink():
                 raise TestFireError("TEST_FIRE_RECEIPT_WITHOUT_DESTINATION_FILE")
             if target_file.read_bytes() != body:
