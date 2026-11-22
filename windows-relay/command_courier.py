@@ -217,17 +217,38 @@ def routes(action: str, *, route_id: str | None = None,
     return 0
 
 
-def test_fire(route_id: str | None = None) -> int:
-    """Manually exercise one configured local file route end to end.
+def read_copied_text() -> str:
+    """Read text deliberately placed on the Windows clipboard by the user.
 
-    The native singleton must forward the packet. This command never ticks
-    the router itself, uses ChatGPT UI, or sends to an HTTP destination.
+    No screen scanning, synthetic Ctrl+C, or interaction with other apps.
+    The temporary Tk clipboard reader has no visible window or HUD.
     """
+    import tkinter as tk
+    root = None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        text = root.clipboard_get()
+    except tk.TclError as exc:
+        raise RuntimeError("COURIER_CLIPBOARD_TEXT_UNAVAILABLE_COPY_TEXT_FIRST") from exc
+    finally:
+        if root is not None:
+            root.destroy()
+    return text
+
+
+def test_fire(route_id: str | None = None, *, clipboard: bool = False) -> int:
+    """Debug the actual configured local file route; never send to ChatGPT UI."""
     if runtime_mode() != NATIVE:
         raise RuntimeError("COURIER_TEST_FIRE_NATIVE_PROFILE_REQUIRED")
     import desktop_native_relay as native
     import courier_test_fire as debug
-    report = debug.fire(HOME, native.get_status(), route_id=route_id)
+    state = native.get_status()
+    if clipboard:
+        report = debug.send_copied_text(
+            HOME, state, read_copied_text(), route_id=route_id)
+    else:
+        report = debug.fire(HOME, state, route_id=route_id)
     print("COURIER_TEST_FIRE=" + json.dumps(report, sort_keys=True))
     return 0
 
@@ -259,6 +280,8 @@ def main(argv=None) -> int:
     sub.add_parser("go")
     fire = sub.add_parser("test-fire", help="Temporary debug: real file-route test with receipt")
     fire.add_argument("--route", dest="fire_route", help="Explicit configured directory route")
+    fire.add_argument("--clipboard", action="store_true",
+                      help="Forward only text you deliberately copied with Ctrl+C")
     sub.add_parser("status")
     profile = sub.add_parser("profile")
     profile.add_argument("mode", nargs="?", choices=sorted(ALLOWED))
@@ -285,7 +308,7 @@ def main(argv=None) -> int:
         if args.command == "status":
             return status()
         if args.command == "test-fire":
-            return test_fire(args.fire_route)
+            return test_fire(args.fire_route, clipboard=args.clipboard)
         if args.command == "profile":
             if args.mode is not None:
                 select_runtime(args.mode)
