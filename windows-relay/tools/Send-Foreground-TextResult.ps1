@@ -60,7 +60,11 @@ function Get-ForegroundEditable {
     # Courier's generic editor adapter must never choose a shell console.
     $targetProcess=Get-Process -Id ([int]$window.Current.ProcessId) -ErrorAction SilentlyContinue
     if($targetProcess -and $targetProcess.ProcessName -match
-       '^(?i:cmd|powershell|pwsh|windowsterminal|openconsole|conhost|wt)
+       '^(?i:cmd|powershell|pwsh|windowsterminal|openconsole|conhost|wt)$'){
+        return $null
+    }
+    $editor=[System.Windows.Automation.AutomationElement]::FocusedElement
+    if($null -eq $editor){return $null}
     if(-not $editor.Current.IsEnabled -or $editor.Current.IsOffscreen -or
        $editor.Current.IsPassword -or -not $editor.Current.HasKeyboardFocus){return $null}
     $control=[string]$editor.Current.ControlType.ProgrammaticName
