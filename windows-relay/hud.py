@@ -917,19 +917,26 @@ def run_ui():
             debug_state["busy"]=False
             debug_routes_btn.configure(state="normal")
             if kind in ("fire","copy"):
-                debug_status.configure(
-                    text=("COPY PASS • " if kind=="copy" else "TEST PASS • ")+
-                         str(data["route"])+" • "+str(data["bytes"])+
-                         " bytes • "+str(data["receipt"])+" • "+str(data["nonce"])[:8],
-                    fg=GOOD)
+                receipt=("COPY PASS • " if kind=="copy" else "TEST PASS • ")+\
+                         str(data["route"])+" • "+str(data["bytes"])+\
+                         " bytes • "+str(data["receipt"])+" • "+str(data["nonce"])[:8]
+                debug_status.configure(text=receipt,fg=GOOD)
+                # Always surface a receipt even if Windows display scaling
+                # clips the very bottom of this fixed-size HUD.
+                messagebox.showinfo("Command Courier • Verified Receipt",
+                                    receipt,parent=root)
             elif kind=="routes":
-                debug_status.configure(
-                    text="Routes: "+str(data.get("routes",0))+
-                         " • delivered "+str(data.get("delivered",0))+
-                         " • held "+str(data.get("held",0))+
-                         " • enabled "+str(data.get("enabled",False)),fg=FG)
+                route_line=("Routes: "+str(data.get("routes",0))+
+                            " • delivered "+str(data.get("delivered",0))+
+                            " • held "+str(data.get("held",0))+
+                            " • enabled "+str(data.get("enabled",False)))
+                debug_status.configure(text=route_line,fg=FG)
+                messagebox.showinfo("Command Courier • Route Status",
+                                    route_line,parent=root)
             else:
                 debug_status.configure(text="FORWARD ERROR • "+str(data),fg=BAD)
+                messagebox.showerror("Command Courier • Forward Error",
+                                     str(data),parent=root)
         while not lock_results.empty():
             kind,value=lock_results.get_nowait()
             lock_state["busy"]=False
