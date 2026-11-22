@@ -242,6 +242,10 @@ def native_composer_clear():
     The PowerShell owner verifies the exact ChatGPT window and composer and
     returns a distinct no-send receipt. Run this from a HUD worker thread.
     """
+    import desktop_native_relay as native
+    status=native.get_status()
+    if status.get("native_running") and status.get("phase")=="DELIVERING":
+        raise RuntimeError("COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY")
     script=Path(__file__).resolve().parent/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1"
     if not script.is_file():raise RuntimeError("Native ChatGPT composer helper unavailable")
     powershell="powershell.exe"
@@ -788,7 +792,8 @@ def run_ui():
     clear_results=queue.Queue()
     clear_busy={"value":False}
     def force_clear_composer():
-        if not native_mode() or clear_busy["value"]:return
+        snap=native_view.get("snap") or {}
+        if not native_mode() or clear_busy["value"] or snap.get("native_phase")=="DELIVERING":return
         if not messagebox.askyesno("Force Clear ChatGPT Composer",
                 "Discard the current unsent ChatGPT composer text?\n\n"
                 "This cannot be undone. No relay packet will be sent, retried "
@@ -886,7 +891,8 @@ def run_ui():
                                     activebackground='#188038' if enabled else '#991b1b',state='normal')
             delivery_phase=snap.get('native_delivery_phase')
             force_clear_btn.configure(text="CLEARING…" if clear_busy["value"] else "FORCE CLEAR",
-                                      state="disabled" if clear_busy["value"] else "normal")
+                                      state="disabled" if clear_busy["value"] or
+                                            snap.get("native_phase")=="DELIVERING" else "normal")
             force_command_btn.configure(state='normal' if delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled')
             force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
             clear_queue_check.configure(state='normal')
