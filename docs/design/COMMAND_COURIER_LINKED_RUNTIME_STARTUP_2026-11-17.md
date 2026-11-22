@@ -336,3 +336,47 @@ this design amendment makes auto-target forwarding work today.
    and bookmarked baseline remain intact; tests must be run on Katana.
 
 **This is the authoritative target for the next engineering slice.**
+
+### Foreground destination implementation — current WIP (Windows acceptance pending)
+
+The authoritative contract above now has an initial implementation:
+`tools/Send-Foreground-TextResult.ps1` finds the foreground window's
+focused editable UI Automation control (Edit or Document) and inserts a
+**previously executed and persisted native result**. It does not read text
+from ChatGPT, Notepad, clipboard, or an input directory to obtain that
+result. No configured input source is involved.
+
+`desktop_native_relay.deliver()` now selects this generic sender for
+ordinary native results. Its automatic outbox polling runs independently
+of `read_scan(require_app=True)`, so an already-queued result can be
+delivered with Notepad focused while ChatGPT is closed. The old ChatGPT
+sender remains available exclusively for the explicit historical
+FORCE RESEND recovery path; existing holds are not released.
+
+If there is no eligible focused writable field, the runner transitions the
+same saved result back to `READY`, records `AWAITING_TEXT_FIELD`, and
+tries again later without incrementing the attempt count. There is no
+command reexecution and no input-folder configuration.
+
+Two distinct destination outcomes exist:
+
+- `TEXT_INSERTED`: result receipt and body are verified in a focused editor
+  (Notepad-style). This does **not** claim a remote message was sent.
+- `SUBMITTED`: a unique, accessible Send/Submit control was activated and
+  the result receipt was seen in the destination document after the editor
+  emptied. An ambiguous click or receipt becomes `SUBMIT_UNCERTAIN`
+  without blind retry.
+
+The adapter does not send a blind Enter keystroke; in an app without an
+unambiguous Send button, it inserts text and stops. It never targets password
+fields or terminal windows and rechecks foreground ownership. These are
+destination-integrity protections, **not** configurable input-source
+restrictions. The existing strong HUD, routes, operator ARM/OFF and saved
+execution journals are retained.
+
+**Qualification:** Source and mocked-unit regressions are committed.
+Only Katana Windows UI Automation acceptance can establish which application
+editors expose sufficiently rich Edit/Document patterns. Rich editors with
+unusual accessibility trees or unnamed chat Send icons may support insertion
+but not automatic message submission. Do not claim universal application
+coverage before actual Windows testing.
