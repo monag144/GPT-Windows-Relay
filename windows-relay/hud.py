@@ -179,7 +179,9 @@ def native_snapshot():
         'online':live,'title':title,
         'title_phase':('RECOVERY ADVICE' if title=='READY • HELD' else title),
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
-        'browser':'ChatGPT Windows app • UI Automation • no browser extension',
+        'browser':('Text routes ACTIVE • ChatGPT UI optional'
+                   if phase=='FORWARDING_NO_CHATGPT' else
+                   'ChatGPT Windows app • UI Automation • no browser extension'),
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
