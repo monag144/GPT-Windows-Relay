@@ -286,6 +286,107 @@ class ForegroundResultTests(unittest.TestCase):
             self.state.outbound_lookup(self.aid)["attempt_count"], 1
         )
 
+    def test_chat_without_send_button_is_pending_not_successfully_delivered(self):
+        self.assertIn("SENDER_STAGE=CHAT_DRAFT_PENDING_SEND", SENDER)
+        self.assertIn("RESULT=CHAT_SEND_PENDING", SENDER)
+        self.assertIn('phase = "SEND_PENDING"', NATIVE)
+        self.assertIn("SEND_PENDING", (ROOT/"hud.py").read_text(encoding="utf-8"))
+        self.assertIn("SEND_PENDING", (ROOT/"windows_relay.py").read_text(encoding="utf-8"))
+        self.assertIn("def recover_submit_only(state: wr.State, aid: str):", NATIVE)
+        self.assertIn('"-SubmitExistingOnly"', NATIVE)
+
+    def test_send_only_recovers_stored_chat_draft_without_exec_or_retyping(self):
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
+        self.state.data["outbound_deliveries"][self.aid]["attempt_count"] = 1
+        self.state.save()
+        which, process = self.sender(
+            "SENDER_STAGE=SUBMIT_ONLY_ATTEMPT_1\n"
+            "SENDER_STAGE=CONFIRMED_IN_CONVERSATION\n"
+            "RESULT=HEARTBEAT_SUBMITTED\n")
+        with which, process as invoked, \
+             mock.patch.object(native, "process_packet") as no_exec, \
+             mock.patch.object(native, "execute_with_stop") as no_command:
+            native.recover_submit_only(self.state, self.aid)
+        invoked.assert_called_once()
+        no_exec.assert_not_called()
+        no_command.assert_not_called()
+        args = invoked.call_args.args[0]
+        self.assertIn("-SubmitExistingOnly", args)
+        self.assertIn(str(native.FOREGROUND_SENDER), args)
+        self.assertNotIn(str(native.SENDER), args)
+        record = self.state.outbound_lookup(self.aid)
+        self.assertEqual(record["phase"], "SUBMITTED")
+        self.assertEqual(record["attempt_count"], 1)
+        self.assertEqual(record["submit_only_attempt_count"], 1)
+        self.assertEqual(self.state.lookup(self.aid)["status"], "OK")
+
+    def test_send_only_no_target_defers_without_spending_retry_budget(self):
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
+        self.state.save()
+        which, process = self.sender(
+            "SENDER_STAGE=SUBMIT_ONLY_NO_OWN_DRAFT\n"
+            "RESULT=FOREGROUND_NO_TARGET\n")
+        with which, process as invoked:
+            native.recover_submit_only(self.state, self.aid)
+            native.recover_submit_only(self.state, self.aid)
+        self.assertEqual(invoked.call_count, 2)
+        delivery = self.state.outbound_lookup(self.aid)
+        self.assertEqual(delivery["phase"], "SEND_PENDING")
+        self.assertEqual(delivery["submit_only_attempt_count"], 0)
+        self.assertEqual(self.state.lookup(self.aid)["status"], "OK")
+
+    def test_send_only_uncertain_is_not_retried_or_reexecuted(self):
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
+        self.state.save()
+        which, process = self.sender(
+            "SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED\n"
+            "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n")
+        with which, process as invoked, \
+             mock.patch.object(native, "process_packet") as no_exec:
+            native.recover_submit_only(self.state, self.aid)
+            native.recover_submit_only(self.state, self.aid)
+        invoked.assert_called_once()
+        no_exec.assert_not_called()
+        delivery = self.state.outbound_lookup(self.aid)
+        self.assertEqual(delivery["phase"], "SUBMIT_UNCERTAIN")
+        self.assertEqual(delivery["submit_only_attempt_count"], 1)
+
+    def test_previously_visible_receipt_does_not_send_duplicate(self):
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
+        self.state.save()
+        which, process = self.sender(
+            "SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT\n"
+            "RESULT=HEARTBEAT_SUBMITTED\n")
+        with which, process as invoked:
+            native.recover_submit_only(self.state, self.aid)
+        invoked.assert_called_once()
+        record = self.state.outbound_lookup(self.aid)
+        self.assertEqual(record["phase"], "SUBMITTED")
+        self.assertEqual(record["reconciliation_evidence"],
+                         "UIA_EXISTING_TRANSCRIPT_RECEIPT")
+
+    def test_submit_only_mode_is_receipt_bound_and_never_types_payload(self):
+        self.assertIn("[switch]$SubmitExistingOnly", SENDER)
+        self.assertIn("function Test-ExactOwnDraft(", SENDER)
+        self.assertIn("function Test-ChatGPTSubmissionTarget(", SENDER)
+        self.assertIn("function Recover-ExistingChatDraft(", SENDER)
+        self.assertIn("Test-TranscriptMarker $target $marker", SENDER)
+        self.assertIn("Test-ExactOwnDraft $target $marker", SENDER)
+        self.assertIn("if($SubmitExistingOnly){", SENDER)
+        self.assertIn("Recover-ExistingChatDraft $target $NativeReceiptMarker", SENDER)
+        self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
+        self.assertIn("for($attempt=1;$attempt -le 2;$attempt++)", SENDER)
+        self.assertIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
+        self.assertIn("$proc.ProcessName -ine 'ChatGPT'", SENDER)
+        submit_helper = SENDER.split("function Recover-ExistingChatDraft(",1)[1].split(
+            "$script:autoFocused=$false",1)[0]
+        self.assertNotIn("TypeUnicode(", submit_helper)
+        self.assertNotIn("SetValue(", submit_helper)
+        self.assertNotIn("ClearFocusedComposer(", submit_helper)
+        self.assertNotIn("process_packet(", NATIVE.split("def recover_submit_only(",1)[1].split("def runner():",1)[0])
+        self.assertLess(NATIVE.index("state.list_claimable_submit_retries()"),
+                        NATIVE.index("for aid in state.list_claimable_outbound_ids():"))
+
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"),
                          "PowerShell AST parser is Windows-only")
     def test_sender_powershell_ast_is_parseable_without_running_it(self):
