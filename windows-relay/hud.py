@@ -866,7 +866,7 @@ def run_ui():
                 current=native_snapshot() if native_mode() else {}
                 still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")
                 messagebox.showinfo("Force Clear",
-                    "ChatGPT composer verified empty.\\n\\n"
+                    "ChatGPT composer verified empty.\n\n"
                     + ("The last result remains HELD. The relay can accept new commands. "
                        "Use ABORT SEND to cancel that result, or FORCE RESEND only after "
                        "confirming it never reached ChatGPT."
