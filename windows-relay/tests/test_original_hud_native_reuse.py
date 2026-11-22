@@ -71,6 +71,31 @@ class OriginalHUDReuseTests(unittest.TestCase):
                           'native_delivery_control(','relay_control(','consumer/GO.bat'):
             self.assertNotIn(forbidden,action)
 
+    def test_go_status_depends_on_receiver_and_native_policy(self):
+        self.assertIn("'native_phase':phase",HUD)
+        self.assertIn('go_state["waiting"]=(kind=="waiting")',HUD)
+        self.assertIn('COURIER_GO=WAITING_FOR_DESTINATION',HUD)
+        self.assertIn('destination_ready=(snap.get("native_phase")',HUD)
+        self.assertIn('not armed or snap.get("native_off")',HUD)
+        self.assertIn('go_btn.configure(text="GO…" if go_state["busy"] else',HUD)
+        self.assertIn('go_results.put(("waiting",None))',HUD)
+
+    def test_hud_reconcile_reuses_existing_visible_process_until_source_changes(self):
+        for marker in (
+            "Get-Item -LiteralPath $original",
+            "LastWriteTimeUtc",
+            "StartTime.ToUniversalTime()",
+            "if($reusable)",
+            "ORIGINAL_HUD_START=EXISTING_PROCESS_REUSED",
+            "ORIGINAL_HUD_OLD_CODE_RESTARTED",
+            "for($i=0;$i -lt 12;$i++)",
+            "ORIGINAL_HUD_VISIBLE_WINDOW_COUNT=",
+        ):
+            self.assertIn(marker,RECONCILE)
+        self.assertLess(RECONCILE.index("if($reusable)"),
+                        RECONCILE.index("Stop-HudProcess $p 'ORIGINAL_HUD_OLD_CODE_RESTARTED'"))
+        self.assertNotIn("Start-Process -WindowStyle Hidden",RECONCILE)
+
     def test_desktop_launcher_never_starts_mini_hud(self):
         self.assertIn("hud-mode", LAUNCH)
         self.assertIn("Reconcile-OriginalDesktopHUD.ps1", LAUNCH)
