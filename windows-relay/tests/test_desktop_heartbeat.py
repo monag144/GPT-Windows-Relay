@@ -59,6 +59,43 @@ class DesktopHeartbeatTests(unittest.TestCase):
             self.assertNotIn(operation, segment)
         self.assertIn("exit 0", segment)
 
+    def test_placeholder_fallback_requires_independent_empty_text_and_no_send(self):
+        helper=SOURCE.split("function Test-ComposerTextPatternEmpty($composer){",1)[1].split(
+            "# A UIA Value can contain",1)[0]
+        self.assertIn("TextPattern]::Pattern",helper)
+        self.assertIn("GetText(-1)",helper)
+        self.assertIn("return ($text.Length -eq 0)",helper)
+        self.assertIn("catch{return $false}",helper)
+        self.assertNotIn("SetValue(",helper)
+        self.assertNotIn("SetFocus(",helper)
+
+        predicate=SOURCE.split("function Test-ComposableEmptyState($window,$composer){",1)[1].split(
+            "function Assert-ComposableEmptyState(",1)[0]
+        self.assertIn("$trimmed -ceq 'Ask ChatGPT'",predicate)
+        self.assertIn("if(-not $looksLikeObservedPlaceholder){return $false}",predicate)
+        self.assertIn("if(Test-DisabledSendControlPresent $window){return $true}",predicate)
+        self.assertIn("if(-not (Test-ComposerTextPatternEmpty $composer)){return $false}",predicate)
+        self.assertIn("return ($null -eq (Get-EnabledSend $window))",predicate)
+        self.assertLess(predicate.index("Test-ComposerTextPatternEmpty"),
+                        predicate.index("Get-EnabledSend"))
+
+        assertion=SOURCE.split("function Assert-ComposableEmptyState($window,$composer){",1)[1].split(
+            "function Clear-ComposerForForcedDelivery",1)[0]
+        self.assertIn("COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT",assertion)
+        self.assertIn("COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE",assertion)
+        self.assertIn("Test-ComposerTextPatternEmpty $composer",assertion)
+        self.assertIn("Get-EnabledSend $window",assertion)
+        self.assertIn("PLACEHOLDER_WITH_EMPTY_TEXTPATTERN_NO_ENABLED_SEND",assertion)
+        self.assertNotIn("SetValue(",assertion)
+
+    def test_probe_skips_canary_detection_and_reports_draft_safe_evidence(self):
+        self.assertIn("if($ProbeComposerOnly){",SOURCE)
+        self.assertIn("DETECTION=READ_ONLY_UIA_PROBE",SOURCE)
+        self.assertIn("PROBE_INDEPENDENT_TEXTPATTERN_EMPTY=",SOURCE)
+        self.assertIn("PROBE_EMPTY_VERIFIED=",SOURCE)
+        self.assertIn("RESULT=COMPOSER_PROBE_COMPLETED_NO_SEND",SOURCE)
+        self.assertIn("$composerCleared=(Test-ComposableEmptyState $window $composer)",SOURCE)
+
     def test_force_clear_accepts_empty_placeholder_without_mutation(self):
         # FORCE COMMAND previously required UIA Value.Length == 0 even when
         # ChatGPT had already replaced an empty draft with "Ask ChatGPT".
