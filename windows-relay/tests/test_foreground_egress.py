@@ -305,6 +305,26 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("RESULT=CHAT_SEND_PENDING",prelude)
         self.assertIn("RESULT=TEXT_INSERTED_VERIFIED",prelude)
 
+    def test_recognized_chat_draft_waits_for_send_without_stalling_engine(self):
+        which, process=self.sender(
+            "SENDER_STAGE=CHAT_DRAFT_PENDING_SEND\n"
+            "RESULT=CHAT_SEND_PENDING\n")
+        with which, process as invoked:
+            native.deliver(self.state,self.aid)
+        invoked.assert_called_once()
+        record=self.state.outbound_lookup(self.aid)
+        self.assertEqual(record["phase"],"SEND_PENDING")
+        self.assertEqual(record["attempt_count"],1)
+        self.assertEqual(record["last_sender_stage"],"CHAT_DRAFT_PENDING_SEND")
+        self.assertEqual(self.state.lookup(self.aid)["status"],"OK")
+        status=native.get_status()
+        self.assertEqual(status["phase"],"DELIVERY_UNCERTAIN")
+        self.assertEqual(status["last_result"],"SEND_PENDING")
+        self.assertFalse(status["delivery_blocked"])
+        self.assertIsNone(status["last_delivery_error"])
+        self.assertEqual(self.state.list_claimable_outbound_ids(),[])
+        self.assertEqual(self.state.list_claimable_submit_retries(),[self.aid])
+
     def test_send_only_recovers_stored_chat_draft_without_exec_or_retyping(self):
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
         self.state.data["outbound_deliveries"][self.aid]["attempt_count"] = 1
