@@ -282,8 +282,8 @@ function Assert-ComposableEmptyState($window,$composer){
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
 function Clear-ComposerForForcedDelivery($window,$composer){
-    # Explicit operator-approved clear only. UIA SetValue('') did not reliably
-    # update ChatGPT's controlled editor; a real focused Ctrl+A, Backspace does.
+    # Explicit operator-approved clear only. UIA ValuePattern edits did not
+    # reliably update ChatGPT's controlled editor; focused keyboard edits do.
     # Never type a result or press Send here; preserve the saved delivery state.
     if(Test-ComposableEmptyState $window $composer){return $composer}
     Assert-ChatGPTForeground $window
