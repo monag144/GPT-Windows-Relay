@@ -58,6 +58,25 @@ public static class DesktopHeartbeatForeground {
         }
         return SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(INPUT)));
     }
+    // Real keyboard edit events are needed: Electron may ignore UIA SetValue
+    // for its internal controlled composer even when ValuePattern looks empty.
+    // Only call this after verifying the exact ChatGPT focused editor.
+    const ushort VK_CONTROL=0x11, VK_A=0x41, VK_BACK=0x08;
+    private static INPUT VirtualKey(ushort key, bool up) {
+        INPUT input=new INPUT();
+        input.type=INPUT_KEYBOARD;
+        input.U.ki.wVk=key;
+        input.U.ki.dwFlags=up ? KEYEVENTF_KEYUP : 0;
+        return input;
+    }
+    public static uint ClearFocusedComposer() {
+        INPUT[] inputs=new INPUT[] {
+            VirtualKey(VK_CONTROL,false), VirtualKey(VK_A,false),
+            VirtualKey(VK_A,true), VirtualKey(VK_CONTROL,true),
+            VirtualKey(VK_BACK,false), VirtualKey(VK_BACK,true)
+        };
+        return SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(INPUT)));
+    }
 }
 '@
 # The desktop app transport shares STOP/OFF/KILL with the canonical relay.
@@ -263,17 +282,30 @@ function Assert-ComposableEmptyState($window,$composer){
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
 function Clear-ComposerForForcedDelivery($window,$composer){
-    # FORCE COMMAND applies only to an operator-released saved native result.
-    # An empty editor or verified placeholder needs NO mutation at all.
-    # A real draft may be cleared only under the explicit force authorization.
+    # Explicit operator-approved clear only. UIA SetValue('') did not reliably
+    # update ChatGPT's controlled editor; a real focused Ctrl+A, Backspace does.
+    # Never type a result or press Send here; preserve the saved delivery state.
     if(Test-ComposableEmptyState $window $composer){return $composer}
     Assert-ChatGPTForeground $window
     if($composer.pattern.Current.IsReadOnly){throw 'COMPOSER_READ_ONLY_REFUSE_FORCE_CLEAR'}
-    $composer.pattern.SetValue('')
-    for($i=0;$i -lt 10;$i++){
+    $composer.node.SetFocus()
+    Start-Sleep -Milliseconds 120
+    Assert-ChatGPTForeground $window
+    if(-not $composer.node.Current.HasKeyboardFocus){
+        throw 'COMPOSER_CLEAR_NOT_FOCUSED_REFUSE_KEYBOARD'
+    }
+    $sent=[DesktopHeartbeatForeground]::ClearFocusedComposer()
+    if($sent -ne 6){
+        throw ('COMPOSER_CLEAR_KEYBOARD_INCOMPLETE='+$sent+'/6')
+    }
+    for($i=0;$i -lt 20;$i++){
         Start-Sleep -Milliseconds 100
-        $current=Get-Composer $window
-        if(Test-ComposableEmptyState $window $current){return $current}
+        try{
+            $current=Get-Composer $window
+            if(Test-ComposableEmptyState $window $current){return $current}
+        }catch{
+            # The editor may be transiently unavailable while ChatGPT redraws.
+        }
     }
     throw 'COMPOSER_FORCE_CLEAR_NOT_CONFIRMED'
 }
@@ -388,6 +420,17 @@ try{
         # conversation document and writable composer. Do not load a native
         # result, release a delivery hold, type a packet or click Send.
         $null=Get-ConversationDocument $window
+        $runtimeFile=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayDesktop\runtime-status.json'
+        if(Test-Path -LiteralPath $runtimeFile -PathType Leaf){
+            try{
+                $runtimeStatus=Get-Content -LiteralPath $runtimeFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            }catch{
+                throw 'COMPOSER_CLEAR_RUNTIME_STATUS_UNREADABLE'
+            }
+            if([string]$runtimeStatus.phase -eq 'DELIVERING'){
+                throw 'COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY'
+            }
+        }
         $composer=Wait-ForComposer $window
         if(Test-ComposableEmptyState $window $composer){
             Write-Output 'COMPOSER_CLEAR=ALREADY_EMPTY'
