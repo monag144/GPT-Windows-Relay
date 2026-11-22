@@ -234,14 +234,19 @@ try{
     if([CourierForegroundInput]::InputSize() -ne $requiredSize){
         throw 'FOREGROUND_INPUT_STRUCT_SIZE_INVALID'
     }
+    # Chat textbox newlines may act as Enter and send partial JSON.
+    # Collapse frame whitespace only in Edit controls; Document preserves it.
+    $inputText=$script:wire
+    if([string]$target.editor.Current.ControlType.ProgrammaticName -eq 'ControlType.Edit'){
+        $inputText=$inputText.Replace("`r",' ').Replace("`n",' ')
+    }
     Assert-CurrentTarget $target
     $inputStarted=$true
-    # SendInput Unicode accepts UTF-16 units; chunks constrain resource use
-    # and let us abort if the user changes foreground apps while typing.
-    for($offset=0;$offset -lt $script:wire.Length;$offset+=128){
+    # Chunk large Unicode writes while checking exact focused editor.
+    for($offset=0;$offset -lt $inputText.Length;$offset+=2048){
         Assert-RunnerAllowed
         Assert-CurrentTarget $target
-        $chunk=$script:wire.Substring($offset,[Math]::Min(128,$script:wire.Length-$offset))
+        $chunk=$inputText.Substring($offset,[Math]::Min(2048,$inputText.Length-$offset))
         $written=[CourierForegroundInput]::TypeUnicode($chunk)
         if($written -ne [uint32]($chunk.Length*2)){
             throw 'FOREGROUND_PARTIAL_KEYBOARD_INPUT'
