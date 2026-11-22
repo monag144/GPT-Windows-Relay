@@ -146,6 +146,53 @@ class CourierHudStartupTests(unittest.TestCase):
                 hud.native_composer_clear()
         run.assert_not_called()
 
+    def test_force_clear_closes_pending_even_if_composer_verification_fails(self):
+        receipt={"id":"a"*32,"result":"FORCE_CLEAR_COMPLETE",
+                 "aborted_count":2,"aborted_ids":["001","002"],
+                 "unresolved_remaining":0}
+        with mock.patch.object(hud,"native_composer_clear",
+                               side_effect=RuntimeError("COMPOSER_FORCE_CLEAR_NOT_CONFIRMED")) as composer, \
+             mock.patch.object(native,"request_force_clear_pending",
+                               return_value="a"*32) as request, \
+             mock.patch.object(native,"wait_force_clear_receipt",
+                               return_value=receipt) as waiting:
+            report=hud.native_force_clear_all(composer_focused=True)
+        composer.assert_called_once_with()
+        request.assert_called_once_with()
+        waiting.assert_called_once_with("a"*32,timeout=15.0)
+        self.assertEqual(report["receipt"]["aborted_count"],2)
+        self.assertEqual(report["receipt"]["unresolved_remaining"],0)
+        self.assertIn("NOT_CONFIRMED: COMPOSER_FORCE_CLEAR_NOT_CONFIRMED",
+                      report["composer"])
+
+    def test_force_clear_without_chatgpt_focus_still_resolves_outbox(self):
+        receipt={"id":"b"*32,"result":"FORCE_CLEAR_COMPLETE",
+                 "aborted_count":2,"unresolved_remaining":0}
+        with mock.patch.object(hud,"native_composer_clear") as never_editor, \
+             mock.patch.object(native,"request_force_clear_pending",
+                               return_value="b"*32), \
+             mock.patch.object(native,"wait_force_clear_receipt",
+                               return_value=receipt):
+            report=hud.native_force_clear_all(composer_focused=False)
+        never_editor.assert_not_called()
+        self.assertEqual(report["composer"],"SKIPPED_CHATGPT_NOT_FOCUSED")
+        self.assertEqual(report["receipt"]["aborted_count"],2)
+
+    def test_force_clear_never_claims_success_without_runner_receipt(self):
+        with mock.patch.object(hud,"native_composer_clear",
+                               return_value="COMPOSER_CLEARED_NO_SEND"), \
+             mock.patch.object(native,"request_force_clear_pending",
+                               return_value="c"*32), \
+             mock.patch.object(native,"wait_force_clear_receipt",
+                               side_effect=RuntimeError("request pending")):
+            with self.assertRaisesRegex(RuntimeError,
+                                         "OUTBOX_CLEAR_UNCONFIRMED_REQUEST"):
+                hud.native_force_clear_all(composer_focused=True)
+        source=(ROOT/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Test-ComposerClearPostInput(",source)
+        self.assertIn("COMPOSER_CLEAR=INDEPENDENT_UIA_EMPTY_AFTER_KEYBOARD",source)
+        self.assertIn("Test-DisabledSendControlPresent $window",source)
+
     def test_delayed_app_at_login_does_not_form_empty_execution_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             scanner = Path(temp) / "scanner.ps1"
