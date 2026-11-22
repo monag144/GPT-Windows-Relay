@@ -571,7 +571,7 @@ def run_ui():
     clear_queue_var=tk.BooleanVar(value=False)
     clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",8,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=7,cursor="hand2")
     clear_queue_check.grid(row=0,column=1,sticky="w",padx=(7,0))
-    force_command_btn=tk.Button(force_frame,text="FORCE RESEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_command_btn=tk.Button(force_frame,text="FOCUS FOR SEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_command_btn.grid(row=1,column=0,sticky="w")
     force_abort_btn=tk.Button(force_frame,text="ABORT SEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_abort_btn.grid(row=1,column=1,sticky="w",padx=(7,0))
@@ -886,24 +886,21 @@ def run_ui():
     def native_action_id():
         snap=native_view.get("snap") or {}
         return str(snap.get("action") or "").removeprefix("LAST ").removeprefix("CURRENT ").strip()
-    def show_force_command():
-        aid=native_action_id()
-        if not native_mode() or not aid or aid=='-':return
-        # This resubmits a saved result, not a CMD command.  A prior receipt
-        # may have reached the conversation even when the journal says failed.
-        if not messagebox.askyesno("Force Resend",
-            "Resend saved result " + aid + "?\n\n"
-            "This can duplicate a result already received by ChatGPT and may "
-            "overwrite an existing ChatGPT draft. Reconcile a known receipt "
-            "instead. Continue only if the result was not delivered.",
-            parent=root):
+    def focus_for_send_retry():
+        # This HUD control NEVER calls retry-delivery or force-delivery,
+        # retypes a result, or starts an EXEC.  It only puts ChatGPT in the
+        # foreground; the single native runner owns the receipt-bound
+        # SEND_PENDING -> send-only click once transition.
+        snap=native_view.get("snap") or {}
+        if (not native_mode() or snap.get("native_delivery_phase")!="SEND_PENDING"
+                or not snap.get("auto_send") or snap.get("native_off")):
             return
         if not focus_chatgpt_for_forced_delivery():
-            messagebox.showerror("Force Resend","ChatGPT could not be brought to the foreground. No delivery retry was started.",parent=root)
-            return
-        # Let Windows finish foreground activation before the child sender
-        # performs its independent foreground verification.
-        root.after(180,lambda:native_delivery_control("force-delivery",aid))
+            messagebox.showwarning(
+                "Focus for Send",
+                "ChatGPT could not be brought to the foreground. No Send retry was attempted.",
+                parent=root)
+
     # FORCE CLEAR is the operator's explicit terminal reset, not a resend.
     # Preserve executed commands, stored results and every audited disposition.
     clear_results=queue.Queue()
@@ -941,7 +938,7 @@ def run_ui():
         clear_queue_var.set(False)
         if native_mode() and messagebox.askyesno("Clear Entire Queue","Delete all pending native delivery records and holds?\nExecuted command results are retained.",parent=root):
             native_delivery_control("clear-pending-deliveries")
-    force_command_btn.configure(command=show_force_command)
+    force_command_btn.configure(command=focus_for_send_retry)
     force_clear_btn.configure(command=force_clear_composer)
     force_abort_btn.configure(command=force_abort)
     clear_queue_check.configure(command=clear_pending_queue)
@@ -1069,7 +1066,8 @@ def run_ui():
             force_clear_btn.configure(text="CLEARING…" if clear_busy["value"] else "FORCE CLEAR",
                                       state="disabled" if clear_busy["value"] or
                                             snap.get("native_phase")=="DELIVERING" else "normal")
-            force_command_btn.configure(state='normal' if delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled')
+            force_command_btn.configure(state='normal' if delivery_phase=='SEND_PENDING' and enabled
+                                        and not snap.get("native_off") else 'disabled')
             force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
             clear_queue_check.configure(state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
