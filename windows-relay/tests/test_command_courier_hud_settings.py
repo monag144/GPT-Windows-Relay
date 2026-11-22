@@ -92,7 +92,8 @@ class CourierHudStartupTests(unittest.TestCase):
         result=SimpleNamespace(returncode=0,stdout=(
             "COMPOSER_CLEAR=VERIFIED_EMPTY\\n"
             "RESULT=COMPOSER_CLEARED_NO_SEND\\n"),stderr="")
-        with mock.patch.object(hud.subprocess,"run",return_value=result) as run:
+        with mock.patch.object(native,"get_status",return_value={"native_running":False,"phase":"IDLE"}), \
+             mock.patch.object(hud.subprocess,"run",return_value=result) as run:
             self.assertEqual(hud.native_composer_clear(),"COMPOSER_CLEARED_NO_SEND")
         args=run.call_args.args[0]
         self.assertIn("-ClearComposerOnly",args)
@@ -109,9 +110,18 @@ class CourierHudStartupTests(unittest.TestCase):
         result=SimpleNamespace(returncode=1,stdout=(
             "HEARTBEAT_ERROR=EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2\\n"
             "RESULT=COMPOSER_CLEAR_FAILED_NO_SEND\\n"),stderr="")
-        with mock.patch.object(hud.subprocess,"run",return_value=result):
+        with mock.patch.object(native,"get_status",return_value={"native_running":False,"phase":"IDLE"}), \
+             mock.patch.object(hud.subprocess,"run",return_value=result):
             with self.assertRaisesRegex(RuntimeError,"EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2"):
                 hud.native_composer_clear()
+
+    def test_force_clear_does_not_interfere_with_inflight_native_sender(self):
+        with mock.patch.object(native,"get_status",return_value={
+            "native_running":True,"phase":"DELIVERING"
+        }),mock.patch.object(hud.subprocess,"run") as run:
+            with self.assertRaisesRegex(RuntimeError,"REFUSE_DURING_NATIVE_DELIVERY"):
+                hud.native_composer_clear()
+        run.assert_not_called()
 
     def test_delayed_app_at_login_does_not_form_empty_execution_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
