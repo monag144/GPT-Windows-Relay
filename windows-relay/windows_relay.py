@@ -325,7 +325,7 @@ class State:
             return claimed
 
     def finish_outbound_delivery(self,aid:str,phase:str):
-        if phase not in {'PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN'}: raise RelayError('invalid outbound sender outcome')
+        if phase not in {'PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN','TEXT_INSERTED'}: raise RelayError('invalid outbound sender outcome')
         with self.lock:
             finished=None
             def mutate():
@@ -338,6 +338,25 @@ class State:
                 finished=copy.deepcopy(delivery)
             self._mutate_and_save(mutate)
             return finished
+
+    def defer_outbound_delivery(self,aid:str):
+        """No focused text field: return a zero-input attempt to READY.
+
+        This state transition never resends, executes, or discards the result.
+        The operator may focus any suitable editor and the runner will try
+        again without increasing the delivery-attempt count.
+        """
+        with self.lock:
+            def mutate():
+                delivery=self.data.get('outbound_deliveries',{}).get(aid)
+                if not isinstance(delivery,dict) or delivery.get('phase')!='SUBMITTING':
+                    raise RelayError('outbound delivery is not submitting')
+                delivery['phase']='READY'
+                delivery['attempt_count']=max(0,int(delivery.get('attempt_count',0))-1)
+                delivery['updated_at']=now()
+                delivery['last_deferral']='AWAITING_FOREGROUND_TEXT_FIELD'
+                delivery.pop('submitting_at',None)
+            self._mutate_and_save(mutate)
 
     def reconcile_outbound_receipt(self,aid:str,receipt:str):
         """Record an operator-confirmed ChatGPT receipt without resending.
