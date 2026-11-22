@@ -459,8 +459,13 @@ def deliver(state: wr.State, aid: str):
             if error_code == "SENDER_NO_RECEIPT":
                 error_code = "SENDER_FAILED_BEFORE_CLICK"
         for line in output.splitlines():
-            if line.startswith(("RESULT=", "HEARTBEAT_ERROR=", "DELIVERY=", "SENDER_STAGE=")):
-                note("NATIVE_DELIVERY_" + line)
+            # These markers are bounded, payload-free diagnostics. The first
+            # two explain whether a failed pre-click Send kept its draft.
+            if line.startswith(("RESULT=", "HEARTBEAT_ERROR=", "DELIVERY=",
+                                "SENDER_STAGE=", "OWN_UNSENT_DRAFT=",
+                                "UIA_SEND_READY_DRAFT_MATCH=",
+                                "UIA_SEND_READY_READ_FAILURES=")):
+                note("NATIVE_DELIVERY_" + line[:200])
     except (OSError, subprocess.TimeoutExpired) as exc:
         error_code = type(exc).__name__
         note("NATIVE_DELIVERY_EXCEPTION=" + error_code)
