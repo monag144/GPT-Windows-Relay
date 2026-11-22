@@ -179,7 +179,8 @@ def go() -> int:
     if phase in {"BASELINING", "WAITING_FOR_CHATGPT_APP"}:
         print("COURIER_GO=WAITING_FOR_DESTINATION")
         return 0
-    if phase not in {"BASELINED", "IDLE", "EXECUTING", "DELIVERING"}:
+    if phase not in {"BASELINED", "IDLE", "EXECUTING", "DELIVERING",
+                     "FORWARDING_NO_CHATGPT"}:
         raise RuntimeError("COURIER_GO_UNVERIFIED_RUNTIME_PHASE")
     print("COURIER_GO=NATIVE_RUNTIME_READY")
     return 0
