@@ -45,12 +45,6 @@ public static class CourierForegroundInput {
         }
         return SendInput((uint)keys.Length,keys,Marshal.SizeOf(typeof(INPUT)));
     }
-    public static uint TypeEnter(){
-        INPUT[] keys=new INPUT[2];
-        keys[0].type=1; keys[0].U.ki.wVk=0x0D;
-        keys[1].type=1; keys[1].U.ki.wVk=0x0D; keys[1].U.ki.dwFlags=0x0002;
-        return SendInput(2,keys,Marshal.SizeOf(typeof(INPUT)));
-    }
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra);
@@ -657,48 +651,52 @@ try{
     }
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
-    if($kind -eq 'ControlType.Edit'){
-        # Enter submits only when the same foreground window exposes
-        # exactly one enabled Send/Submit control. Notepad Documents and
-        # terminal editors are not eligible for this shortcut.
-        Write-Output 'SENDER_STAGE=SUBMIT_KEY_BEGIN'
-        Write-Output 'UIA_GUARDED_SUBMIT_ENTER_BEGIN'
-        $submitStarted=$true
-        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
-            throw 'FOREGROUND_SUBMIT_ENTER_INCOMPLETE'
+    # A Send is allowed only for the one complete saved message.  ChatGPT
+    # must never receive a partial frame or an Enter keystroke as fallback.
+    if($isChatComposer){
+        if(-not (Test-ExactOwnDraft $target $NativeReceiptMarker)){
+            Write-Output 'SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME'
+            Write-Output 'RESULT=CHAT_SEND_PENDING'
+            exit 0
         }
-        Write-Output 'SENDER_STAGE=SUBMIT_KEY_COMPLETED'
-    }else{
-        # A rich Document uses an explicit Send control instead of Enter,
-        # which can insert a newline rather than submit.
-        $box=$send.Current.BoundingRectangle
-        $rootBox=$target.window.Current.BoundingRectangle
-        $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
-        $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
-        if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
-           $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
-            throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
+        if(Test-ConversationReceiptNotComposer $target $NativeReceiptMarker){
+            # An independently visible posted receipt makes a further
+            # Send ambiguous even if the editor still shows text.
+            Write-Output 'SENDER_STAGE=CHAT_TRANSCRIPT_ALREADY_HAS_RECEIPT'
+            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            exit 5
         }
-        $cursor=New-Object CourierForegroundInput+POINT
-        if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
-            throw 'FOREGROUND_CURSOR_UNAVAILABLE'
-        }
-        Write-Output 'SENDER_STAGE=CLICK_BEGIN'
-        Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
-        $submitStarted=$true
-        try{
-            if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
-                throw 'FOREGROUND_SEND_CURSOR_FAILURE'
-            }
-            [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
-            Start-Sleep -Milliseconds 70
-            [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
-        }finally{
-            [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
-        }
-        Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     }
+    # Initial submission and send-only recovery use the same explicit
+    # Send control.  Never treat Enter as a substitute for clicking Send.
+    $box=$send.Current.BoundingRectangle
+    $rootBox=$target.window.Current.BoundingRectangle
+    $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
+    $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
+    if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
+       $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
+        throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
+    }
+    $cursor=New-Object CourierForegroundInput+POINT
+    if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
+        throw 'FOREGROUND_CURSOR_UNAVAILABLE'
+    }
+    Write-Output 'SENDER_STAGE=CLICK_BEGIN'
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
+    $submitStarted=$true
+    try{
+        if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
+            throw 'FOREGROUND_SEND_CURSOR_FAILURE'
+        }
+        Assert-CurrentTarget $target
+        [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 70
+        [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
+    }finally{
+        [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
+    }
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED'
+    Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     $confirmed=$false
     for($i=0;$i -lt 50;$i++){
         Start-Sleep -Milliseconds 200
