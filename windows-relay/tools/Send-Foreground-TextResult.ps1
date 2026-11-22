@@ -44,6 +44,12 @@ public static class CourierForegroundInput {
         }
         return SendInput((uint)keys.Length,keys,Marshal.SizeOf(typeof(INPUT)));
     }
+    public static uint TypeEnter(){
+        INPUT[] keys=new INPUT[2];
+        keys[0].type=1; keys[0].U.ki.wVk=0x0D;
+        keys[1].type=1; keys[1].U.ki.wVk=0x0D; keys[1].U.ki.dwFlags=0x0002;
+        return SendInput(2,keys,Marshal.SizeOf(typeof(INPUT)));
+    }
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr extra);
@@ -180,10 +186,66 @@ function Get-ForegroundEditable {
 }
 
 function Read-EditorText($target){
-    if($target.hasValue){
-        return [string]$target.value.Current.Value
+    # A UIA ValuePattern can stay stale after Electron processes SendInput.
+    # Consult both fresh ValuePattern and TextPattern; prefer a nonempty
+    # editable body over placeholder or stale ValuePattern text.
+    $node=$target.editor
+    $v=$null
+    $t=$null
+    $value=''
+    $doc=''
+    if($node.TryGetCurrentPattern(
+        [System.Windows.Automation.ValuePattern]::Pattern,[ref]$v)){
+        try{$value=[string]$v.Current.Value}catch{}
     }
-    return [string]$target.text.DocumentRange.GetText(-1)
+    if($node.TryGetCurrentPattern(
+        [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)){
+        try{$doc=[string]$t.DocumentRange.GetText(-1)}catch{}
+    }
+    if($doc.Length -gt $value.Length){return $doc}
+    return $value
+}
+
+function Test-EditorContainsMarker($target,[string]$marker){
+    # UIA patterns are queried fresh after each input batch; React editors
+    # can replace their underlying UIA elements during an update.
+    $node=$target.editor
+    $items=New-Object System.Collections.ArrayList
+    [void]$items.Add($node)
+    try{
+        $current=[System.Windows.Automation.AutomationElement]::FocusedElement
+        if($null -ne $current -and
+           ($current.GetRuntimeId() -join ',') -cne $target.runtimeId){
+            # A retargeting React editor is only admissible if the focused
+            # replacement is still within the same foreground window.
+            if(Test-EligibleEditor $target.window $current){[void]$items.Add($current)}
+        }
+    }catch{}
+    foreach($item in $items){
+        try{
+            $v=$null
+            if($item.TryGetCurrentPattern(
+                    [System.Windows.Automation.ValuePattern]::Pattern,[ref]$v)){
+                if(([string]$v.Current.Value).Contains($marker)){return $true}
+            }
+        }catch{}
+        try{
+            $t=$null
+            if($item.TryGetCurrentPattern(
+                    [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)){
+                if($null -ne $t.DocumentRange.FindText($marker,$false,$false)){
+                    return $true
+                }
+            }
+        }catch{}
+    }
+    return $false
+}
+
+function Test-EmptyOrPlaceholder([string]$value){
+    if([string]::IsNullOrWhiteSpace($value)){return $true}
+    return ($value.Trim() -match
+            '^(?i:ask chatgpt|ask anything|ask a question|message|type a message|send a message|write a message)$')
 }
 
 function Assert-CurrentTarget($target){
