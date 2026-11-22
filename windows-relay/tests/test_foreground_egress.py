@@ -388,6 +388,34 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertLess(NATIVE.index("state.list_claimable_submit_retries()"),
                         NATIVE.index("for aid in state.list_claimable_outbound_ids():"))
 
+    def test_retry_journal_survives_restart_and_prevents_duplicate_enter(self):
+        d=self.state.data["outbound_deliveries"][self.aid]
+        d["phase"]="SEND_PENDING"
+        d["attempt_count"]=1
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[self.aid])
+        self.state.claim_submit_only_retry(self.aid)
+        recovered=wr.State(native.STATE)
+        record=recovered.outbound_lookup(self.aid)
+        self.assertEqual(record["phase"],"SUBMIT_UNCERTAIN")
+        self.assertEqual(record["submit_only_attempt_count"],1)
+        self.assertEqual(recovered.list_claimable_submit_retries(),[])
+        self.assertEqual(recovered.lookup(self.aid)["status"],"OK")
+
+    def test_only_chat_outcomes_are_eligible_for_send_retry(self):
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+        d=self.state.data["outbound_deliveries"][self.aid]
+        d["phase"]="TEXT_INSERTED"
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+        d["phase"]="SUBMITTED"
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+        d["phase"]="SEND_PENDING"
+        d["submit_only_attempt_count"]=1
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"),
                          "PowerShell AST parser is Windows-only")
     def test_sender_powershell_ast_is_parseable_without_running_it(self):
