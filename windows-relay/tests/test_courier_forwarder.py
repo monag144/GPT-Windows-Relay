@@ -282,7 +282,7 @@ class TextForwarderTests(unittest.TestCase):
         self.assertLess(forward, scan)
         self.assertLess(worker, scan)
         self.assertIn("name=\"command-courier-text-forwarder\"", native)
-        self.assertIn('phase = ("FORWARDING_NO_CHATGPT" if forward_report["active"]', native)
+        self.assertIn('else "FORWARDING_NO_CHATGPT" if forward_report["active"]', native)
         self.assertIn('if policy["armed"] and policy["auto_send"]:', native)
         self.assertIn("NATIVE_TEXT_ROUTE_ERROR=", native)
         hud = (ROOT / "hud.py").read_text(encoding="utf-8")
