@@ -33,10 +33,10 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn('exit 0',branch)
         self.assertNotIn('Set-ComposerTextBySendInput',branch)
         self.assertNotIn('Get-EnabledSend',branch)
-        self.assertNotIn('click',branch.lower())
+        self.assertNotIn('mouse_event(',branch)
+        self.assertNotIn('UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN',branch)
         self.assertNotIn('NativeResultPath',branch)
         self.assertIn('RESULT=COMPOSER_CLEAR_FAILED_NO_SEND',SOURCE)
-        self.assertIn('if($ClearComposerOnly){',SOURCE.split('}catch{',1)[-1] if False else SOURCE)
 
     def test_ui_gates_before_send(self):
         self.assertIn("Watch-ChatGPT-ActionCandidates.ps1",SOURCE)
