@@ -51,54 +51,132 @@ public static class CourierForegroundInput {
 }
 '@
 
+function Test-EligibleEditor($window,$node){
+    if($null -eq $node){return $false}
+    try{
+        if(-not $node.Current.IsEnabled -or $node.Current.IsOffscreen -or
+           $node.Current.IsPassword){return $false}
+        $kind=[string]$node.Current.ControlType.ProgrammaticName
+        if($kind -notin @('ControlType.Edit','ControlType.Document')){return $false}
+        $bounds=$node.Current.BoundingRectangle
+        $root=$window.Current.BoundingRectangle
+        if($bounds.Width -lt 8 -or $bounds.Height -lt 8 -or
+           $bounds.Left -lt $root.Left -or $bounds.Top -lt $root.Top -or
+           $bounds.Right -gt $root.Right -or $bounds.Bottom -gt $root.Bottom){
+            return $false
+        }
+        $walk=[System.Windows.Automation.TreeWalker]::RawViewWalker
+        $rootId=($window.GetRuntimeId() -join ',')
+        $cursor=$node
+        $belongs=$false
+        for($depth=0;$depth -lt 60 -and $null -ne $cursor;$depth++){
+            if(($cursor.GetRuntimeId() -join ',') -ceq $rootId){
+                $belongs=$true
+                break
+            }
+            $cursor=$walk.GetParent($cursor)
+        }
+        if(-not $belongs){return $false}
+        $value=$null
+        $text=$null
+        $supportsValue=$node.TryGetCurrentPattern(
+            [System.Windows.Automation.ValuePattern]::Pattern,[ref]$value)
+        $supportsText=$node.TryGetCurrentPattern(
+            [System.Windows.Automation.TextPattern]::Pattern,[ref]$text)
+        if($supportsValue -and $value.Current.IsReadOnly){return $false}
+        return ($supportsValue -or $supportsText)
+    }catch{
+        return $false
+    }
+}
+
+function Focus-CandidateEditor($window,$editor,[IntPtr]$handle){
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $handle){return $false}
+    $expected=($editor.GetRuntimeId() -join ',')
+    try{
+        $editor.SetFocus()
+        Start-Sleep -Milliseconds 100
+    }catch{}
+    $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+    if($null -ne $focused -and $focused.Current.HasKeyboardFocus -and
+       ($focused.GetRuntimeId() -join ',') -ceq $expected){return $true}
+
+    # Some Electron/Scintilla editors do not honor UIA SetFocus. Click the
+    # center of the VERIFIED editor, not any screen coordinate guessed from
+    # a specific application's geometry or the Enter/Send control.
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $handle){return $false}
+    $bounds=$editor.Current.BoundingRectangle
+    $x=[int][Math]::Round(($bounds.Left+$bounds.Right)/2)
+    $y=[int][Math]::Round(($bounds.Top+$bounds.Bottom)/2)
+    $root=$window.Current.BoundingRectangle
+    if($x -lt $root.Left -or $x -ge $root.Right -or
+       $y -lt $root.Top -or $y -ge $root.Bottom){return $false}
+    $saved=New-Object CourierForegroundInput+POINT
+    if(-not [CourierForegroundInput]::GetCursorPos([ref]$saved)){return $false}
+    try{
+        if(-not [CourierForegroundInput]::SetCursorPos($x,$y)){return $false}
+        [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 45
+        [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
+    }finally{
+        [void][CourierForegroundInput]::SetCursorPos($saved.X,$saved.Y)
+    }
+    Start-Sleep -Milliseconds 120
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $handle){return $false}
+    $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+    return ($null -ne $focused -and $focused.Current.HasKeyboardFocus -and
+            ($focused.GetRuntimeId() -join ',') -ceq $expected)
+}
+
 function Get-ForegroundEditable {
     $hwnd=[CourierForegroundInput]::GetForegroundWindow()
     if($hwnd -eq [IntPtr]::Zero){return $null}
     $window=[System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
     if($null -eq $window){return $null}
-    # Unicode newline characters can execute text in a terminal. Command
-    # Courier's generic editor adapter must never choose a shell console.
-    $targetProcess=Get-Process -Id ([int]$window.Current.ProcessId) -ErrorAction SilentlyContinue
-    if($targetProcess -and $targetProcess.ProcessName -match
+    # Terminal text panes must not execute result-body code as keystrokes.
+    $proc=Get-Process -Id ([int]$window.Current.ProcessId) -ErrorAction SilentlyContinue
+    if($proc -and $proc.ProcessName -match
        '^(?i:cmd|powershell|pwsh|windowsterminal|openconsole|conhost|wt)$'){
         return $null
     }
-    $editor=[System.Windows.Automation.AutomationElement]::FocusedElement
-    if($null -eq $editor){return $null}
-    if(-not $editor.Current.IsEnabled -or $editor.Current.IsOffscreen -or
-       $editor.Current.IsPassword -or -not $editor.Current.HasKeyboardFocus){return $null}
-    $control=[string]$editor.Current.ControlType.ProgrammaticName
-    if($control -notin @('ControlType.Edit','ControlType.Document')){return $null}
-    $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
-    $node=$editor
-    $inside=$false
-    $windowId=($window.GetRuntimeId() -join ',')
-    for($i=0;$i -lt 60 -and $null -ne $node;$i++){
-        if(($node.GetRuntimeId() -join ',') -ceq $windowId){
-            $inside=$true
-            break
+    $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+    $editor=$null
+    if(Test-EligibleEditor $window $focused){
+        $editor=$focused
+    }else{
+        # Do not demand an already-clicked composer. Discover a single
+        # visible writable Edit/Document target from the FOREGROUND app.
+        $all=New-Object System.Collections.ArrayList
+        $named=New-Object System.Collections.ArrayList
+        $descendants=$window.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        foreach($node in $descendants){
+            if(-not (Test-EligibleEditor $window $node)){continue}
+            [void]$all.Add($node)
+            if([string]$node.Current.Name -match
+               '(?i)ask chatgpt|ask anything|message|prompt|compose|write.*message'){
+                [void]$named.Add($node)
+            }
         }
-        $node=$walker.GetParent($node)
+        if($named.Count -eq 1){$editor=$named[0]}
+        elseif($all.Count -eq 1){$editor=$all[0]}
+        else{return $null}  # Ambiguous fields: never type into a guess.
+        if(-not (Focus-CandidateEditor $window $editor $hwnd)){return $null}
+        Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'
     }
-    if(-not $inside){return $null}
-    $box=$editor.Current.BoundingRectangle
-    $rootBox=$window.Current.BoundingRectangle
-    if($box.Width -lt 8 -or $box.Height -lt 8 -or
-       $box.Left -lt $rootBox.Left -or $box.Top -lt $rootBox.Top -or
-       $box.Right -gt $rootBox.Right -or $box.Bottom -gt $rootBox.Bottom){
-        return $null
-    }
-    $v=$null
-    $t=$null
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd -or
+       -not $editor.Current.HasKeyboardFocus){return $null}
+    $value=$null
+    $text=$null
     $hasValue=$editor.TryGetCurrentPattern(
-        [System.Windows.Automation.ValuePattern]::Pattern,[ref]$v)
+        [System.Windows.Automation.ValuePattern]::Pattern,[ref]$value)
     $hasText=$editor.TryGetCurrentPattern(
-        [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)
-    if($hasValue -and $v.Current.IsReadOnly){return $null}
-    if(-not $hasValue -and -not $hasText){return $null}
-    $rid=($editor.GetRuntimeId() -join ',')
-    return @{window=$window;editor=$editor;handle=$hwnd;runtimeId=$rid;
-             value=$v;text=$t;hasValue=$hasValue;hasText=$hasText}
+        [System.Windows.Automation.TextPattern]::Pattern,[ref]$text)
+    if($hasValue -and $value.Current.IsReadOnly){return $null}
+    return @{window=$window;editor=$editor;handle=$hwnd;
+             runtimeId=($editor.GetRuntimeId() -join ',');
+             value=$value;text=$text;hasValue=$hasValue;hasText=$hasText}
 }
 
 function Read-EditorText($target){
