@@ -332,6 +332,20 @@ function Test-ConversationReceiptNotComposer($target,[string]$marker){
                [System.Windows.Automation.ControlType]::Document){continue}
             if($node.Current.IsOffscreen){continue}
             if(($node.GetRuntimeId() -join ',') -ceq $target.runtimeId){continue}
+            # A parent Document can aggregate an editable child. It is
+            # never independent evidence of a posted conversation message.
+            $cursor=$target.editor
+            $ownsComposer=$false
+            $id=($node.GetRuntimeId() -join ',')
+            $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
+            for($depth=0;$depth -lt 60 -and $null -ne $cursor;$depth++){
+                if(($cursor.GetRuntimeId() -join ',') -ceq $id){
+                    $ownsComposer=$true
+                    break
+                }
+                $cursor=$walker.GetParent($cursor)
+            }
+            if($ownsComposer){continue}
             $t=$null
             if(-not $node.TryGetCurrentPattern(
                 [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)){continue}
