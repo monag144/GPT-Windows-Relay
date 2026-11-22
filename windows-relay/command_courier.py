@@ -198,6 +198,31 @@ def status() -> int:
     return 0
 
 
+def routes(action: str, *, route_id: str | None = None,
+           source: str | None = None, to_dir: str | None = None,
+           to_http: str | None = None, bearer_token_env: str | None = None) -> int:
+    """Configure transport-neutral forwarding without changing the native HUD."""
+    import courier_forwarder as forwarder
+    if action == "status":
+        print("COURIER_TEXT_FORWARDING_STATUS=" +
+              json.dumps(forwarder.status(HOME), sort_keys=True))
+    elif action == "set":
+        if not route_id or not source or (bool(to_dir) == bool(to_http)):
+            raise ValueError("COURIER_ROUTE_ID_SOURCE_AND_ONE_DESTINATION_REQUIRED")
+        forwarder.configure_route(HOME, route_id, source,
+                                  "directory" if to_dir else "http",
+                                  to_dir or to_http,
+                                  bearer_token_env=bearer_token_env)
+        print("COURIER_TEXT_ROUTE_CONFIGURED=" + route_id)
+        print("COURIER_TEXT_ROUTE_ACTIVATION=WHEN_ARMED_AND_AUTO_SEND_ON")
+    elif action in ("enable", "disable"):
+        forwarder.set_enabled(HOME, action == "enable")
+        print("COURIER_TEXT_FORWARDING=" + ("ENABLED" if action == "enable" else "DISABLED"))
+    else:
+        raise ValueError("COURIER_ROUTE_ACTION_INVALID")
+    return 0
+
+
 def startup(action: str) -> int:
     """Only the current user's Startup shortcut is changed, on explicit request."""
     if not IS_WINDOWS:
@@ -228,6 +253,18 @@ def main(argv=None) -> int:
     profile.add_argument("mode", nargs="?", choices=sorted(ALLOWED))
     login = sub.add_parser("startup")
     login.add_argument("action", choices=("install", "remove", "status"))
+    route = sub.add_parser("route", help="Configured text source to file or HTTP destination")
+    route_sub = route.add_subparsers(dest="route_action", required=True)
+    setting = route_sub.add_parser("set")
+    setting.add_argument("--id", required=True)
+    setting.add_argument("--source", required=True)
+    target = setting.add_mutually_exclusive_group(required=True)
+    target.add_argument("--to-dir")
+    target.add_argument("--to-http")
+    setting.add_argument("--bearer-token-env")
+    route_sub.add_parser("status")
+    route_sub.add_parser("enable")
+    route_sub.add_parser("disable")
     args = parser.parse_args(argv)
     try:
         if args.command in (None, "start"):
@@ -244,6 +281,13 @@ def main(argv=None) -> int:
             return 0
         if args.command == "startup":
             return startup(args.action)
+        if args.command == "route":
+            return routes(args.route_action,
+                          route_id=getattr(args, "id", None),
+                          source=getattr(args, "source", None),
+                          to_dir=getattr(args, "to_dir", None),
+                          to_http=getattr(args, "to_http", None),
+                          bearer_token_env=getattr(args, "bearer_token_env", None))
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
         if args.command in (None, "start"):
             record_startup_event("START_FAILED", type(exc).__name__ + ":" + str(exc))
