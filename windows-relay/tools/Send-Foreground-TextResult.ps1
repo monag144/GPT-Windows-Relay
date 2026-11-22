@@ -320,6 +320,29 @@ function Assert-RunnerAllowed {
 }
 
 
+function Test-ConversationReceiptNotComposer($target,[string]$marker){
+    # A chat's writable composer can itself be ControlType.Document. Never
+    # mistake its own draft for an already posted conversation message.
+    $nodes=$target.window.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    foreach($node in $nodes){
+        try{
+            if($node.Current.ControlType -ne
+               [System.Windows.Automation.ControlType]::Document){continue}
+            if($node.Current.IsOffscreen){continue}
+            if(($node.GetRuntimeId() -join ',') -ceq $target.runtimeId){continue}
+            $t=$null
+            if(-not $node.TryGetCurrentPattern(
+                [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)){continue}
+            if($null -ne $t.DocumentRange.FindText($marker,$false,$false)){
+                return $true
+            }
+        }catch{}
+    }
+    return $false
+}
+
 function Test-ExactOwnDraft($target,[string]$marker){
     if(-not (Test-EditorContainsMarker $target $marker)){return $false}
     # Do not submit a mixed human draft: both frame delimiters and the
@@ -386,7 +409,7 @@ function Invoke-ExistingDraftSubmit($target,$send){
 function Recover-ExistingChatDraft($target,[string]$marker){
     # Read-only receipt reconciliation happens BEFORE any keyboard event.
     if(-not (Test-EditorContainsMarker $target $marker)){
-        if(Test-TranscriptMarker $target $marker){
+        if(Test-ConversationReceiptNotComposer $target $marker){
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT'
             Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
         }else{
@@ -405,6 +428,21 @@ function Recover-ExistingChatDraft($target,[string]$marker){
         Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
         return
     }
+    # Before another Enter, allow a previously initiated send to settle.
+    # A slow ChatGPT response must not trigger an immediate duplicate.
+    for($settle=0;$settle -lt 10;$settle++){
+        Start-Sleep -Milliseconds 250
+        if(-not (Test-EditorContainsMarker $target $marker)){
+            if(Test-ConversationReceiptNotComposer $target $marker){
+                Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT'
+                Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
+            }else{
+                Write-Output 'SENDER_STAGE=SUBMIT_ONLY_DRAFT_DISAPPEARED_UNCONFIRMED'
+                Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            }
+            return
+        }
+    }
     # A valid draft can be sent at most twice in this invocation: the
     # original input is NEVER retyped or passed to any process executor.
     for($attempt=1;$attempt -le 2;$attempt++){
@@ -412,7 +450,7 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
             return
         }
-        if(Test-TranscriptMarker $target $marker){
+        if(Test-ConversationReceiptNotComposer $target $marker){
             # Transcript may still include composer; never click if both
             # show the same receipt, because server state is ambiguous.
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_TRANSCRIPT_AMBIGUOUS'
@@ -434,7 +472,7 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             Start-Sleep -Milliseconds 200
             try{
                 $draftPresent=Test-EditorContainsMarker $target $marker
-                if(-not $draftPresent -and (Test-TranscriptMarker $target $marker)){
+                if(-not $draftPresent -and (Test-ConversationReceiptNotComposer $target $marker)){
                     Write-Output 'SENDER_STAGE=CONFIRMED_IN_CONVERSATION'
                     Write-Output 'RESULT=HEARTBEAT_SUBMITTED'
                     return
