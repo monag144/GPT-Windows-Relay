@@ -366,11 +366,14 @@ def _tick_unlocked(home: Path, *, enabled: bool) -> dict:
     state = _ledger(home)
     forwarded = 0
     held = 0
+    route_errors = 0
     remaining = MAX_FILES_PER_TICK
     for route in routes:
         source = route["source"]
         if not source.is_dir() or source.is_symlink():
-            raise ForwardingError("FORWARDING_SOURCE_UNAVAILABLE")
+            # A missing app's input must not stop independent other routes.
+            route_errors += 1
+            continue
         for entry in sorted(source.iterdir(), key=lambda p: p.name):
             if remaining <= 0:
                 break
@@ -379,11 +382,15 @@ def _tick_unlocked(home: Path, *, enabled: bool) -> dict:
             # Never spend the per-tick *new delivery* budget on already
             # forwarded files; that would starve newer files as the folder grows.
             # Oversized and binary files are ignored rather than truncated.
-            before = entry.stat()
-            if before.st_size > MAX_TEXT_BYTES:
+            try:
+                before = entry.stat()
+                if before.st_size > MAX_TEXT_BYTES:
+                    continue
+                body = entry.read_bytes()
+                after = entry.stat()
+            except OSError:
+                route_errors += 1
                 continue
-            body = entry.read_bytes()
-            after = entry.stat()
             # Prefer atomic source-file drops. Skip concurrent writers rather
             # than forwarding a truncated/in-flight text body.
             if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
@@ -421,7 +428,8 @@ def _tick_unlocked(home: Path, *, enabled: bool) -> dict:
                 )
                 _persist(home, state)
                 forwarded += 1
-    return {"active": True, "forwarded": forwarded, "held": held}
+    return {"active": True, "forwarded": forwarded, "held": held,
+            "route_errors": route_errors}
 
 
 def status(home: Path) -> dict:
