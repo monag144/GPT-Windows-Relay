@@ -96,16 +96,16 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         # the Send button did not become eligible. Preserve the draft and hold
         # the saved result; do not replay the Windows command or auto-retry.
         fake=SimpleNamespace(returncode=1,
-            stdout=("SENDER_STAGE=INPUT_COMPLETED\\n"
-                    "SENDER_STAGE=SEND_BUTTON_NOT_READY\\n"
-                    "UIA_SEND_READY_DRAFT_MATCH=True\\n"
-                    "UIA_SEND_READY_READ_FAILURES=2\\n"
-                    "HEARTBEAT_ERROR=COMPOSER_SET_BUT_SEND_NOT_ENABLED\\n"
-                    "OWN_UNSENT_DRAFT=PRESERVED_IN_COMPOSER\\n"
-                    "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY\\n"),
+            stdout=("SENDER_STAGE=INPUT_COMPLETED\n"
+                    "SENDER_STAGE=SEND_BUTTON_NOT_READY\n"
+                    "UIA_SEND_READY_DRAFT_MATCH=True\n"
+                    "UIA_SEND_READY_READ_FAILURES=2\n"
+                    "HEARTBEAT_ERROR=COMPOSER_SET_BUT_SEND_NOT_ENABLED\n"
+                    "OWN_UNSENT_DRAFT=PRESERVED_IN_COMPOSER\n"
+                    "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY\n"),
             stderr="")
         before=self.state.lookup(self.id).copy()
-        with mock.patch.object(native.shutil,"which",return_value="powershell.exe"), \\
+        with mock.patch.object(native.shutil,"which",return_value="powershell.exe"), \
              mock.patch.object(native.subprocess,"run",return_value=fake) as sender:
             native.deliver(self.state,self.id)
             native.deliver(self.state,self.id)
