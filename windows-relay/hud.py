@@ -183,14 +183,16 @@ def native_snapshot():
     if delivery_blocked:
         exact+='\nDELIVERY BLOCKED: '+delivery_error
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
-    if delivery_blocked:
+    # The durable delivery phase, not a potentially stale runner error,
+    # decides whether a saved ChatGPT draft is awaiting send-only recovery.
+    if result=='SEND_PENDING' and delivery_phase=='SEND_PENDING':
+        phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
+    elif delivery_blocked:
         phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
     elif phase=='AWAITING_TEXT_FIELD':
         phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif phase=='WAITING_FOR_CHATGPT_APP':
         phase_line='UI SOURCE NOT OPEN • foreground sender READY'
-    elif report.get('last_result')=='SEND_PENDING':
-        phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
     elif outstanding_count:
         phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
     return {
