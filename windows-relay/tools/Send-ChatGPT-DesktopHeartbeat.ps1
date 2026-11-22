@@ -583,6 +583,18 @@ try{
         $script:wire='[GPT_WINDOWS_HEARTBEAT]'+$eol+($payload|ConvertTo-Json -Compress)+$eol+'[/GPT_WINDOWS_HEARTBEAT]'
     }
     Write-Output ('HEARTBEAT_ID='+$id)
+    # Check duplicates BEFORE inserting our own result into ChatGPT. The
+    # original EXEC instruction necessarily contains the action ID, so ID-only
+    # searches of the whole conversation are not proof of prior delivery.
+    # A native result has a unique nonce that appears only in its RESULT frame.
+    # After insertion, some UIA Document trees also include composer text,
+    # so never search that document for the result marker again before Send.
+    $conversationResultMarker=if($NativeResultPath){$NativeReceiptMarker}else{$id}
+    $doc=Get-TargetDocument $window $canary
+    if(Has-Marker $doc $conversationResultMarker){
+        throw 'RESULT_RECEIPT_ALREADY_PRESENT_REFUSE_DUPLICATE'
+    }
+    Write-Output 'SENDER_STAGE=PRIOR_RESULT_ABSENCE_VERIFIED'
     # Newlines require Enter-like semantics in some Electron editors.  The result
     # protocol accepts whitespace around its JSON, so keep the typed wire on one
     # line and reserve the only click for the actual Send control below.
@@ -618,8 +630,8 @@ try{
     Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'
     Write-Output 'UIA_SEND_BUTTON=ENABLED'
     Write-Output 'SENDER_STAGE=SEND_BUTTON_ENABLED'
-    $doc=Get-TargetDocument $window $canary
-    if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
+    # Do not repeat the conversation-document lookup now: the document can
+    # expose our still-unsent composer, yielding a false duplicate.
     $composer=Get-Composer $window
     if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){throw 'COMPOSER_CHANGED_BEFORE_SEND'}
     # Never activate an unverified button via a blind Enter keypress.
@@ -631,8 +643,9 @@ try{
     if(-not (Test-OwnHeartbeatDraft ([string]$composer.pattern.Current.Value))){
         throw 'COMPOSER_CHANGED_BEFORE_MOUSE_CLICK'
     }
-    $doc=Get-TargetDocument $window $canary
-    if(Has-Marker $doc $id){throw 'HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE'}
+    # The verified single native owner and durable SUBMITTING reservation
+    # exclude a second sender for this operation. Recheck our exact draft and
+    # enabled Send button, never the document that may include that draft.
     $send=Get-EnabledSend $window
     if($null -eq $send){throw 'SEND_BUTTON_UNAVAILABLE_BEFORE_MOUSE_CLICK'}
     $rect=$send.node.Current.BoundingRectangle
@@ -675,7 +688,7 @@ try{
             $composer=Get-Composer $window
             $valueAfter=[string]$composer.pattern.Current.Value
             $composerCleared=(Test-ComposableEmptyState $window $composer)
-            if((Has-Marker $doc $id) -and $composerCleared){
+            if((Has-Marker $doc $conversationResultMarker) -and $composerCleared){
                 $confirmed=$true
                 break
             }
