@@ -181,27 +181,25 @@ class CourierCoordinatorTests(unittest.TestCase):
                         return_value={"off":False,"armed":True}), \
              mock.patch("desktop_native_relay.launch_runner_if_absent") as launch, \
              mock.patch("desktop_native_relay.get_status",return_value=report), \
-             mock.patch("desktop_native_relay.delivery_held",return_value=True) as held, \
              mock.patch.object(courier.subprocess,"run") as no_send, \
              mock.patch("builtins.print") as output:
             self.assertEqual(courier.go(),0)
         launch.assert_called_once()
-        held.assert_called_once_with(action_id)
         no_send.assert_not_called()
         messages=[str(call.args[0]) for call in output.call_args_list]
-        self.assertIn("COURIER_GO=EXECUTION_READY_DELIVERY_HELD",messages)
+        self.assertIn("COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED",messages)
         self.assertNotIn("COURIER_GO=NATIVE_RUNTIME_READY",messages)
 
-    def test_go_refuses_blocked_delivery_despite_running_engine(self):
+    def test_go_refuses_actual_engine_error_but_not_old_outbound_failure(self):
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
         report={"native_running":True,"native_armed":True,"native_off":False,
-                "phase":"DELIVERY_BLOCKED","delivery_blocked":True,"runner_error_type":None}
+                "phase":"DELIVERY_BLOCKED","delivery_blocked":True,"runner_error_type":"RuntimeError"}
         with mock.patch.object(courier,"IS_WINDOWS",True), \
              mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
              mock.patch("desktop_native_relay.launch_runner_if_absent"), \
              mock.patch("desktop_native_relay.get_status",return_value=report), \
              mock.patch("builtins.print"):
-            with self.assertRaisesRegex(RuntimeError,"ENGINE_OR_DELIVERY_BLOCKED"):
+            with self.assertRaisesRegex(RuntimeError,"COURIER_GO_ENGINE_ERROR"):
                 courier.go()
 
     def test_go_detects_policy_change_after_launch_without_resend(self):
