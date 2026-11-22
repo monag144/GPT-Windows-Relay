@@ -683,11 +683,14 @@ def deliver(state: wr.State, aid: str):
         note("NATIVE_DELIVERY_RETRY=OPERATOR_REQUIRED_NO_AUTO_RETRY")
     else:
         completed=phase in {"SUBMITTED", "TEXT_INSERTED"}
+        # SEND_PENDING has a saved draft eligible for bounded send-only
+        # recovery; it is not a blocked engine or a completed delivery.
+        recoverable=phase == "SEND_PENDING"
         status_update(phase=("IDLE" if completed else "DELIVERY_UNCERTAIN"),
                       last_action=aid, last_result=phase,
-                      delivery_blocked=not completed,
+                      delivery_blocked=not (completed or recoverable),
                       last_delivery_stage=stage,
-                      last_delivery_error=(None if completed else error_code))
+                      last_delivery_error=(None if completed or recoverable else error_code))
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
