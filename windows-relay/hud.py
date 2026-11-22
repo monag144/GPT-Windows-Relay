@@ -775,7 +775,7 @@ def run_ui():
                     go_results.put(("ok",None))
                 elif "COURIER_GO=WAITING_FOR_DESTINATION" in output:
                     go_results.put(("waiting",None))
-                elif "COURIER_GO=EXECUTION_READY_DELIVERY_HELD" in output:
+                elif "COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED" in output:
                     go_results.put(("held",None))
                 else:
                     raise RuntimeError("Command Courier runtime was not confirmed")
