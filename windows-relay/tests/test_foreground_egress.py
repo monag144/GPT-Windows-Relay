@@ -367,23 +367,24 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(self.state.lookup(self.aid)["status"], "OK")
 
     def test_send_only_uncertain_is_not_retried_or_reexecuted(self):
+        # The first Send may have succeeded even without a visible receipt.
+        # Neither the background worker nor the direct helper may press again.
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
         self.state.save()
-        which, process = self.sender(
-            "SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED\n"
-            "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n")
-        with which, process as invoked, \
+        self.assertEqual(self.state.list_claimable_submit_retries(), [])
+        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\\n")
+        with which, process as invoked, \\
              mock.patch.object(native, "process_packet") as no_exec:
             native.recover_submit_only(self.state, self.aid)
             native.recover_submit_only(self.state, self.aid)
-        invoked.assert_called_once()
+        invoked.assert_not_called()
         no_exec.assert_not_called()
         delivery = self.state.outbound_lookup(self.aid)
         self.assertEqual(delivery["phase"], "SUBMIT_UNCERTAIN")
-        self.assertEqual(delivery["submit_only_attempt_count"], 1)
+        self.assertEqual(delivery.get("submit_only_attempt_count", 0), 0)
 
     def test_previously_visible_receipt_does_not_send_duplicate(self):
-        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
         self.state.save()
         which, process = self.sender(
             "SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT\n"
@@ -407,7 +408,11 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("if($SubmitExistingOnly){", SENDER)
         self.assertIn("Recover-ExistingChatDraft $target $NativeReceiptMarker", SENDER)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
-        self.assertIn("for($attempt=1;$attempt -le 2;$attempt++)", SENDER)
+        self.assertIn("for($attempt=1;$attempt -le 1;$attempt++)", SENDER)
+        click_helper = SENDER.split("function Invoke-ExistingDraftSubmit(",1)[1].split(
+            "function Recover-ExistingChatDraft(",1)[0]
+        self.assertNotIn("TypeEnter()", click_helper)
+        self.assertIn("if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}", click_helper)
         self.assertIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
         self.assertIn("$proc.ProcessName -ine 'ChatGPT'", SENDER)
         submit_helper = SENDER.split("function Recover-ExistingChatDraft(",1)[1].split(
@@ -437,6 +442,9 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(self.state.list_claimable_submit_retries(),[])
         d=self.state.data["outbound_deliveries"][self.aid]
         d["phase"]="TEXT_INSERTED"
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+        d["phase"]="SUBMIT_UNCERTAIN"
         self.state.save()
         self.assertEqual(self.state.list_claimable_submit_retries(),[])
         d["phase"]="SUBMITTED"
