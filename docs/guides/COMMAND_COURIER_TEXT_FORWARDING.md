@@ -103,3 +103,31 @@ the same persistent route-specific receipt and deduplication rules.
 Existing GitHub bookmark
 bookmark/command-courier-hud-force-clear-2026-11-22 remains pinned and was
 not modified by this integration.
+
+
+## ChatGPT sender recovery without stopping the courier
+
+A historical ChatGPT desktop sender failure must not prevent automatic file or
+API forwarding. The original HUD displays **READY** when its engine is armed,
+with unresolved ChatGPT outbound results in a **secondary outbox status**.
+An old sender hold is not a universal delivery block; GO activates the engine.
+
+When the operator can independently confirm one exact result frame was
+received, matching its action ID and unique NATIVE-RECEIPT marker, reconcile
+it on the existing runner:
+
+    python -B "windows-relay\desktop_native_relay.py" queue-confirmed-receipt ACTION_ID NATIVE-RECEIPT-EXACT_NONCE
+
+This queues metadata after validating the marker against the persistent
+native outbox. **The running singleton applies it through its own journal**
+before the next ChatGPT scan, marking only that outbound delivery SUBMITTED.
+No command is rerun, no text is resent, no composer is cleared, and saved
+execution, attempt count, outbox and historical hold file are preserved.
+
+An action ID alone is not enough; an unsent composer draft is not confirmed
+delivery. If no actual receipt is independently confirmed, leave that attempt
+unresolved. It remains visible as outbox history without blocking the relay.
+
+The earlier acknowledge-receipt CLI still works for a stopped/disarmed runner,
+but is no longer needed when the live singleton processes receipt requests.
+Avoid opening a second writable State while the runner is alive.
