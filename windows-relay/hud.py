@@ -236,6 +236,28 @@ def focus_chatgpt_for_forced_delivery():
     user32.EnumWindows(CALLBACK(visit),None)
     return bool(candidates and user32.SetForegroundWindow(candidates[0]))
 
+def native_composer_clear():
+    """Explicit editor-only recovery; never touches the saved delivery journal.
+
+    The PowerShell owner verifies the exact ChatGPT window and composer and
+    returns a distinct no-send receipt. Run this from a HUD worker thread.
+    """
+    script=Path(__file__).resolve().parent/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1"
+    if not script.is_file():raise RuntimeError("Native ChatGPT composer helper unavailable")
+    powershell="powershell.exe"
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    proc=subprocess.run([powershell,"-NoLogo","-NoProfile","-ExecutionPolicy","Bypass",
+                         "-STA","-File",str(script),"-ClearComposerOnly"],
+                        cwd=str(script.parent),capture_output=True,text=True,
+                        encoding="utf-8",errors="replace",timeout=20,check=False,
+                        creationflags=flags)
+    if proc.returncode or "RESULT=COMPOSER_CLEARED_NO_SEND" not in proc.stdout:
+        diagnostic=next((line.partition("=")[2] for line in proc.stdout.splitlines()
+                         if line.startswith("HEARTBEAT_ERROR=")),None)
+        raise RuntimeError((diagnostic or "COMPOSER_CLEAR_NOT_CONFIRMED")[:180])
+    return "COMPOSER_CLEARED_NO_SEND"
+
+
 def native_delivery_control(command,action_id=None):
     import desktop_native_relay as native
     python=Path(sys.executable)
@@ -485,16 +507,18 @@ def run_ui():
     restart_btn=tk.Button(controls,text="RESTART",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("restart")); restart_btn.pack(side="left",padx=3)
     off_btn=tk.Button(controls,text="OFF",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("off")); off_btn.pack(side="left",padx=3)
     kill_btn=tk.Button(controls,text="KILL",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2",command=lambda:relay_control("kill")); kill_btn.pack(side="left",padx=3)
-    # Keep the recovery actions compact and distinct: CLEAR sits above COMMAND,
-    # while the queue-wide checkbox remains to the right of CLEAR.
+    # Keep the original FORCE CLEAR slot. Composer clear, outbound abort,
+    # resend and queue removal are different operations, never aliases.
     force_frame=tk.Frame(panel,bg=PANEL); force_frame.place(x=278,y=34,anchor="nw")
-    force_abort_btn=tk.Button(force_frame,text="ABORT SEND",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
-    force_abort_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
+    force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR",font=("Segoe UI",8,"bold"),bg="#7f1d1d",fg=FG,activebackground="#991b1b",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_clear_btn.grid(row=0,column=0,sticky="w",pady=(0,2))
     clear_queue_var=tk.BooleanVar(value=False)
     clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",8,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=7,cursor="hand2")
     clear_queue_check.grid(row=0,column=1,sticky="w",padx=(7,0))
     force_command_btn=tk.Button(force_frame,text="FORCE RESEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_command_btn.grid(row=1,column=0,sticky="w")
+    force_abort_btn=tk.Button(force_frame,text="ABORT SEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_abort_btn.grid(row=1,column=1,sticky="w",padx=(7,0))
     relay=tk.Label(panel,text="Relay …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
     relay.pack(fill="x",pady=(1,0))
     browser=tk.Label(panel,text="Browser …",font=("Segoe UI",9),bg=PANEL,fg=FG,anchor="w")
@@ -759,6 +783,27 @@ def run_ui():
         # Let Windows finish foreground activation before the child sender
         # performs its independent foreground verification.
         root.after(180,lambda:native_delivery_control("force-delivery",aid))
+    # FORCE CLEAR is an explicit, confirmed editor-only operation. It is not
+    # FORCE RESEND, ABORT SEND or CLEAR QUEUE; it never releases a result hold.
+    clear_results=queue.Queue()
+    clear_busy={"value":False}
+    def force_clear_composer():
+        if not native_mode() or clear_busy["value"]:return
+        if not messagebox.askyesno("Force Clear ChatGPT Composer",
+                "Discard the current unsent ChatGPT composer text?\\n\\n"
+                "This cannot be undone. No relay packet will be sent, retried "
+                "or deleted. Continue?",parent=root):
+            return
+        if not focus_chatgpt_for_forced_delivery():
+            messagebox.showerror("Force Clear",
+                "ChatGPT could not be focused; nothing was cleared.",parent=root)
+            return
+        clear_busy["value"]=True
+        force_clear_btn.configure(state="disabled",text="CLEARING…")
+        def worker():
+            try:clear_results.put(("ok",native_composer_clear()))
+            except Exception as exc:clear_results.put(("error",str(exc)[-180:]))
+        threading.Thread(target=worker,name="courier-composer-clear",daemon=True).start()
     def force_abort():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return
@@ -770,6 +815,7 @@ def run_ui():
         if native_mode() and messagebox.askyesno("Clear Entire Queue","Delete all pending native delivery records and holds?\nExecuted command results are retained.",parent=root):
             native_delivery_control("clear-pending-deliveries")
     force_command_btn.configure(command=show_force_command)
+    force_clear_btn.configure(command=force_clear_composer)
     force_abort_btn.configure(command=force_abort)
     clear_queue_check.configure(command=clear_pending_queue)
     def toggle_auto_send():
@@ -799,6 +845,11 @@ def run_ui():
             elif kind=="error":
                 courier_state["known"]=False
             update_courier_settings_widgets()
+        while not clear_results.empty():
+            kind,value=clear_results.get_nowait()
+            clear_busy["value"]=False
+            if kind=="error":
+                messagebox.showerror("Force Clear",value,parent=root)
         while not go_results.empty():
             kind,error=go_results.get_nowait()
             go_state["busy"]=False
@@ -834,6 +885,8 @@ def run_ui():
                                     bg='#137333' if enabled else '#7f1d1d',
                                     activebackground='#188038' if enabled else '#991b1b',state='normal')
             delivery_phase=snap.get('native_delivery_phase')
+            force_clear_btn.configure(text="CLEARING…" if clear_busy["value"] else "FORCE CLEAR",
+                                      state="disabled" if clear_busy["value"] else "normal")
             force_command_btn.configure(state='normal' if delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled')
             force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
             clear_queue_check.configure(state='normal')
@@ -850,6 +903,7 @@ def run_ui():
         startup_check.configure(state='disabled')
         settings_startup_check.configure(state='disabled')
         auto_send_btn.configure(text='Auto Send: OFF',bg='#7f1d1d',activebackground='#991b1b',state='disabled')
+        force_clear_btn.configure(text="FORCE CLEAR",state='disabled')
         force_command_btn.configure(state='disabled'); force_abort_btn.configure(state='disabled'); clear_queue_check.configure(state='disabled')
         if isinstance(snap.get("conversation_lock_enabled"),bool):
             lock_state["enabled"]=snap["conversation_lock_enabled"]
