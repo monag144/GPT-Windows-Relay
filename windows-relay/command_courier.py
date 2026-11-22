@@ -160,21 +160,15 @@ def go() -> int:
     if report.get("native_off") or not report.get("native_armed"):
         raise RuntimeError("COURIER_GO_POLICY_CHANGED_WHILE_ACTIVATING")
     phase = str(report.get("phase") or "UNKNOWN").upper()
-    # An earlier pre-click outbound result can be held while this same
-    # singleton continues admitting NEW instructions. A GO readiness check
-    # must distinguish those facts without releasing the held result.
-    last_action=report.get("last_action")
-    if (phase in {"DELIVERY_BLOCKED", "FORWARDING_NO_CHATGPT"} and report.get("delivery_blocked")
-            and not report.get("runner_error_type")
-            and report.get("last_result")=="PRE_SUBMIT_FAILED"
-            and isinstance(last_action,str) and last_action
-            and native.delivery_held(last_action)):
-        print("COURIER_GO=EXECUTION_READY_DELIVERY_HELD")
+    # GO starts/attaches to the courier, not to any one destination.
+    # A stuck or uncertain ChatGPT outbox must not block independent sources
+    # or file/API recipients. Never claim the old result was submitted.
+    if report.get("runner_error_type") or phase == "ERROR":
+        raise RuntimeError("COURIER_GO_ENGINE_ERROR")
+    if (phase in {"DELIVERY_BLOCKED", "DELIVERY_UNCERTAIN"}
+            or report.get("delivery_blocked")):
+        print("COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED")
         return 0
-    if report.get("runner_error_type") or phase in {
-        "ERROR", "DELIVERY_BLOCKED", "DELIVERY_UNCERTAIN"
-    } or report.get("delivery_blocked"):
-        raise RuntimeError("COURIER_GO_ENGINE_OR_DELIVERY_BLOCKED")
     # Process singleton is not evidence that the selected receiver is ready.
     if phase in {"BASELINING", "WAITING_FOR_CHATGPT_APP"}:
         print("COURIER_GO=WAITING_FOR_DESTINATION")
