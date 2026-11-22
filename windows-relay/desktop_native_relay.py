@@ -430,8 +430,11 @@ def reconcile_receipt_requests(state: wr.State):
             if not before:
                 raise RuntimeError("NATIVE_RECEIPT_ACK_DELIVERY_NOT_FOUND")
             if before.get("phase") == "SUBMITTED":
-                if before.get("reconciled_receipt") != receipt:
+                prior = before.get("reconciled_receipt")
+                if prior is not None and prior != receipt:
                     raise RuntimeError("NATIVE_RECEIPT_ACK_ALREADY_SUBMITTED_DIFFERENTLY")
+                # Already submitted natively: receipt was accepted without an
+                # operator reconciliation field. This request is idempotent.
             else:
                 state.reconcile_outbound_receipt(aid, receipt)
             status_update(phase="IDLE", last_action=aid, last_result="SUBMITTED",
