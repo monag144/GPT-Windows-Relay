@@ -389,17 +389,9 @@ function Test-ChatGPTSubmissionTarget($target){
 function Invoke-ExistingDraftSubmit($target,$send){
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    $type=[string]$target.editor.Current.ControlType.ProgrammaticName
-    if($type -eq 'ControlType.Edit' -or $null -eq $send){
-        # Named native ChatGPT composer and exact own receipt are
-        # independently required by the caller. No blind Enter.
-        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_BEGIN'
-        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
-            throw 'SUBMIT_ONLY_ENTER_INCOMPLETE'
-        }
-        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_COMPLETED'
-        return
-    }
+    # A recovered result may ONLY use ChatGPT's explicit, unique Send control.
+    # Enter is not a Send-button substitute and must never create another post.
+    if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}
     $bounds=$send.Current.BoundingRectangle
     $root=$target.window.Current.BoundingRectangle
     $x=[int][Math]::Round(($bounds.Left+$bounds.Right)/2)
@@ -464,9 +456,9 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             return
         }
     }
-    # A valid draft can be sent at most twice in this invocation: the
-    # original input is NEVER retyped or passed to any process executor.
-    for($attempt=1;$attempt -le 2;$attempt++){
+    # At most ONE actual Send-button activation for this saved result.
+    # Any unconfirmed outcome stays uncertain; never auto-press Send again.
+    for($attempt=1;$attempt -le 1;$attempt++){
         if(-not (Test-ExactOwnDraft $target $marker)){
             Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
             return
@@ -479,10 +471,7 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             return
         }
         $send=Find-SendButton $target
-        $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
-        $name=[string]$target.editor.Current.Name
-        if($null -eq $send -and $name -notmatch
-            '(?i)ask chatgpt|ask anything|message|prompt|compose'){
+        if($null -eq $send){
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'
             Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
             return
@@ -512,8 +501,8 @@ function Recover-ExistingChatDraft($target,[string]$marker){
                 return
             }
         }
-        # Retry another Send ONLY if the exact original receipt is STILL
-        # visible in the composer, and no transcript receipt appeared.
+        # The send-control activation has an ambiguous outcome. Do not
+        # retry, even when UIA still shows the draft and no receipt.
     }
     Write-Output 'SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED'
     Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
