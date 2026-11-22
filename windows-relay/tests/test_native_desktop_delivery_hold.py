@@ -322,6 +322,7 @@ class DeliveryFailureHoldTests(unittest.TestCase):
     def test_force_clear_terminally_disposes_unresolved_and_preserves_history(self):
         held="PCE19-NATIVE-E2E-20261122-001"
         unsure="PCE19-NATIVE-HEALTH-20261122-002"
+        pending="PCE19-CHAT-SEND-PENDING-20261122-009"
         delivered="PCE19-FOREGROUND-E2E-20261122-005"
         deliveries=self.state.data["outbound_deliveries"]
         deliveries[self.id]["phase"]="READY"
@@ -329,6 +330,8 @@ class DeliveryFailureHoldTests(unittest.TestCase):
                           "saved_result_path":"saved-held"}
         deliveries[unsure]={"id":unsure,"phase":"SUBMIT_UNCERTAIN","attempt_count":1,
                             "saved_result_path":"saved-uncertain"}
+        deliveries[pending]={"id":pending,"phase":"SEND_PENDING","attempt_count":1,
+                             "saved_result_path":"saved-pending"}
         deliveries[delivered]={"id":delivered,"phase":"SUBMITTED",
                                "attempt_count":1,"saved_result_path":"saved-sent"}
         self.state.save()
@@ -336,7 +339,7 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         affected=self.state.force_clear_unresolved_deliveries("a"*32,{
             held:{"stage":"INPUT_BEGIN","reason":"COMPOSER_NOT_READY",
                   "held_utc":"2026-11-22T03:00:00Z"}})
-        self.assertCountEqual(affected,[self.id,held,unsure])
+        self.assertCountEqual(affected,[self.id,held,unsure,pending])
         for key in affected:
             item=self.state.outbound_lookup(key)
             self.assertEqual(item["phase"],"ABORTED")
