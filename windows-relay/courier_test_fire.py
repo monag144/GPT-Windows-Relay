@@ -42,32 +42,58 @@ def _select_route(home: Path, route_id: str | None):
 
 def fire(home: Path, native: dict, *, route_id: str | None = None,
          timeout: float = 12.0, sleep=time.sleep) -> dict:
-    """Run a single operator-requested end-to-end text relay test.
+    """Send a unique synthetic file packet through the real running relay."""
+    nonce = uuid.uuid4().hex
+    route = _select_route(home, route_id)
+    body = ("COURIER_TEST_FIRE_V1\nroute=" + route["id"] +
+            "\nnonce=" + nonce + "\n").encode("utf-8")
+    return _submit_and_verify(home, native, route, body, nonce=nonce,
+                              filename_prefix="courier-test-fire",
+                              timeout=timeout, sleep=sleep)
 
-    Returns a compact receipt only after the actual background forwarder has
-    completed the configured route; never creates a route or bypasses ARM/OFF.
-    HTTP and non-file destinations require a separate explicit test mode.
+
+def send_copied_text(home: Path, native: dict, text: str, *,
+                     route_id: str | None = None,
+                     timeout: float = 12.0, sleep=time.sleep) -> dict:
+    """Forward only text explicitly copied by the operator; never execute it."""
+    if not isinstance(text, str) or not text:
+        raise TestFireError("COPY_TEXT_EMPTY_CLIPBOARD")
+    try:
+        body = text.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise TestFireError("COPY_TEXT_ENCODING_INVALID") from exc
+    if len(body) > forwarding.MAX_TEXT_BYTES:
+        raise TestFireError("COPY_TEXT_EXCEEDS_ROUTE_LIMIT")
+    route = _select_route(home, route_id)
+    return _submit_and_verify(home, native, route, body,
+                              nonce=uuid.uuid4().hex,
+                              filename_prefix="courier-copied-text",
+                              timeout=timeout, sleep=sleep)
+
+
+def _submit_and_verify(home: Path, native: dict, route: dict,
+                       body: bytes, *, nonce: str, filename_prefix: str,
+                       timeout: float, sleep) -> dict:
+    """Drop a complete UTF-8 file and verify the real worker's receipt.
+
+    This method does NOT call forwarder.tick and cannot dispatch a packet
+    itself. The native singleton must be running with Auto Send enabled.
     """
     if not (native.get("native_running") and native.get("native_armed")
             and native.get("auto_send") and not native.get("native_off")):
         raise TestFireError("TEST_FIRE_REQUIRES_RUNNING_ARMED_AUTO_SEND")
-    route = _select_route(home, route_id)
     source = route["source"]
     target_folder = route["destination"]["path"]
     if not source.is_dir() or source.is_symlink():
         raise TestFireError("TEST_FIRE_SOURCE_UNAVAILABLE")
 
-    nonce = uuid.uuid4().hex
-    name = "courier-test-fire-" + nonce + ".txt"
-    body = ("COURIER_TEST_FIRE_V1\nroute=" + route["id"] +
-            "\nnonce=" + nonce + "\n").encode("utf-8")
+    name = filename_prefix + "-" + nonce + ".txt"
     source_file = source / name
     key = forwarding._delivery_key(route, name, body)
     target_file = target_folder / (route["id"] + "-" + key + ".txt")
-    # An atomic file drop makes this packet visible to the running worker
-    # only after the test body has been fully written.
+    # Atomic file drop: no partial body can be observed by the native worker.
     fd, temporary = tempfile.mkstemp(
-        prefix=".courier-test-fire-", suffix=".tmp", dir=source
+        prefix="." + filename_prefix + "-", suffix=".tmp", dir=source
     )
     try:
         with os.fdopen(fd, "wb") as writer:
