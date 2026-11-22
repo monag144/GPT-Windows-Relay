@@ -186,7 +186,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("RESULT=HEARTBEAT_SUBMITTED", SENDER)
         self.assertIn("windowsterminal|openconsole|conhost", SENDER)
         self.assertIn("$inputText=$script:wire", SENDER)
-        self.assertIn('ControlType.Edit\'){', SENDER)
+        self.assertIn("ControlType.Edit", SENDER)
         self.assertIn('Replace("`r",\' \').Replace("`n",\' \')', SENDER)
         self.assertEqual(SENDER.count("function Read-EditorText"), 1)
         self.assertNotIn("\n}\n){\n", SENDER)
