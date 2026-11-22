@@ -86,7 +86,8 @@ def load_routes(home: Path) -> list[dict]:
     routes = []
     ids = set()
     for obj in config["routes"]:
-        if not isinstance(obj, dict) or not ROUTE_ID.fullmatch(str(obj.get("id", ""))):
+        if (not isinstance(obj, dict) or not isinstance(obj.get("id"), str)
+                or not ROUTE_ID.fullmatch(obj["id"])):
             raise ForwardingError("FORWARDING_ROUTE_ID_INVALID")
         rid = obj["id"]
         if rid in ids:
@@ -224,9 +225,15 @@ def tick(home: Path, *, enabled: bool) -> dict:
                 continue
             remaining -= 1
             # Oversized and binary files are ignored rather than truncated.
-            if entry.stat().st_size > MAX_TEXT_BYTES:
+            before = entry.stat()
+            if before.st_size > MAX_TEXT_BYTES:
                 continue
             body = entry.read_bytes()
+            after = entry.stat()
+            # Prefer atomic source-file drops. Skip concurrent writers rather
+            # than forwarding a truncated/in-flight text body.
+            if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                continue
             if not body or len(body) > MAX_TEXT_BYTES:
                 continue
             try:
