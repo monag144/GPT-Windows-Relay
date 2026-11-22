@@ -31,9 +31,13 @@ Create an input and output directory under operator-owned paths, then run:
 The existing HUD must have **ARMED** and **Auto Send: ON**. Afterward, any
 new UTF-8 .txt file the operator or a connected app places in the selected
 input directory will be written to the output directory as
-"<route-id>-<sha256>.txt" with its original bytes. Do not use the input
-directory as the output directory; recursive routes are explicitly rejected.
-Producers should write to a temporary name and rename atomically to .txt.
+"<route-id>-<sha256>.txt" with its original bytes. Files already present
+when the operator configures a route are **baselined, not forwarded**, so
+enabling a new destination cannot replay historical results. A subsequent
+change to the filename or content creates a new delivery identity. Do not
+use the input directory as the output directory; recursive routes are
+explicitly rejected. Producers should write to a temporary name and rename
+atomically to .txt.
 
 ### Forward native command result bodies to a folder
 
