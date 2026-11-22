@@ -9,7 +9,8 @@ param([ValidateRange(2,30)][int]$DetectionSeconds=5,
       [string]$NativeActionId='',
       [string]$NativeReceiptMarker='',
       [switch]$ForceClearComposer,
-      [switch]$ProbeComposerOnly)
+      [switch]$ProbeComposerOnly,
+      [switch]$ClearComposerOnly)
 $ErrorActionPreference='Stop'
 $canary=if($NativeResultPath){$NativeActionId}elseif($SmokeResult){'PCE18-KATANA-OPTEST-003'}else{'PCE18-KATANA-DETECTION-001'}
 $script:wire=''
@@ -334,7 +335,16 @@ $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
-    if($ProbeComposerOnly){
+    if($ClearComposerOnly -and ($NativeResultPath -or $NativeActionId -or
+            $NativeReceiptMarker -or $ForceClearComposer -or $ProbeComposerOnly -or
+            $SmokeResult)){
+        throw 'COMPOSER_CLEAR_INCOMPATIBLE_SEND_OR_PROBE_FLAGS'
+    }
+    if($ClearComposerOnly){
+        $status='NOT_APPLICABLE'
+        $level=0
+        Write-Output 'DETECTION=OPERATOR_CLEAR_COMPOSER_ONLY'
+    }elseif($ProbeComposerOnly){
         # Diagnostics must not run the 5-second command scanner or report the
         # expected absent smoke canary as a spurious delivery failure.
         $status='NOT_APPLICABLE'
@@ -363,6 +373,23 @@ try{
     }
     $window=Get-ChatGPTWindow
     Write-Output 'SENDER_STAGE=APP_WINDOW_FOUND'
+    if($ClearComposerOnly){
+        # Dedicated manual action. Require exactly one ChatGPT window,
+        # conversation document and writable composer. Do not load a native
+        # result, release a delivery hold, type a packet or click Send.
+        $null=Get-ConversationDocument $window
+        $composer=Wait-ForComposer $window
+        if(Test-ComposableEmptyState $window $composer){
+            Write-Output 'COMPOSER_CLEAR=ALREADY_EMPTY'
+        }else{
+            Assert-ChatGPTForeground $window
+            $composer=Clear-ComposerForForcedDelivery $window $composer
+            Assert-ComposableEmptyState $window $composer
+            Write-Output 'COMPOSER_CLEAR=VERIFIED_EMPTY'
+        }
+        Write-Output 'RESULT=COMPOSER_CLEARED_NO_SEND'
+        exit 0
+    }
     if($ProbeComposerOnly){
         # Read-only UIA diagnostics. Never focus, clear, type, click, or print
         # draft text. Used to validate ChatGPT's actual accessibility controls.
@@ -598,6 +625,10 @@ try{
     exit 5
 }catch{
     Write-Output ('HEARTBEAT_ERROR='+$_.Exception.Message)
+    if($ClearComposerOnly){
+        Write-Output 'RESULT=COMPOSER_CLEAR_FAILED_NO_SEND'
+        exit 1
+    }
     if($null -ne $window){Try-ClearOwnDraft $window}
     Write-Output 'RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY'
     exit 1
