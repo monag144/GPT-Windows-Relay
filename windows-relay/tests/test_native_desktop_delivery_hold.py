@@ -278,6 +278,20 @@ class DeliveryFailureHoldTests(unittest.TestCase):
                 native.acknowledge_confirmed_receipt(self.id, receipt)
         self.assertEqual(wr.State(native.STATE).outbound_lookup(self.id)["phase"], "READY")
 
+    def test_receipt_request_processed_before_any_chatgpt_uia_scan(self):
+        source=(ROOT/"desktop_native_relay.py").read_text(encoding="utf-8")
+        self.assertIn('"queue-confirmed-receipt"',source)
+        self.assertIn("request_confirmed_receipt(args.action_id, args.receipt)",source)
+        self.assertIn("reconcile_receipt_requests(state)",source)
+        runner=source.split("def runner():",1)[1].split("HUD_MODE =",1)[0]
+        self.assertLess(runner.index("reconcile_receipt_requests(state)"),
+                        runner.index("candidates = read_scan(require_app=True)"))
+        reconcile=source.split("def reconcile_receipt_requests(state: wr.State):",1)[1].split(
+            "def acknowledge_confirmed_receipt",1)[0]
+        self.assertNotIn("subprocess.run(",reconcile)
+        self.assertNotIn("deliver(",reconcile)
+        self.assertIn("state.reconcile_outbound_receipt(aid, receipt)",reconcile)
+
     def test_operator_abort_and_clear_queue_never_change_executed_result(self):
         native.hold_failed_delivery(self.id,"INPUT_BEGIN","TEST")
         native.abort_failed_delivery(self.state,self.id)
