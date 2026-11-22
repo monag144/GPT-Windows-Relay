@@ -52,6 +52,20 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
         self.assertIn("ChatGPT could not be brought to the foreground", HUD)
 
+    def test_armed_execution_ready_with_held_delivery_not_mislabeled_failed_engine(self):
+        # The engine can ingest NEW actions while a prior outbound result is
+        # persistently held. Do not hide the hold or falsely mark SUBMITTED.
+        self.assertIn("title='READY • HELD'", HUD)
+        self.assertIn("phase=='DELIVERY_BLOCKED' and delivery_blocked", HUD)
+        self.assertIn("'title_phase':('RECOVERY ADVICE' if title=='READY • HELD' else title)", HUD)
+        self.assertIn("phase_line='DELIVERY HELD • '", HUD)
+        self.assertIn("'native_delivery_phase':delivery_phase", HUD)
+        self.assertIn("DELIVERY BLOCKED: ", HUD)
+        self.assertIn('still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")', HUD)
+        self.assertIn("The last result remains HELD", HUD)
+        self.assertIn("Use ABORT SEND to cancel that result", HUD)
+        self.assertIn("No saved result was resent, aborted or discarded.", HUD)
+
     def test_force_clear_restored_as_separate_chatgpt_editor_action(self):
         self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
         self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
