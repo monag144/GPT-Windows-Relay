@@ -71,7 +71,10 @@ def _url(value):
 
 
 def load_routes(home: Path) -> list[dict]:
-    config = _json(home / "courier-forwarding.json", None)
+    return _validated_routes(_json(home / "courier-forwarding.json", None))
+
+
+def _validated_routes(config) -> list[dict]:
     if config is None:
         return []
     if not isinstance(config, dict) or config.get("version") != 1 \
@@ -129,6 +132,52 @@ def load_routes(home: Path) -> list[dict]:
             if any(dest == src or src in dest.parents for src in sources):
                 raise ForwardingError("FORWARDING_OUTPUT_INSIDE_WATCHED_SOURCE")
     return routes
+
+
+def configure_route(home: Path, route_id: str, source: str,
+                    destination_type: str, value: str,
+                    *, bearer_token_env: str | None = None):
+    """Explicit operator action; replaces one named route atomically."""
+    current = _json(home / "courier-forwarding.json", None)
+    if current is None:
+        current = {"version": 1, "enabled": True, "routes": []}
+    if not isinstance(current, dict) or current.get("version") != 1 \
+            or not isinstance(current.get("routes"), list):
+        raise ForwardingError("FORWARDING_CONFIG_INVALID")
+    dest = ({"type": "directory", "path": value}
+            if destination_type == "directory" else
+            {"type": "http", "url": value})
+    if destination_type not in {"directory", "http"}:
+        raise ForwardingError("FORWARDING_DESTINATION_TYPE_INVALID")
+    if bearer_token_env is not None:
+        if destination_type != "http":
+            raise ForwardingError("HTTP_TOKEN_ONLY_FOR_HTTP")
+        dest["bearer_token_env"] = bearer_token_env
+    route = {"id": route_id,
+             "source": {"type": "directory", "path": source},
+             "destination": dest}
+    current["routes"] = [
+        existing for existing in current["routes"]
+        if isinstance(existing, dict) and existing.get("id") != route_id
+    ] + [route]
+    current["enabled"] = True
+    _validated_routes(current)
+    home.mkdir(parents=True, exist_ok=True)
+    wr.atomic_json(home / "courier-forwarding.json", current)
+
+
+def set_enabled(home: Path, value: bool):
+    current = _json(home / "courier-forwarding.json", None)
+    if current is None:
+        raise ForwardingError("FORWARDING_NOT_CONFIGURED")
+    if not isinstance(current, dict):
+        raise ForwardingError("FORWARDING_CONFIG_INVALID")
+    if value:
+        current["enabled"] = True
+        _validated_routes(current)
+    else:
+        current["enabled"] = False
+    wr.atomic_json(home / "courier-forwarding.json", current)
 
 
 def _ledger(home: Path):
