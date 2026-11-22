@@ -269,3 +269,39 @@ capture requires a separately configured, explicit app/window integration.
 
 The compact HUD and bookmarked pre-debug build remain unchanged. This is a
 temporary diagnostic input adapter, not a universal always-on clipboard spy.
+
+### Editor auto-focus and Enter submission — current fix (Windows GUI acceptance pending)
+
+The generic foreground sender now locates **one uniquely identifiable writable
+Edit/Document control** in the active foreground application, even when the
+operator has clicked elsewhere in that window. It focuses the control via UI
+Automation and, when necessary, clicks the control itself. It never selects
+an arbitrary editor when several equally eligible inputs are present.
+
+Some Electron chat editors display the typed result while their UIA
+ValuePattern continues to report an old placeholder. The sender now tries
+fresh ValuePattern and TextPattern marker reads and can also recognize a
+previously disabled **Send** control becoming enabled after its own keystrokes.
+This second indicator is only used when the target had an empty/placeholder
+composer before the insertion; an unrelated draft is left untouched.
+
+For a foreground **Edit** chat composer with a unique enabled named Send
+control, the sender presses **Enter once**. For a rich Document editor with
+a Send control, it clicks that control instead; plain Notepad documents
+receive text and stop at `TEXT_INSERTED`, with no Enter. On submission,
+`SUBMITTED` requires the receipt in the conversation document, the own
+receipt marker absent from the editor and the Send control no longer enabled.
+An unverified Enter/click remains `SUBMIT_UNCERTAIN` without automatic
+replay. The source packet is still the result already owned by Courier; no
+configured input source or clipboard action is required.
+
+**Historical 004:** The previously visible
+`PCE19-FOREGROUND-E2E-20261122-004` result was typed into the ChatGPT
+composer but failed UIA verification. Its earlier state is not automatically
+replayed or reset by this fix. Before creating a new live result, clear that
+unsent draft *manually* only after confirming its receipt was preserved in
+the native results ledger. This avoids merging an old draft into a new
+delivery. Never use global queue clearing to clean up the composer.
+
+Use a fresh unique action ID for Windows GUI qualification. The unchanged
+strong-HUD bookmark remains pinned.
