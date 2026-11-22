@@ -153,8 +153,10 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("ClearFocusedComposer()",clear)
         self.assertIn("Test-ComposableEmptyState $window $current",clear)
         self.assertNotIn("SetValue(",clear)
-        clear_only=SOURCE.split("if($ClearComposerOnly){",SOURCE.index(
-            "SENDER_STAGE=APP_WINDOW_FOUND"))[1].split("if($ProbeComposerOnly){",1)[0]
+        clear_start=SOURCE.index("    if($ClearComposerOnly){",
+                                 SOURCE.index("SENDER_STAGE=APP_WINDOW_FOUND"))
+        clear_end=SOURCE.index("    if($ProbeComposerOnly){",clear_start)
+        clear_only=SOURCE[clear_start:clear_end]
         self.assertIn("COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY",clear_only)
         self.assertIn("COMPOSER_CLEAR_RUNTIME_STATUS_UNREADABLE",clear_only)
         self.assertIn("RESULT=COMPOSER_CLEARED_NO_SEND",clear_only)
