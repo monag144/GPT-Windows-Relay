@@ -1,13 +1,6 @@
 name: Native desktop relay checks
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - wip/windows-relay-rebuilt-resynced-2047-101026
-    paths:
-      - 'windows-relay/**'
-      - 'consumer/**'
-      - '.github/workflows/native-desktop-ci.yml'
 
 jobs:
   native-windows:
