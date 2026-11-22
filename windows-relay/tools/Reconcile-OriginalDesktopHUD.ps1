@@ -53,6 +53,15 @@ $visiblePrior=@($prior | ForEach-Object {
     Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
 } | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })
 $sourceUpdated=(Get-Item -LiteralPath $original).LastWriteTimeUtc
+# Runtime imports can change without a hud.py modification. Reload once when
+# any of these canonical dependencies is newer than the visible HUD process.
+foreach($sourceName in @('desktop_native_relay.py','windows_relay.py','command_courier.py')){
+    $dependency=Join-Path $root $sourceName
+    if(Test-Path -LiteralPath $dependency -PathType Leaf){
+        $modified=(Get-Item -LiteralPath $dependency).LastWriteTimeUtc
+        if($modified -gt $sourceUpdated){$sourceUpdated=$modified}
+    }
+}
 $reusable=$false
 if($visiblePrior.Count -eq 1){
     try{
