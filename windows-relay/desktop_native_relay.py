@@ -25,6 +25,7 @@ import uuid
 from pathlib import Path
 
 import windows_relay as wr
+import courier_forwarder as forwarder
 
 ROOT = Path(__file__).resolve().parent
 TOOLS = ROOT / "tools"
@@ -523,6 +524,21 @@ def runner():
         seen = set()
         baseline_ready = False
         while not configuration()["off"]:
+            # Transport-neutral routes run BEFORE the ChatGPT UI scanner.
+            # They keep forwarding when ChatGPT is closed, its editor has a
+            # draft, or a prior ChatGPT outbound result remains held.
+            forward_report = {"active": False, "forwarded": 0, "held": 0}
+            cfg = configuration()
+            if cfg["armed"] and cfg["auto_send"] and not stop_requested():
+                try:
+                    forward_report = forwarder.tick(HOME, enabled=True)
+                    if forward_report["forwarded"] or forward_report["held"]:
+                        note("NATIVE_TEXT_ROUTED=" + str(forward_report["forwarded"]),
+                             "TEXT_HELD=" + str(forward_report["held"]))
+                except (forwarder.ForwardingError, OSError, ValueError) as exc:
+                    # A bad route is isolated from native packet execution.
+                    note("NATIVE_TEXT_ROUTE_ERROR=" + type(exc).__name__,
+                         str(exc)[:120])
             runner_stage = "SCANNING_CHATGPT_APP"
             try:
                 candidates = read_scan(require_app=True)
@@ -575,7 +591,11 @@ def runner():
             except RuntimeError as exc:
                 if str(exc) == "NATIVE_CHATGPT_APP_NOT_READY":
                     baseline_ready = False
-                    status_update(pid=os.getpid(), phase="WAITING_FOR_CHATGPT_APP",
+                    # The independent text route can continue; unavailable
+                    # ChatGPT must not make the entire courier appear stopped.
+                    phase = ("FORWARDING_NO_CHATGPT" if forward_report["active"]
+                             else "WAITING_FOR_CHATGPT_APP")
+                    status_update(pid=os.getpid(), phase=phase,
                                   runner_error_type=None, runner_error_stage=None)
                 else:
                     note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
