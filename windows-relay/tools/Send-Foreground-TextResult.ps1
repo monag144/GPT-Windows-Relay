@@ -472,8 +472,10 @@ function Recover-ExistingChatDraft($target,[string]$marker){
         }
         $send=Find-SendButton $target
         if($null -eq $send){
+            # No Send click occurred; keep SEND_PENDING and try only after
+            # the application exposes one verified Send control.
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'
-            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
             return
         }
         Write-Output ('SENDER_STAGE=SUBMIT_ONLY_ATTEMPT_'+$attempt)
