@@ -197,3 +197,69 @@ enabled Send=0, `PROBE_EMPTY_VERIFIED=True`, but the result remains held
 These receipts are *before* FORCE CLEAR restoration. New changes still require
 Katana full test sweep, PowerShell parse gate and a deliberate editor-only
 manual test; no live clearing or delivery was performed here.
+
+## Director's transport-neutral forwarding contract (2026-11-21)
+
+**Product identity:** Command Courier is a general-purpose relay, not a
+ChatGPT-only automation tool. Its fundamental job is to capture the body of
+output/text from an **operator-selected input** (for example, executed code,
+another application's output, an API-connected client or a chat UI), and
+automatically forward that body to the **operator-selected destination**.
+The source and receiver can independently be ChatGPT, another application,
+an authenticated API, or another explicit adapter. This is the intended
+architecture, **not a claim that all those adapters exist today**.
+
+Keep these boundaries separate:
+
+1. **Input adapter:** listen to the chosen and authorized source, capture the
+   selected text/result verbatim with its source identity and a unique
+   delivery identity. Detection is not inherently a request to execute.
+   The existing `[GPT_WINDOWS_ACTION]` parser is one *optional* command
+   adapter, not the universal format required for arbitrary forwarding.
+2. **Execution adapter (optional):** if the input was explicitly admitted as
+   an authorized command, execute once and capture stdout, stderr and exit
+   status. Otherwise forward input text without executing it. Output/error
+   status must not be silently discarded or changed to `OK`.
+3. **Courier/outbox:** persist the actual body and delivery status, preserve
+   ordering where required, and route to configured sink(s). A failure for
+   one sink must hold *that delivery*, not globally stop ingestion, execution
+   or unrelated sinks. Do not re-run the originating command to retry a
+   delivery.
+4. **Destination adapter:** send via its appropriate API, IPC, local app
+   integration, or, for the current ChatGPT Windows UI adapter, accessible
+   editor. Only a destination that actually uses a composer needs a
+   composer-empty/focus check. **No general preflight requirement to clear
+   ChatGPT's composer before Command Courier can ingest or forward data.**
+5. **Receipts:** track source capture, optional command execution, outbound
+   submission and receiver acknowledgement independently. Retry based on
+   per-destination confirmation/idempotency, not the mere appearance of an
+   action ID in source text or in an unsent draft.
+
+**Automatic forwarding** is the desired normal behavior when the configured
+source/destination adapters are armed. The current GO button is a runtime
+activation control, not itself a packet send. STOP/OFF/KILL remain applicable.
+
+**Operator-safety boundary:** configurable source and target ownership,
+permission and opt-in, size/encoding limits, cycle/loop prevention, preserved
+unsent text, and duplicate-send protections remain necessary. Those
+protections must be **adapter-specific** and must not masquerade as a global
+ChatGPT-only dependency. In particular, blindly collecting *all* on-screen
+text could forward passwords, messages or unrelated app content; do not
+implement such indiscriminate monitoring without explicit scope.
+
+**Implementation gap (verified in this branch):** `desktop_native_relay.py`
+currently uses `Watch-ChatGPT-ActionCandidates.ps1` for ingress, extracts
+`[GPT_WINDOWS_ACTION]`, and uses `Send-ChatGPT-DesktopHeartbeat.ps1` for
+egress. `command_courier.py` accepts `native-desktop` or `disabled`; there
+is no transport-neutral `text-body -> configured destination` adapter yet.
+Therefore do not remove the working ChatGPT UIA editor guard prematurely.
+First add a distinct, end-to-end tested transport-neutral outbox/router
+interface and explicit input/output adapters, retaining the known-good native
+ChatGPT path for compatibility.
+
+**Design correction:** The earlier instruction to FORCE CLEAR the ChatGPT
+composer *before testing any new command* was overly broad. A busy composer
+can block the **ChatGPT UI destination's send attempt**, but cannot logically
+be a prerequisite for Command Courier's general detection, execution, or
+API/non-UI forwarding. Keep the failed ChatGPT delivery held and test an
+independent destination separately when its adapter exists.
