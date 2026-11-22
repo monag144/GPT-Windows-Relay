@@ -162,3 +162,38 @@ That check does not certify delivery to an arbitrary external destination.
   `State` while the runner also retains a live `State` instance.
   Concurrency and durable queue ownership need a dedicated design/test
   before promising reliable simultaneous operator recovery.
+
+
+## PC Engineer 19 — FORCE CLEAR restoration (2026-11-21 local)
+
+The original HUD's upper-right recovery area again has a **FORCE CLEAR**
+button in the historical first-row, first-column slot. Its action now matches
+its name: after a destructive-action confirmation, it focuses and clears the
+**current ChatGPT Windows composer only**, verifying the unique ChatGPT window,
+conversation document, writable editor, and empty editor afterward. It reports
+`COMPOSER_CLEARED_NO_SEND` or a specific error. Clearing is disabled while the
+native runner is actively `DELIVERING`. The PowerShell sender now offers
+`-ClearComposerOnly` as a separate, incompatible-with-send/probe mode, and
+does not run a sender, input a packet, update a delivery journal, release a
+delivery hold, or click Send.
+
+The distinct **ABORT SEND** control is retained on the second row next to
+**FORCE RESEND**. They have different meanings:
+- FORCE CLEAR: clear **only** an unsent ChatGPT editor draft (destructive;
+  explicit confirmation; no packet delivery).
+- ABORT SEND: mark the selected unsent outbound delivery aborted; keep
+  execution result (requires its own confirmation).
+- FORCE RESEND: explicit recovery of an eligible previously saved result,
+  with duplicate risk, not a command execution.
+- CLEAR QUEUE: destructive pending-delivery cleanup with separate confirmation.
+
+The new `FORCE CLEAR` action does **not** resolve or automatically retry
+`PCE19-NATIVE-E2E-20261122-001`. The previous Katana acceptance for sender
+`2338aab` is 541 Windows tests + 123 Consumer tests, **664/664 PASS**; native
+composer probe returned `PROBE_VALUE_CLASS=PLACEHOLDER_CANDIDATE`,
+`PROBE_TEXT_CLASS=PLACEHOLDER_CANDIDATE`, both length 12, disabled Send=1,
+enabled Send=0, `PROBE_EMPTY_VERIFIED=True`, but the result remains held
+`EXECUTION=OK, DELIVERY=PRE_SUBMIT_FAILED, ATTEMPTS=2, HELD=True`.
+These receipts are *before* FORCE CLEAR restoration. New changes still require
+Katana full test sweep, PowerShell parse gate and a deliberate editor-only
+manual test; no live clearing or delivery was performed here.
