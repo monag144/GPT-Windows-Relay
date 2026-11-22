@@ -154,6 +154,10 @@ def native_snapshot():
     elif not armed: title='STOPPED'
     elif phase=='WAITING_FOR_CHATGPT_APP': title='WAITING'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
+    elif phase=='DELIVERY_BLOCKED' and delivery_blocked:
+        # A held outbound receipt must remain visibly held, but it does not
+        # prevent the live armed engine from accepting NEW command packets.
+        title='READY • HELD'
     elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
     else: title='READY'
     state=read_json(native.STATE,{})
@@ -170,9 +174,10 @@ def native_snapshot():
         exact+='\nDELIVERY BLOCKED: '+delivery_error
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     if delivery_blocked:
-        phase_line='DELIVERY BLOCKED • '+delivery_error[:75]
+        phase_line='DELIVERY HELD • '+delivery_error[:75]
     return {
-        'online':live,'title':title,'title_phase':title,
+        'online':live,'title':title,
+        'title_phase':('RECOVERY ADVICE' if title=='READY • HELD' else title),
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':'ChatGPT Windows app • UI Automation • no browser extension',
         'phase':phase_line,
