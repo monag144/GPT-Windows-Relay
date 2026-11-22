@@ -763,6 +763,8 @@ def run_ui():
                     go_results.put(("ok",None))
                 elif "COURIER_GO=WAITING_FOR_DESTINATION" in output:
                     go_results.put(("waiting",None))
+                elif "COURIER_GO=EXECUTION_READY_DELIVERY_HELD" in output:
+                    go_results.put(("held",None))
                 else:
                     raise RuntimeError("Command Courier runtime was not confirmed")
             except Exception as exc:
@@ -881,6 +883,11 @@ def run_ui():
             go_state["waiting"]=(kind=="waiting")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
+            elif kind=="held":
+                messagebox.showinfo("Command Courier GO",
+                    "Native engine is ready for new instructions.\\n\\n"
+                    "An older result remains HELD; GO did not submit or "
+                    "discard it.",parent=root)
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
         snap=snapshot()
@@ -895,13 +902,17 @@ def run_ui():
                                 activebackground="#137333" if armed else "#1967d2")
             destination_ready=(snap.get("native_phase") in
                                ("BASELINED","IDLE","EXECUTING","DELIVERING"))
+            prior_result_held=(snap.get("native_phase")=="DELIVERY_BLOCKED" and
+                               snap.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")
             go_btn.configure(text="GO…" if go_state["busy"] else
                              ("GO ✓" if go_state["ready"] and snap["online"] and
                               armed and destination_ready else
+                              "GO • HELD" if prior_result_held else
                               "WAIT" if go_state["waiting"] and not destination_ready else "GO"),
                              state="disabled" if go_state["busy"] or not armed or snap.get("native_off")
                                    else "normal",
-                             bg="#188038" if armed and not snap.get("native_off") else "#3c4043",
+                             bg=("#9a6700" if prior_result_held else "#188038")
+                                if armed and not snap.get("native_off") else "#3c4043",
                              activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
