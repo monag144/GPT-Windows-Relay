@@ -284,6 +284,30 @@ def native_composer_clear():
     return "COMPOSER_CLEARED_NO_SEND"
 
 
+def native_force_clear_all(*, composer_focused: bool) -> dict:
+    """Operator-confirmed destructive reset with two independent receipts.
+
+    Composer focus/keyboard verification is best-effort; old outbox results
+    are closed by the active runner even if ChatGPT's UIA readback fails.
+    Neither path sends a message, reexecutes an action or deletes results.
+    """
+    import desktop_native_relay as native
+    composer="SKIPPED_CHATGPT_NOT_FOCUSED"
+    if composer_focused:
+        try:
+            composer=native_composer_clear()
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            composer="NOT_CONFIRMED: " + str(exc)[:150]
+    request_id=native.request_force_clear_pending()
+    try:
+        receipt=native.wait_force_clear_receipt(request_id, timeout=15.0)
+    except (RuntimeError, ValueError, OSError) as exc:
+        raise RuntimeError(
+            "OUTBOX_CLEAR_UNCONFIRMED_REQUEST="+request_id+
+            " COMPOSER="+composer+" "+str(exc)[:100]) from exc
+    return {"composer":composer, "receipt":receipt}
+
+
 def native_delivery_control(command,action_id=None):
     import desktop_native_relay as native
     python=Path(sys.executable)
@@ -874,28 +898,33 @@ def run_ui():
         # Let Windows finish foreground activation before the child sender
         # performs its independent foreground verification.
         root.after(180,lambda:native_delivery_control("force-delivery",aid))
-    # FORCE CLEAR is an explicit, confirmed editor-only operation. It is not
-    # FORCE RESEND, ABORT SEND or CLEAR QUEUE; it never releases a result hold.
+    # FORCE CLEAR is the operator's explicit terminal reset, not a resend.
+    # Preserve executed commands, stored results and every audited disposition.
     clear_results=queue.Queue()
     clear_busy={"value":False}
     def force_clear_composer():
         snap=native_view.get("snap") or {}
         if not native_mode() or clear_busy["value"] or snap.get("native_phase")=="DELIVERING":return
-        if not messagebox.askyesno("Force Clear ChatGPT Composer",
+        if not messagebox.askyesno("Force Clear — Discard Pending Work",
                 "Discard the current unsent ChatGPT composer text?\n\n"
-                "This cannot be undone. No relay packet will be sent, retried "
-                "or deleted. Continue?",parent=root):
+                "Also close ALL unresolved native result deliveries as ABORTED, "
+                "including held/uncertain results? This cannot be undone.\n\n"
+                "Executed commands, saved results and delivery evidence remain "
+                "in the audit journal. Nothing will be resent. Continue?",
+                parent=root):
             return
-        if not focus_chatgpt_for_forced_delivery():
-            messagebox.showerror("Force Clear",
-                "ChatGPT could not be focused; nothing was cleared.",parent=root)
-            return
+        # Foreground focus is needed for the editor-only keyboard attempt.
+        # A failed focus must NOT prevent the separately confirmed outbox reset.
+        chatgpt_focused=focus_chatgpt_for_forced_delivery()
         clear_busy["value"]=True
         force_clear_btn.configure(state="disabled",text="CLEARING…")
         def worker():
-            try:clear_results.put(("ok",native_composer_clear()))
-            except Exception as exc:clear_results.put(("error",str(exc)[-180:]))
-        threading.Thread(target=worker,name="courier-composer-clear",daemon=True).start()
+            try:
+                clear_results.put(("ok",native_force_clear_all(
+                    composer_focused=chatgpt_focused)))
+            except Exception as exc:
+                clear_results.put(("error",str(exc)[-300:]))
+        threading.Thread(target=worker,name="courier-force-clear",daemon=True).start()
     def force_abort():
         aid=native_action_id()
         if not native_mode() or not aid or aid=='-':return
@@ -968,18 +997,20 @@ def run_ui():
             if kind=="error":
                 messagebox.showerror("Force Clear",value,parent=root)
             else:
-                # A verified empty composer is not a delivery receipt. Keep
-                # the historical failed result and its durable hold visible.
-                current=native_snapshot() if native_mode() else {}
-                still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")
-                messagebox.showinfo("Force Clear",
-                    "ChatGPT composer verified empty.\n\n"
-                    + ("The last result remains HELD. The relay can accept new commands. "
-                       "Use ABORT SEND to cancel that result, or FORCE RESEND only after "
-                       "confirming it never reached ChatGPT."
-                       if still_held else
-                       "No saved result was resent, aborted or discarded."),
-                    parent=root)
+                receipt=value["receipt"]
+                closed=int(receipt["aborted_count"])
+                remaining=int(receipt["unresolved_remaining"])
+                composer=str(value["composer"])
+                detail=("Pending deliveries closed as ABORTED: "+str(closed)+
+                        "\nUnresolved remaining: "+str(remaining)+
+                        "\nSaved commands and results: RETAINED\n"+
+                        "Composer: "+composer)
+                if composer=="COMPOSER_CLEARED_NO_SEND":
+                    messagebox.showinfo("Force Clear — Complete",detail,parent=root)
+                else:
+                    messagebox.showwarning(
+                        "Force Clear — Outbox Reset; Composer Not Confirmed",
+                        detail+"\nNo submission was attempted.",parent=root)
         while not go_results.empty():
             kind,error=go_results.get_nowait()
             go_state["busy"]=False
