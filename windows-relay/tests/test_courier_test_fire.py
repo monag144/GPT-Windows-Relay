@@ -106,7 +106,8 @@ class TestFireTests(unittest.TestCase):
             route=fire._select_route(self.home,None)
             key=forwarding._delivery_key(route,message.name,message.read_bytes())
             forwarding._persist(self.home,{"version":1,"deliveries":{
-                key:{"phase":"DELIVERED","receipt":"FILE_WRITTEN"}
+                key:{"phase":"DELIVERED","receipt":"FILE_WRITTEN",
+                     "route":route["id"],"file":message.name}
             }})
         with self.assertRaisesRegex(fire.TestFireError,
                                     "RECEIPT_WITHOUT_DESTINATION_FILE"):
