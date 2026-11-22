@@ -175,6 +175,32 @@ class TextForwarderTests(unittest.TestCase):
             self.assertEqual(courier.main(["route","enable"]),0)
         self.assertEqual(f.status(self.home)["routes"],1)
 
+    def test_new_route_baselines_existing_files_without_forwarding_history(self):
+        (self.src / "historical.txt").write_text("old result", encoding="utf-8")
+        f.configure_route(self.home,"native-result",str(self.src),
+                          "directory",str(self.dst))
+        state=self.entries()
+        self.assertEqual(len(state),1)
+        self.assertEqual(next(iter(state.values()))["phase"],"BASELINED")
+        self.assertEqual(f.tick(self.home,enabled=True)["forwarded"],0)
+        self.assertEqual(list(self.dst.iterdir()),[])
+        (self.src / "new.txt").write_text("new result", encoding="utf-8")
+        self.assertEqual(f.tick(self.home,enabled=True)["forwarded"],1)
+        self.assertEqual(len(list(self.dst.glob("*.txt"))),1)
+
+    def test_source_or_destination_change_has_fresh_baselined_identity(self):
+        (self.src / "history.txt").write_text("a result", encoding="utf-8")
+        f.configure_route(self.home,"native",str(self.src),"directory",str(self.dst))
+        before=set(self.entries())
+        alternate=Path(self.temp.name)/"another-target"
+        alternate.mkdir()
+        f.configure_route(self.home,"native",str(self.src),
+                          "directory",str(alternate))
+        after=set(self.entries())
+        self.assertEqual(len(after-before),1)
+        self.assertFalse(list(alternate.iterdir()))
+        self.assertEqual(f.tick(self.home,enabled=True)["forwarded"],0)
+
     def test_configure_one_named_route_atomically(self):
         f.configure_route(self.home,"existing",str(self.src),
                           "directory",str(self.dst))
