@@ -160,6 +160,9 @@ def native_snapshot():
     detail,active=action_detail(state)
     aid=str(report.get('last_action') or (detail.get('id') if detail else '') or '-')
     result=str(report.get('last_result') or '-')
+    deliveries=state.get('outbound_deliveries',{})
+    delivery=(deliveries.get(aid) if isinstance(deliveries,dict) else None)
+    delivery_phase=str(delivery.get('phase') or '') if isinstance(delivery,dict) else ''
     cmd=command_preview(detail.get('command') if detail else '')
     exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
            if detail else 'ID: '+aid+'\nRESULT: '+result)
@@ -177,6 +180,7 @@ def native_snapshot():
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
         'auto_send':bool(report.get('auto_send')),
         'native_armed':armed, 'native_off':off, 'native_phase':phase,
+        'native_delivery_phase':delivery_phase,
     }
 
 def native_control(action):
@@ -592,8 +596,13 @@ def run_ui():
     root.bind("<Map>",restore_borderless)
     # GPT_RELAY_HUD_NO_HIDDEN_RIGHT_CLICK_EXIT_V1
 
+    details_cache={"text":None}
     def set_details(text):
-        details.configure(state="normal"); details.delete("1.0","end"); details.insert("1.0",text or "No relay instruction available.")
+        # Never erase a selection every second when the receipt has not changed.
+        value=text or "No relay instruction available."
+        if value==details_cache["text"]:return
+        details_cache["text"]=value
+        details.configure(state="normal"); details.delete("1.0","end"); details.insert("1.0",value)
         details.configure(state="disabled")
 
     def redraw_expanded_pane():
@@ -824,7 +833,10 @@ def run_ui():
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
                                     bg='#137333' if enabled else '#7f1d1d',
                                     activebackground='#188038' if enabled else '#991b1b',state='normal')
-            force_command_btn.configure(state='normal'); force_abort_btn.configure(state='normal'); clear_queue_check.configure(state='normal')
+            delivery_phase=snap.get('native_delivery_phase')
+            force_command_btn.configure(state='normal' if delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled')
+            force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
+            clear_queue_check.configure(state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
             relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
             phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
