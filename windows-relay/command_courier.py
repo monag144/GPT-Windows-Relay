@@ -154,8 +154,22 @@ def go() -> int:
     # Existing native singleton performs independent command admission,
     # journal deduplication and delivery; GO never calls its sender.
     native.launch_runner_if_absent()
-    if not native.runner_active():
+    report = native.get_status()
+    if not report.get("native_running"):
         raise RuntimeError("COURIER_GO_NATIVE_SINGLETON_NOT_CONFIRMED")
+    if report.get("native_off") or not report.get("native_armed"):
+        raise RuntimeError("COURIER_GO_POLICY_CHANGED_WHILE_ACTIVATING")
+    phase = str(report.get("phase") or "UNKNOWN").upper()
+    if report.get("runner_error_type") or phase in {
+        "ERROR", "DELIVERY_BLOCKED", "DELIVERY_UNCERTAIN"
+    } or report.get("delivery_blocked"):
+        raise RuntimeError("COURIER_GO_ENGINE_OR_DELIVERY_BLOCKED")
+    # Process singleton is not evidence that the selected receiver is ready.
+    if phase in {"BASELINING", "WAITING_FOR_CHATGPT_APP"}:
+        print("COURIER_GO=WAITING_FOR_DESTINATION")
+        return 0
+    if phase not in {"BASELINED", "IDLE", "EXECUTING", "DELIVERING"}:
+        raise RuntimeError("COURIER_GO_UNVERIFIED_RUNTIME_PHASE")
     print("COURIER_GO=NATIVE_RUNTIME_READY")
     return 0
 
