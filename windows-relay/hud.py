@@ -583,7 +583,7 @@ def run_ui():
     # Settings are embedded into the same HUD window; no extra top-level UI.
     settings_frame=tk.Frame(panel,bg=PANEL)
     tk.Label(settings_frame,text="Command Courier • Settings",font=("Segoe UI",10,"bold"),
-             bg=PANEL,fg=FG,anchor="w").pack(fill="x",pady=(3,3))
+             bg=PANEL,fg=FG,anchor="w").pack(fill="x",pady=(1,1))
     settings_row=tk.Frame(settings_frame,bg=PANEL)
     settings_row.pack(fill="x")
     tk.Label(settings_row,text="Runtime at next sign-in:",font=("Segoe UI",9),
@@ -603,7 +603,7 @@ def run_ui():
                                  font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,
                                  activebackground="#5f6368",activeforeground=FG,
                                  bd=0,padx=8,pady=3,cursor="hand2")
-    apply_runtime_btn.pack(anchor="w",pady=(6,3))
+    apply_runtime_btn.pack(anchor="w",pady=(2,1))
     settings_startup_check=tk.Checkbutton(settings_frame,text="Start HUD and engine with Windows sign-in",
                                            variable=startup_var,font=("Segoe UI",9),
                                            bg=PANEL,fg=FG,activebackground=PANEL,
@@ -614,25 +614,25 @@ def run_ui():
     settings_status=tk.Label(settings_frame,text="Startup status: checking…",
                               font=("Segoe UI",8),bg=PANEL,fg=MUTED,
                               justify="left",anchor="w",wraplength=W-35)
-    settings_status.pack(fill="x",pady=(5,2))
-    tk.Label(settings_frame,text="At user sign-in, not before login. STOP/OFF remain authoritative.",
-             font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w").pack(fill="x")
+    settings_status.pack(fill="x",pady=(2,0))
     # Temporary diagnostics live only in the original expanded Settings pane.
     # No second HUD and no changes to compact 560×184 controls.
     debug_row=tk.Frame(settings_frame,bg=PANEL)
-    debug_row.pack(fill="x",pady=(5,1))
+    debug_row.pack(fill="x",pady=(2,0))
     debug_test_btn=tk.Button(debug_row,text="TEST FIRE",font=("Segoe UI",8,"bold"),
                              bg="#174ea6",fg=FG,activebackground="#1967d2",
-                             activeforeground=FG,bd=0,padx=10,pady=2,cursor="hand2")
-    debug_test_btn.pack(side="left",padx=(0,6))
+                             activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
+    debug_test_btn.pack(side="left",padx=(0,5))
+    debug_copy_btn=tk.Button(debug_row,text="SEND COPIED TEXT",font=("Segoe UI",8,"bold"),
+                             bg="#174ea6",fg=FG,activebackground="#1967d2",
+                             activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
+    debug_copy_btn.pack(side="left",padx=(0,5))
     debug_routes_btn=tk.Button(debug_row,text="CHECK ROUTES",font=("Segoe UI",8,"bold"),
                                bg="#3c4043",fg=FG,activebackground="#5f6368",
                                activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
     debug_routes_btn.pack(side="left")
-    tk.Label(debug_row,text="Temporary debug • local file route only",
-             font=("Segoe UI",8),bg=PANEL,fg=MUTED).pack(side="left",padx=(8,0))
     debug_status=tk.Label(settings_frame,
-                          text="Test Fire verifies the real background forwarder and saved receipt.",
+                          text="Ctrl+C in ChatGPT/Notepad, then SEND COPIED TEXT.",
                           font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w",
                           justify="left",wraplength=W-35)
     debug_status.pack(fill="x",pady=(1,0))
@@ -809,27 +809,31 @@ def run_ui():
     def run_debug_action(action):
         if not native_mode() or debug_state["busy"]:return
         snap=native_view.get("snap") or {}
-        if action=="fire" and (not snap.get("online") or not snap.get("native_armed")
+        if action in ("fire","copy") and (not snap.get("online") or not snap.get("native_armed")
                 or snap.get("native_off") or not snap.get("auto_send")):
-            debug_status.configure(text="TEST FIRE requires running, ARMED, Auto Send ON.",
+            debug_status.configure(text="Text forwarding requires running, ARMED, Auto Send ON.",
                                    fg=WARN)
             return
         debug_state["busy"]=True
         debug_test_btn.configure(state="disabled")
+        debug_copy_btn.configure(state="disabled")
         debug_routes_btn.configure(state="disabled")
-        debug_status.configure(text="TEST FIRE in progress…" if action=="fire"
-                               else "Checking forwarding routes…",fg=WARN)
+        debug_status.configure(
+            text="Sending a fresh test…" if action=="fire" else
+                 "Forwarding copied text…" if action=="copy" else
+                 "Checking forwarding routes…",fg=WARN)
         def debug_worker():
             try:
-                if action=="fire":
-                    result=courier_hud_cli("test-fire")
+                if action in ("fire","copy"):
+                    result=(courier_hud_cli("test-fire","--clipboard")
+                            if action=="copy" else courier_hud_cli("test-fire"))
                     line=next((item for item in result.splitlines()
                                if item.startswith("COURIER_TEST_FIRE=")),None)
                     if not line:raise RuntimeError("TEST_FIRE_RECEIPT_MISSING")
                     receipt=json.loads(line.partition("=")[2])
                     if receipt.get("result")!="PASS":
                         raise RuntimeError("TEST_FIRE_UNVERIFIED")
-                    debug_results.put(("fire",receipt))
+                    debug_results.put((action,receipt))
                 else:
                     result=courier_hud_cli("route","status")
                     line=next((item for item in result.splitlines()
@@ -842,6 +846,7 @@ def run_ui():
                          name="courier-debug-test-fire" if action=="fire"
                               else "courier-debug-route-check",daemon=True).start()
     debug_test_btn.configure(command=lambda:run_debug_action("fire"))
+    debug_copy_btn.configure(command=lambda:run_debug_action("copy"))
     debug_routes_btn.configure(command=lambda:run_debug_action("routes"))
     def native_action_id():
         snap=native_view.get("snap") or {}
@@ -911,10 +916,11 @@ def run_ui():
             kind,data=debug_results.get_nowait()
             debug_state["busy"]=False
             debug_routes_btn.configure(state="normal")
-            if kind=="fire":
+            if kind in ("fire","copy"):
                 debug_status.configure(
-                    text="PASS • "+str(data["route"])+" • "+str(data["bytes"])+
-                         " bytes • "+str(data["receipt"])+" • nonce "+str(data["nonce"])[:8],
+                    text=("COPY PASS • " if kind=="copy" else "TEST PASS • ")+
+                         str(data["route"])+" • "+str(data["bytes"])+
+                         " bytes • "+str(data["receipt"])+" • "+str(data["nonce"])[:8],
                     fg=GOOD)
             elif kind=="routes":
                 debug_status.configure(
@@ -923,7 +929,7 @@ def run_ui():
                          " • held "+str(data.get("held",0))+
                          " • enabled "+str(data.get("enabled",False)),fg=FG)
             else:
-                debug_status.configure(text="TEST FIRE / ROUTE ERROR • "+str(data),fg=BAD)
+                debug_status.configure(text="FORWARD ERROR • "+str(data),fg=BAD)
         while not lock_results.empty():
             kind,value=lock_results.get_nowait()
             lock_state["busy"]=False
@@ -1001,6 +1007,9 @@ def run_ui():
             debug_test_btn.configure(
                 state="normal" if not debug_state["busy"] and armed and snap["online"]
                                   and not snap.get("native_off") and enabled else "disabled")
+            debug_copy_btn.configure(
+                state="normal" if not debug_state["busy"] and armed and snap["online"]
+                                  and not snap.get("native_off") and enabled else "disabled")
             debug_routes_btn.configure(
                 state="normal" if not debug_state["busy"] else "disabled")
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
@@ -1021,6 +1030,7 @@ def run_ui():
             return
         gear_btn.configure(state='disabled')
         debug_test_btn.configure(state='disabled')
+        debug_copy_btn.configure(state='disabled')
         debug_routes_btn.configure(state='disabled')
         start_btn.configure(text="START",state="normal",bg="#174ea6",
                             activebackground="#1967d2")
