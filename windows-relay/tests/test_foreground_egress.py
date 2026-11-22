@@ -297,6 +297,14 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("def recover_submit_only(state: wr.State, aid: str):", NATIVE)
         self.assertIn('"-SubmitExistingOnly"', NATIVE)
 
+    def test_existing_own_chat_draft_is_pending_not_falsely_delivered(self):
+        prelude=SENDER.split("if(Test-EditorContainsMarker $target $NativeReceiptMarker){",1)[1].split(
+            "# When a chat has an enabled Send control BEFORE our insertion",1)[0]
+        self.assertIn("Test-ChatGPTSubmissionTarget $target",prelude)
+        self.assertIn("SENDER_STAGE=CHAT_DRAFT_PENDING_SEND",prelude)
+        self.assertIn("RESULT=CHAT_SEND_PENDING",prelude)
+        self.assertIn("RESULT=TEXT_INSERTED_VERIFIED",prelude)
+
     def test_send_only_recovers_stored_chat_draft_without_exec_or_retyping(self):
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
         self.state.data["outbound_deliveries"][self.aid]["attempt_count"] = 1
