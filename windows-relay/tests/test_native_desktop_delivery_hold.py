@@ -224,6 +224,17 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         self.assertFalse(native.get_status()["delivery_blocked"])
         self.assertEqual(list(native.RECEIPT_REQUESTS.glob("*.json")),[])
 
+    def test_queued_receipt_is_idempotent_when_native_sender_already_submitted(self):
+        _,receipt=native.outbox_result(self.state,self.id)
+        record=self.state.data["outbound_deliveries"][self.id]
+        record["phase"]="SUBMITTED"
+        self.state.save()
+        native.request_confirmed_receipt(self.id,receipt)
+        original=self.state.outbound_lookup(self.id)
+        self.assertEqual(native.reconcile_receipt_requests(self.state),1)
+        self.assertEqual(self.state.outbound_lookup(self.id),original)
+        self.assertEqual(list(native.RECEIPT_REQUESTS.glob("*.json")),[])
+
     def test_queued_receipt_rejects_wrong_nonce_without_tampering_with_history(self):
         _, receipt=native.outbox_result(self.state,self.id)
         before=native.STATE.read_bytes()
