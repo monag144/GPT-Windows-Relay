@@ -367,11 +367,15 @@ def tick(home: Path, *, enabled: bool) -> dict:
 
 
 def status(home: Path) -> dict:
+    config = _json(home / "courier-forwarding.json", None)
     routes = load_routes(home)
     state = _ledger(home)
     deliveries = state["deliveries"]
     return {
+        "enabled": bool(config and config.get("enabled")),
         "routes": len(routes),
+        "configured_routes": len(config.get("routes", [])) if isinstance(config, dict) else 0,
         "delivered": sum(1 for x in deliveries.values() if x.get("phase") == "DELIVERED"),
         "held": sum(1 for x in deliveries.values() if x.get("phase") in {"HELD", "SUBMITTING"}),
+        "baselined": sum(1 for x in deliveries.values() if x.get("phase") == "BASELINED"),
     }
