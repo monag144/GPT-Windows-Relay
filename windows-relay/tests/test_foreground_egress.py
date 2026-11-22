@@ -195,7 +195,9 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("\n}\n){\n", SENDER)
         self.assertIn("AWAITING_TEXT_FIELD", NATIVE)
         self.assertNotIn("Get-ChatGPTWindow", SENDER)
-        self.assertNotIn("ProcessName -ieq 'ChatGPT'", SENDER)
+        generic_path=SENDER.split("function Get-ForegroundEditable {",1)[1].split(
+            "function Read-EditorText(",1)[0]
+        self.assertNotIn("ProcessName -ieq 'ChatGPT'", generic_path)
         self.assertNotIn("VK_RETURN", SENDER)
         self.assertNotIn("SendKeys", SENDER)
         self.assertNotIn("subprocess.run(", SENDER)
@@ -213,7 +215,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("if($named.Count -eq 1)", SENDER)
         self.assertIn("elseif($all.Count -eq 1)", SENDER)
         self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
-        self.assertIn("Test-EligibleEditor $window $focused", SENDER)
+        self.assertIn("$editor=Resolve-FocusedEditor $window $focused", SENDER)
         self.assertIn("IsPassword", SENDER)
         self.assertIn("Read-EditorText $target", SENDER)
         # A diagnostic from inside a PowerShell function would corrupt its
@@ -223,8 +225,51 @@ class ForegroundResultTests(unittest.TestCase):
             "Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'\n    }\n    if(",
             SENDER)
 
+    def test_selected_nested_editable_wins_before_auto_focus(self):
+        # Discord/Telegram and other Electron apps may focus a child node.
+        # Resolve the already-selected Edit/Document ancestor before trying
+        # any other field in the foreground window.
+        resolver=SENDER.split("function Resolve-FocusedEditor(",1)[1].split(
+            "function Focus-CandidateEditor(",1)[0]
+        self.assertIn("Test-EligibleEditor $window $cursor", resolver)
+        self.assertIn("if(-not $pageWide){return $cursor}", resolver)
+        self.assertIn("if($null -eq $focused){return $null}", resolver)
+        self.assertIn("ControlType]::Button", resolver)
+        self.assertIn("$editor=Resolve-FocusedEditor $window $focused", SENDER)
+        self.assertIn("function Test-IsSelfOrChild(", SENDER)
+        self.assertIn("Test-EditorOwnsFocus $editor", SENDER)
+        self.assertIn("Test-EditorOwnsFocus $target.editor", SENDER)
+        self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
+
+    def test_generic_send_button_semantics_and_no_enter_fallback(self):
+        sender=SENDER.split("function Find-SendButton(",1)[1].split(
+            "function Test-TranscriptMarker(",1)[0]
+        self.assertIn("ControlType.Button", sender)
+        self.assertIn("ControlType.Custom", sender)
+        self.assertIn("$node.Current.Name", sender)
+        self.assertIn("$node.Current.HelpText", sender)
+        self.assertIn("$node.Current.AutomationId", sender)
+        self.assertIn("InvokePattern", sender)
+        self.assertIn("if($candidates.Count -eq 1)", sender)
+        self.assertNotIn("TypeEnter()", SENDER)
+        self.assertIn("for($attempt=1;$attempt -le 1;$attempt++)", SENDER)
+        self.assertIn("RESULT=CHAT_SEND_PENDING", SENDER)
+
+    def test_generic_receipt_excludes_composer_and_chat_partial_frames(self):
+        receipt=SENDER.split("function Test-ConversationReceiptNotComposer(",1)[1].split(
+            "function Test-ExactOwnDraft(",1)[0]
+        self.assertIn("ControlType.Document", receipt)
+        self.assertIn("ControlType.Text", receipt)
+        self.assertIn("Test-IsSelfOrChild $node $target.editor", receipt)
+        self.assertIn("Test-IsSelfOrChild $target.editor $node", receipt)
+        self.assertIn("([string]$node.Current.Name).Contains($marker)", receipt)
+        self.assertIn("if($isChatComposer -or", SENDER)
+        self.assertIn("Replace(", SENDER)
+        self.assertIn("Test-ExactOwnDraft $target $NativeReceiptMarker", SENDER)
+        self.assertNotIn("TypeEnter()", SENDER)
+
     def test_chat_send_button_requires_full_saved_draft_and_never_enters(self):
-        # Even the FIRST delivery must click ChatGPT's explicit Send button:
+        # Even the FIRST chat delivery must click the app's explicit Send button:
         # a typed result alone is not a submission and Enter is not recovery.
         self.assertNotIn("TypeEnter()", SENDER)
         self.assertIn("function Find-SendButton(", SENDER)
@@ -304,7 +349,7 @@ class ForegroundResultTests(unittest.TestCase):
     def test_existing_own_chat_draft_is_pending_not_falsely_delivered(self):
         prelude=SENDER.split("if(Test-EditorContainsMarker $target $NativeReceiptMarker){",1)[1].split(
             "# When a chat has an enabled Send control BEFORE our insertion",1)[0]
-        self.assertIn("Test-ChatGPTSubmissionTarget $target",prelude)
+        self.assertIn("Test-MessagingComposerTarget $target",prelude)
         self.assertIn("SENDER_STAGE=CHAT_DRAFT_PENDING_SEND",prelude)
         self.assertIn("RESULT=CHAT_SEND_PENDING",prelude)
         self.assertIn("RESULT=TEXT_INSERTED_VERIFIED",prelude)
@@ -404,7 +449,8 @@ class ForegroundResultTests(unittest.TestCase):
     def test_submit_only_mode_is_receipt_bound_and_never_types_payload(self):
         self.assertIn("[switch]$SubmitExistingOnly", SENDER)
         self.assertIn("function Test-ExactOwnDraft(", SENDER)
-        self.assertIn("function Test-ChatGPTSubmissionTarget(", SENDER)
+        self.assertIn("function Test-MessagingComposerTarget(", SENDER)
+        self.assertNotIn("function Test-ChatGPTSubmissionTarget(", SENDER)
         self.assertIn("function Recover-ExistingChatDraft(", SENDER)
         self.assertIn("Test-ConversationReceiptNotComposer $target $marker", SENDER)
         self.assertIn("function Test-ConversationReceiptNotComposer(", SENDER)
@@ -418,7 +464,8 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("TypeEnter()", click_helper)
         self.assertIn("if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}", click_helper)
         self.assertIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
-        self.assertIn("$proc.ProcessName -ine 'ChatGPT'", SENDER)
+        self.assertIn("if(-not (Test-MessagingComposerTarget $target) -and", SENDER)
+        self.assertIn("$null -eq (Find-SendButton $target)", SENDER)
         submit_helper = SENDER.split("function Recover-ExistingChatDraft(",1)[1].split(
             "$script:autoFocused=$false",1)[0]
         self.assertNotIn("TypeUnicode(", submit_helper)
