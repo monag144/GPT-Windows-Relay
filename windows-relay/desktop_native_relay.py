@@ -41,6 +41,8 @@ STATUS = HOME / "runtime-status.json"
 LOCK = HOME / "desktop-runner.lock"
 DELIVERY_HOLDS = HOME / "delivery-holds"
 RECEIPT_REQUESTS = HOME / "receipt-reconciliations"
+FORCE_CLEAR_REQUESTS = HOME / "force-clear-requests"
+FORCE_CLEAR_RECEIPTS = HOME / "force-clear-receipts"
 SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
 MAX_TRANSPORT_BYTES = 100_000
 
@@ -391,6 +393,104 @@ def _verify_saved_receipt_binding(aid: str, receipt: str):
         raise RuntimeError("NATIVE_RECEIPT_ACK_BINDING_MISMATCH")
 
 
+def request_force_clear_pending() -> str:
+    """Queue an operator-confirmed reset for the running journal owner.
+
+    This function writes only an inbox request, never a second State instance
+    while the singleton is live. No result is executed or resent.
+    """
+    if not runner_active():
+        raise RuntimeError("NATIVE_FORCE_CLEAR_RUNNER_NOT_ACTIVE")
+    request_id = uuid.uuid4().hex
+    FORCE_CLEAR_REQUESTS.mkdir(parents=True, exist_ok=True)
+    request = FORCE_CLEAR_REQUESTS / (request_id + ".json")
+    write_json(request, {"id": request_id, "kind": "FORCE_CLEAR_PENDING",
+                         "created_utc": utc()})
+    note("NATIVE_FORCE_CLEAR=QUEUED", "REQUEST=" + request_id)
+    return request_id
+
+
+def wait_force_clear_receipt(request_id: str, timeout: float = 12.0) -> dict:
+    if not re.fullmatch(r"[0-9a-f]{32}", request_id):
+        raise ValueError("invalid force-clear request ID")
+    target = FORCE_CLEAR_RECEIPTS / (request_id + ".json")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if target.is_file():
+            data = json.loads(target.read_text(encoding="utf-8"))
+            if (data.get("id") != request_id or
+                    data.get("result") != "FORCE_CLEAR_COMPLETE"):
+                raise RuntimeError("NATIVE_FORCE_CLEAR_RECEIPT_INVALID")
+            return data
+        time.sleep(0.15)
+    raise RuntimeError("NATIVE_FORCE_CLEAR_REQUEST_PENDING_UNCONFIRMED_" + request_id)
+
+
+def reconcile_force_clear_requests(state: wr.State) -> int:
+    """Single native runner owns all persisted delivery transitions."""
+    if not FORCE_CLEAR_REQUESTS.is_dir():
+        return 0
+    completed = 0
+    for path in sorted(FORCE_CLEAR_REQUESTS.glob("*.json")):
+        try:
+            if path.is_symlink():
+                raise RuntimeError("NATIVE_FORCE_CLEAR_REQUEST_SYMLINK_REFUSED")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            request_id = data.get("id")
+            if (not isinstance(request_id, str)
+                    or not re.fullmatch(r"[0-9a-f]{32}", request_id)
+                    or path.name != request_id + ".json"
+                    or data.get("kind") != "FORCE_CLEAR_PENDING"):
+                raise RuntimeError("NATIVE_FORCE_CLEAR_REQUEST_INVALID")
+            receipt_path = FORCE_CLEAR_RECEIPTS / (request_id + ".json")
+            if receipt_path.is_file():
+                prior = json.loads(receipt_path.read_text(encoding="utf-8"))
+                if prior.get("id") != request_id or prior.get("result") != "FORCE_CLEAR_COMPLETE":
+                    raise RuntimeError("NATIVE_FORCE_CLEAR_RECEIPT_CONFLICT")
+                path.unlink()
+                continue
+            holds = {}
+            for aid,delivery in state.data.get("outbound_deliveries",{}).items():
+                if not isinstance(delivery,dict):
+                    continue
+                if delivery.get("phase") not in {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN"}:
+                    continue
+                hold = delivery_hold_path(aid)
+                if hold.is_file():
+                    try:
+                        record = json.loads(hold.read_text(encoding="utf-8"))
+                        if isinstance(record,dict) and record.get("id") == aid:
+                            holds[aid] = record
+                    except (OSError,ValueError):
+                        pass  # Preserve an unreadable hold on disk.
+            affected = state.force_clear_unresolved_deliveries(request_id, holds)
+            for aid in affected:
+                # Executed results and journal entries remain untouched.
+                # Hold evidence was copied into the terminal delivery record.
+                hold = delivery_hold_path(aid)
+                if aid in holds:
+                    hold.unlink(missing_ok=True)
+                delivery_force_clear_path(aid).unlink(missing_ok=True)
+            remaining = sum(
+                isinstance(d, dict) and d.get("phase") in
+                {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN"}
+                for d in state.data.get("outbound_deliveries",{}).values())
+            receipt = {"id":request_id, "result":"FORCE_CLEAR_COMPLETE",
+                       "aborted_ids":affected, "aborted_count":len(affected),
+                       "unresolved_remaining":remaining,"finished_utc":utc()}
+            write_json(receipt_path,receipt)
+            path.unlink()
+            status_update(phase="IDLE", last_result="FORCE_CLEAR_COMPLETE",
+                          last_delivery_stage="OPERATOR_FORCE_CLEAR_PENDING",
+                          delivery_blocked=False, last_delivery_error=None)
+            note("NATIVE_FORCE_CLEAR=COMPLETE","REQUEST="+request_id,
+                 "ABORTED="+str(len(affected)),"UNRESOLVED="+str(remaining))
+            completed += 1
+        except (RuntimeError, ValueError, OSError, wr.RelayError) as exc:
+            note("NATIVE_FORCE_CLEAR=HELD",type(exc).__name__)
+    return completed
+
+
 def request_confirmed_receipt(aid: str, receipt: str):
     """Queue a known received result for the ACTIVE runner to reconcile.
 
@@ -644,6 +744,9 @@ def runner():
             # One journal owner reconciles confirmed receipts regardless of
             # whether ChatGPT is open. This never sends or reexecutes packets.
             reconcile_receipt_requests(state)
+            # Manual FORCE CLEAR is applied by the same journal owner before
+            # scanning new instructions or claiming any outbound delivery.
+            reconcile_force_clear_requests(state)
             # The output queue is INDEPENDENT of ChatGPT's packet scanner:
             # a pending result can be inserted into focused Notepad or another
             # foreground editor even when the ChatGPT app is closed.
@@ -786,7 +889,8 @@ def main():
                                  "auto-send-on", "auto-send-off", "abort-delivery",
                                  "clear-pending-deliveries",
                                  "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
-                                 "acknowledge-receipt", "queue-confirmed-receipt"))
+                                 "acknowledge-receipt", "queue-confirmed-receipt",
+                                 "queue-force-clear-pending"))
     parser.add_argument("action_id", nargs="?")
     parser.add_argument("receipt", nargs="?")
 
@@ -802,6 +906,9 @@ def main():
         if not args.action_id or not args.receipt:
             raise SystemExit("queue-confirmed-receipt requires action ID and received result nonce")
         request_confirmed_receipt(args.action_id, args.receipt)
+        return 0
+    if args.command == "queue-force-clear-pending":
+        request_force_clear_pending()
         return 0
     if args.command == "retry-delivery":
         if not args.action_id:
