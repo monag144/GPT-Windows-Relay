@@ -670,6 +670,8 @@ def deliver(state: wr.State, aid: str):
             delivery_force_clear_path(aid).unlink(missing_ok=True)
     # Persist the durable outbound phase before any native-only hold update.
     state.finish_outbound_delivery(aid, phase)
+    state.record_outbound_sender_diagnostic(
+        aid, stage, "" if phase in {"SUBMITTED", "TEXT_INSERTED"} else error_code)
     if phase == "PRE_SUBMIT_FAILED":
         hold_failed_delivery(aid, stage, error_code)
         status_update(phase="DELIVERY_BLOCKED", last_action=aid, last_result=phase,
@@ -732,6 +734,9 @@ def recover_submit_only(state: wr.State, aid: str):
     no_target = code == 0 and "RESULT=FOREGROUND_NO_TARGET" in output
     phase = "SUBMITTED" if submitted else "SUBMIT_UNCERTAIN"
     state.finish_submit_only_retry(aid, phase, no_target=no_target, stage=stage)
+    if not no_target:
+        state.record_outbound_sender_diagnostic(
+            aid, stage, "" if submitted else "SUBMIT_ONLY_UNCONFIRMED")
     if no_target:
         status_update(phase="AWAITING_TEXT_FIELD", last_action=aid,
                       last_result=previous, delivery_blocked=False,
