@@ -198,6 +198,94 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("SendKeys", SENDER)
         self.assertNotIn("subprocess.run(", SENDER)
 
+    def test_foreground_target_auto_focus_requires_unique_writable_editor(self):
+        # Automatic focus must not depend on a prior click in the composer.
+        self.assertIn("function Test-EligibleEditor(", SENDER)
+        self.assertIn("function Focus-CandidateEditor(", SENDER)
+        self.assertIn("function Get-ForegroundEditable {", SENDER)
+        self.assertIn("$window.FindAll(", SENDER)
+        self.assertIn("FOREGROUND_EDITOR_AUTOFOCUSED", SENDER)
+        self.assertIn("$editor.SetFocus()", SENDER)
+        self.assertIn("GetCursorPos", SENDER)
+        self.assertIn("SetCursorPos", SENDER)
+        self.assertIn("if($named.Count -eq 1)", SENDER)
+        self.assertIn("elseif($all.Count -eq 1)", SENDER)
+        self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
+        self.assertIn("Test-EligibleEditor $window $focused", SENDER)
+        self.assertIn("IsPassword", SENDER)
+        self.assertIn("Read-EditorText $target", SENDER)
+        # A diagnostic from inside a PowerShell function would corrupt its
+        # hashtable result. Require script-scoped status to be emitted later.
+        self.assertIn("$script:autoFocused=$true", SENDER)
+        self.assertNotIn(
+            "Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'\n    }\n    if(",
+            SENDER)
+
+    def test_chat_send_enter_only_after_unique_enabled_send_control(self):
+        self.assertIn("public static uint TypeEnter()", SENDER)
+        self.assertIn("keys[0].U.ki.wVk=0x0D", SENDER)
+        self.assertIn("function Find-SendButton(", SENDER)
+        self.assertIn("$send=if($allowSubmit){Find-SendButton $target}else{$null}", SENDER)
+        self.assertIn("if($null -eq $send){", SENDER)
+        self.assertIn("RESULT=TEXT_INSERTED_VERIFIED", SENDER)
+        self.assertIn("if($kind -eq 'ControlType.Edit'){", SENDER)
+        self.assertIn("[CourierForegroundInput]::TypeEnter() -ne [uint32]2", SENDER)
+        self.assertIn("UIA_GUARDED_SUBMIT_ENTER_BEGIN", SENDER)
+        self.assertIn("SENDER_STAGE=SUBMIT_KEY_COMPLETED", SENDER)
+        self.assertLess(SENDER.index("if($null -eq $send){"),
+                        SENDER.index("if($kind -eq 'ControlType.Edit'){"))
+        self.assertIn("FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW", SENDER)
+        self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN", SENDER)
+        self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
+
+    def test_electron_typing_recognized_without_stale_value_pattern(self):
+        self.assertIn("function Test-EditorContainsMarker(", SENDER)
+        self.assertIn("function Test-EmptyOrPlaceholder(", SENDER)
+        self.assertIn("EDITOR_TEXT_MARKER_VERIFIED", SENDER)
+        self.assertIn("EDITOR_SEND_ENABLEMENT_VERIFIED", SENDER)
+        self.assertIn("$sendBefore=Find-SendButton $target", SENDER)
+        self.assertIn("$null -eq $sendBefore", SENDER)
+        self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
+        self.assertIn("RESULT=FOREGROUND_NO_TARGET", SENDER)
+        self.assertIn("Test-TranscriptMarker $target $NativeReceiptMarker", SENDER)
+        self.assertIn("Test-EditorContainsMarker $target $NativeReceiptMarker){continue}", SENDER)
+        self.assertIn("FOREGROUND_INSERTION_NOT_VERIFIED", SENDER)
+
+    def test_guarded_enter_submitted_receipt_updates_native_journal(self):
+        which, process = self.sender(
+            "SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED\n"
+            "SENDER_STAGE=EDITOR_SEND_ENABLEMENT_VERIFIED\n"
+            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
+            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "SENDER_STAGE=CONFIRMED_IN_CONVERSATION\n"
+            "RESULT=HEARTBEAT_SUBMITTED\n"
+        )
+        with which, process as invoked:
+            native.deliver(self.state, self.aid)
+        invoked.assert_called_once()
+        self.assertEqual(
+            self.state.outbound_lookup(self.aid)["phase"], "SUBMITTED"
+        )
+        self.assertEqual(native.get_status()["last_delivery_stage"],
+                         "CONFIRMED_IN_CONVERSATION")
+
+    def test_guarded_enter_unconfirmed_is_not_replayed(self):
+        which, process = self.sender(
+            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
+            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n", 5
+        )
+        with which, process as invoked:
+            native.deliver(self.state, self.aid)
+            native.deliver(self.state, self.aid)
+        invoked.assert_called_once()
+        self.assertEqual(
+            self.state.outbound_lookup(self.aid)["phase"], "SUBMIT_UNCERTAIN"
+        )
+        self.assertEqual(
+            self.state.outbound_lookup(self.aid)["attempt_count"], 1
+        )
+
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"),
                          "PowerShell AST parser is Windows-only")
     def test_sender_powershell_ast_is_parseable_without_running_it(self):
