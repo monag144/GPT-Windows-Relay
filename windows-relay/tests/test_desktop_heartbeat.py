@@ -131,6 +131,41 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT", SOURCE)
         self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
 
+    def test_preclick_failure_preserves_own_unsent_draft_without_erasure(self):
+        # Previously Try-ClearOwnDraft silently called ValuePattern.SetValue('')
+        # in the sender's catch block, erasing the visible but unsent result.
+        self.assertNotIn("Try-ClearOwnDraft", SOURCE)
+        self.assertNotIn("OWN_UNSENT_DRAFT_CLEARED=ATTEMPTED", SOURCE)
+        self.assertIn("function Report-UnsentDraftState($window){", SOURCE)
+        start = SOURCE.index("function Report-UnsentDraftState($window){")
+        end = SOURCE.index("Write-Output 'CHATGPT_DESKTOP_SENDER_V4'", start)
+        reporter = SOURCE[start:end]
+        self.assertIn("if($script:submitted", reporter)
+        self.assertIn("Test-OwnHeartbeatDraft $value", reporter)
+        self.assertIn("OWN_UNSENT_DRAFT=PRESERVED_IN_COMPOSER", reporter)
+        self.assertIn("OWN_UNSENT_DRAFT=CHANGED_OR_UNVERIFIED_NO_MUTATION", reporter)
+        self.assertNotIn("SetValue(", reporter)
+        self.assertNotIn("SetFocus(", reporter)
+        self.assertNotIn("Clear-ComposerForForcedDelivery", reporter)
+
+        error = SOURCE.split("}catch{")[-1]
+        self.assertIn("Report-UnsentDraftState $window", SOURCE)
+        self.assertIn("RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY", SOURCE)
+
+    def test_send_readiness_rereads_transient_uia_without_mutating_draft(self):
+        start = SOURCE.index("    $send=$null", SOURCE.index("SENDER_STAGE=INPUT_COMPLETED"))
+        end = SOURCE.index("    Write-Output 'COMPOSER_INPUT=SENDINPUT_UNICODE_ACCEPTED'", start)
+        loop = SOURCE[start:end]
+        self.assertIn("for($i=0;$i -lt 50;$i++)", loop)
+        self.assertIn("$composer=Get-Composer $window", loop)
+        self.assertIn("$draftMatches=Test-OwnHeartbeatDraft", loop)
+        self.assertIn("$readFailures++", loop)
+        self.assertIn("SENDER_STAGE=SEND_BUTTON_NOT_READY", loop)
+        self.assertIn("throw 'COMPOSER_SET_BUT_SEND_NOT_ENABLED'", loop)
+        self.assertNotIn("SetValue(", loop)
+        self.assertNotIn("Clear-ComposerForForcedDelivery", loop)
+        self.assertNotIn("mouse_event(", loop)
+
     def test_sendinput_union_uses_native_win32_input_size(self):
         # Win32 INPUT is 40 bytes on x64, 28 on x86.  A union containing
         # KEYBDINPUT only is too small and SendInput returns ERROR 87.
