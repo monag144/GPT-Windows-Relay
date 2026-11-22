@@ -885,7 +885,7 @@ def run_ui():
                 messagebox.showerror("Command Courier GO",error,parent=root)
             elif kind=="held":
                 messagebox.showinfo("Command Courier GO",
-                    "Native engine is ready for new instructions.\\n\\n"
+                    "Native engine is ready for new instructions.\n\n"
                     "An older result remains HELD; GO did not submit or "
                     "discard it.",parent=root)
         if native_mode() and not courier_state["queried"]:
