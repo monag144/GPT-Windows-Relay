@@ -134,7 +134,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('COURIER_GO=EXECUTION_READY_OUTBOUND_UNRESOLVED',HUD)
         self.assertIn('go_results.put(("held",None))',HUD)
         self.assertIn('(snap.get("native_phase")=="DELIVERY_BLOCKED" and',HUD)
-        self.assertIn('"FORWARDING_NO_CHATGPT") or',HUD)
+        self.assertIn('"FORWARDING_NO_CHATGPT","AWAITING_TEXT_FIELD") or',HUD)
         self.assertIn('bg="#188038" if armed and not snap.get("native_off") else "#3c4043"',HUD)
         self.assertIn("CHATGPT OUTBOX HELD",HUD)
 
