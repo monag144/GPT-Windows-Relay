@@ -386,6 +386,9 @@ function Invoke-ExistingDraftSubmit($target,$send){
     # A recovered result may ONLY use ChatGPT's explicit, unique Send control.
     # Enter is not a Send-button substitute and must never create another post.
     if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}
+    if(-not $send.Current.IsEnabled -or $send.Current.IsOffscreen){
+        throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_READY'
+    }
     $bounds=$send.Current.BoundingRectangle
     $root=$target.window.Current.BoundingRectangle
     $x=[int][Math]::Round(($bounds.Left+$bounds.Right)/2)
@@ -403,6 +406,8 @@ function Invoke-ExistingDraftSubmit($target,$send){
         if(-not [CourierForegroundInput]::SetCursorPos($x,$y)){
             throw 'SUBMIT_ONLY_CURSOR_MOVE_FAILED'
         }
+        Assert-RunnerAllowed
+        Assert-CurrentTarget $target
         [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
         Start-Sleep -Milliseconds 70
         [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
@@ -723,6 +728,19 @@ try{
     if($reason -notmatch '^[A-Z0-9_]{3,90}$'){$reason='FOREGROUND_UNCLASSIFIED_ERROR'}
     Write-Output ('HEARTBEAT_ERROR='+$reason)
     if(-not $inputStarted){
+        # These failures occur before ANY mouse-down, so a later attempt
+        # may still click this same verified draft without risking a retry
+        # of a click that might already have reached ChatGPT.
+        if($SubmitExistingOnly -and $reason -in @(
+            'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED',
+            'SUBMIT_ONLY_SEND_CONTROL_NOT_READY',
+            'SUBMIT_ONLY_BUTTON_OUTSIDE_WINDOW',
+            'SUBMIT_ONLY_CURSOR_UNAVAILABLE',
+            'SUBMIT_ONLY_CURSOR_MOVE_FAILED')){
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NO_CLICK_CONFIRMED'
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+            exit 0
+        }
         if($reason -in @('FOREGROUND_TARGET_CHANGED_DURING_INPUT',
                         'FOCUSED_EDITOR_CHANGED_DURING_INPUT',
                         'OPERATOR_AUTO_SEND_NOT_ARMED',
