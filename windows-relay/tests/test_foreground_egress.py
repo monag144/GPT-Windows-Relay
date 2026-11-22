@@ -186,7 +186,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("RESULT=HEARTBEAT_SUBMITTED", SENDER)
         self.assertIn("windowsterminal|openconsole|conhost", SENDER)
         self.assertIn("windowsterminal|openconsole|conhost|wt)$", SENDER)
-        self.assertIn("$editor=[System.Windows.Automation.AutomationElement]::FocusedElement", SENDER)
+        self.assertIn("$focused=[System.Windows.Automation.AutomationElement]::FocusedElement", SENDER)
         self.assertIn("$inputText=$script:wire", SENDER)
         self.assertIn('Replace("`r",\' \').Replace("`n",\' \')', SENDER)
         self.assertEqual(SENDER.count("function Read-EditorText"), 1)
