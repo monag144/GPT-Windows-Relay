@@ -154,7 +154,7 @@ class CourierCoordinatorTests(unittest.TestCase):
         self.assertIn("COURIER_GO=NATIVE_RUNTIME_READY",
                       [str(x.args[0]) for x in output.call_args_list])
 
-    def test_go_does_not_claim_destination_ready_during_baseline(self):
+    def test_go_ready_without_chatgpt_process_for_foreground_target(self):
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
         ready={"native_running":True,"native_armed":True,"native_off":False,
                "phase":"WAITING_FOR_CHATGPT_APP","delivery_blocked":False,"runner_error_type":None}
@@ -166,8 +166,8 @@ class CourierCoordinatorTests(unittest.TestCase):
             self.assertEqual(courier.go(),0)
         launch.assert_called_once()
         messages=[str(x.args[0]) for x in output.call_args_list]
-        self.assertIn("COURIER_GO=WAITING_FOR_DESTINATION",messages)
-        self.assertNotIn("COURIER_GO=NATIVE_RUNTIME_READY",messages)
+        self.assertIn("COURIER_GO=NATIVE_RUNTIME_READY",messages)
+        self.assertNotIn("COURIER_GO=WAITING_FOR_DESTINATION",messages)
 
     def test_go_distinguishes_running_executor_from_durable_held_outbound(self):
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
