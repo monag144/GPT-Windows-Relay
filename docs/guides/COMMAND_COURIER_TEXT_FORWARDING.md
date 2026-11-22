@@ -305,3 +305,45 @@ delivery. Never use global queue clearing to clean up the composer.
 
 Use a fresh unique action ID for Windows GUI qualification. The unchanged
 strong-HUD bookmark remains pinned.
+
+
+### FORCE CLEAR — deliberate terminal reset (post-checkpoint maintenance)
+
+The original 560×184/560×386 HUD's **FORCE CLEAR** has a separately
+confirmed, destructive scope. One operator confirmation requests two
+independent operations:
+
+1. Try to clear the **current unsent ChatGPT editor draft** without sending
+   it. The editor helper uses focus-checked Ctrl+A/Backspace; when Electron's
+   ValuePattern is stale, an independently disabled Send control or empty
+   TextPattern can verify the keyboard clear. A UIA error is honestly reported
+   as *composer not confirmed*, never silently treated as success.
+2. Ask the already-running **native singleton** to terminally close **all
+   unresolved outbound deliveries** currently in `READY`,
+   `PRE_SUBMIT_FAILED`, or `SUBMIT_UNCERTAIN`. Each becomes `ABORTED`
+   with `force_clear_previous_phase`, `force_clear_disposition`,
+   `force_clear_request_id`, original attempt count and any prior hold
+   evidence. `SUBMITTED`, `TEXT_INSERTED`, `ABORTED`, and active
+   `SUBMITTING` deliveries are not changed. No action is re-executed and no
+   saved result or execution history is deleted.
+
+The HUD waits for a unique, durable `FORCE_CLEAR_COMPLETE` receipt and
+reports the exact **aborted_count** and **unresolved_remaining** separately
+from its composer outcome. If the composer cannot be verified, a warning
+still reports the completed outbox reset; it does **not** claim the editor
+was cleared. If the native runner has not acknowledged the request, the HUD
+does **not** claim the outbox was cleared; the same request remains queued
+for the sole journal owner. Re-processing its request ID is idempotent
+across crashes.
+
+This terminal closure is **not a delivery receipt**. A prior ambiguous send
+is recorded as `OPERATOR_DISCARDED_UNVERIFIED_DELIVERY`, never misclassified
+as `SUBMITTED`. The historical 001 and 002 `PRE_SUBMIT_FAILED` entries
+are expected to become `ABORTED` when the operator deliberately uses
+FORCE CLEAR, and the HUD's `2 unresolved` becomes `0` if no new
+deliveries are pending.
+
+**Release boundary:** this change exists only on the WIP development
+branch. The accepted stable checkpoint branch
+`stable/command-courier-working-build-2026-11-22` and its full commit
+`821bd35477aed56cc1aa4d2f415c2f027cbc9a2e` are unchanged.
