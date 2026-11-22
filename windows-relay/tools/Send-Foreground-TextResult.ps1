@@ -361,19 +361,34 @@ try{
     if($script:autoFocused){Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'}
     Write-Output 'SENDER_STAGE=FOREGROUND_TEXT_FIELD_FOUND'
     $before=Read-EditorText $target
-    if($before.Contains($NativeReceiptMarker)){
+    $sendBefore=Find-SendButton $target
+    if(Test-EditorContainsMarker $target $NativeReceiptMarker){
         Write-Output 'SENDER_STAGE=RESULT_ALREADY_IN_EDIT_FIELD'
         Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
         exit 0
     }
-    # An existing draft must never be submitted together with an unrelated
-    # result. The text may still be inserted at the current cursor position.
-    $allowSubmit=[string]::IsNullOrWhiteSpace($before)
+    # When a chat has an enabled Send control BEFORE our insertion, it
+    # already contains someone else's draft. Defer without touching it.
+    if($null -ne $sendBefore){
+        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
+        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        exit 0
+    }
+    $allowSubmit=Test-EmptyOrPlaceholder $before
     if($target.hasText){
         try{
-            $textBefore=[string]$target.text.DocumentRange.GetText(-1)
-            $allowSubmit=[string]::IsNullOrWhiteSpace($textBefore)
+            $allowSubmit=($allowSubmit -and
+                         (Test-EmptyOrPlaceholder ([string]$target.text.DocumentRange.GetText(-1))))
         }catch{}
+    }
+    # For a named chat composer, a busy draft isn't an output target. The
+    # unrelated text must not be submitted with our result.
+    $isChatComposer=([string]$target.editor.Current.Name -match
+                     '(?i)ask chatgpt|ask anything|message|prompt|compose|chat')
+    if($isChatComposer -and -not $allowSubmit){
+        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
+        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        exit 0
     }
     $requiredSize=if([IntPtr]::Size -eq 8){40}else{28}
     if([CourierForegroundInput]::InputSize() -ne $requiredSize){
@@ -399,19 +414,31 @@ try{
     }
     Write-Output 'SENDER_STAGE=FOREGROUND_INPUT_COMPLETED'
     $matched=$false
-    for($i=0;$i -lt 25;$i++){
-        Start-Sleep -Milliseconds 120
+    $send=$null
+    for($i=0;$i -lt 40;$i++){
+        Start-Sleep -Milliseconds 150
         try{
-            if((Read-EditorText $target).Contains($NativeReceiptMarker)){
+            if(Test-EditorContainsMarker $target $NativeReceiptMarker){
                 $matched=$true
+                Write-Output 'SENDER_STAGE=EDITOR_TEXT_MARKER_VERIFIED'
                 break
+            }
+            # Electron can render the exact typed body while returning an
+            # old placeholder through UIA. A previously DISABLED Send
+            # control becoming ENABLED after our own SendInput is a
+            # second, event-driven indication that typing reached it.
+            if($allowSubmit -and $null -eq $sendBefore){
+                $send=Find-SendButton $target
+                if($null -ne $send){
+                    $matched=$true
+                    Write-Output 'SENDER_STAGE=EDITOR_SEND_ENABLEMENT_VERIFIED'
+                    break
+                }
             }
         }catch{}
     }
     if(-not $matched){throw 'FOREGROUND_INSERTION_NOT_VERIFIED'}
     Write-Output 'SENDER_STAGE=TEXT_INSERTION_VERIFIED'
-    # Explicit chat Send control is optional. Without it, e.g. Notepad,
-    # successful text insertion is a terminal result (not a remote receipt).
     $send=if($allowSubmit){Find-SendButton $target}else{$null}
     if($null -eq $send){
         Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
