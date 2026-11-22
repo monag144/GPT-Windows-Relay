@@ -45,28 +45,50 @@ $mini=@(Find-HudProcesses $obsolete)
 foreach($p in $mini){
     Stop-HudProcess $p 'UNWANTED_MINI_HUD'
 }
-# Old hud.py processes contain pre-pull code and cannot hot-reload the new
-# native-status adapter. Restart only that exact file, preserving HUD position.
+# Reuse an already-visible original HUD if its process is newer than the
+# source file. Every blind restart causes a visible flicker and UI state loss.
+# A git pull updates hud.py's timestamp, forcing one genuine code reload.
 $prior=@(Find-HudProcesses $original)
-foreach($p in $prior){
-    Stop-HudProcess $p 'ORIGINAL_HUD_OLD_CODE_RESTARTED'
-}
-Start-Sleep -Milliseconds 400
-$existing=@(Find-HudProcesses $original)
-if($existing.Count -eq 0){
-    Start-Process -FilePath $python -WorkingDirectory $root -ArgumentList @('-B',('"'+$original+'"')) | Out-Null
-    Write-Output 'ORIGINAL_HUD_START=REQUESTED'
-}else{
-    Write-Output 'ORIGINAL_HUD_START=EXISTING_PROCESS_REUSED'
-}
-Start-Sleep -Milliseconds 850
-$active=@(Find-HudProcesses $original)
-if($active.Count -eq 0){throw 'ORIGINAL_HUD_NOT_RUNNING_AFTER_START'}
-# venv Python can retain a host parent plus the actual child interpreter.  The
-# acceptance invariant is one visible canonical HUD window, not one host PID.
-$visible=@($active | ForEach-Object {
+$visiblePrior=@($prior | ForEach-Object {
     Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
 } | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })
+$sourceUpdated=(Get-Item -LiteralPath $original).LastWriteTimeUtc
+$reusable=$false
+if($visiblePrior.Count -eq 1){
+    try{
+        $reusable=($visiblePrior[0].StartTime.ToUniversalTime() -ge $sourceUpdated)
+    }catch{$reusable=$false}
+}
+if($reusable){
+    Write-Output 'ORIGINAL_HUD_START=EXISTING_PROCESS_REUSED'
+}else{
+    # Restart only this canonical file after a source upgrade, missing window
+    # or invalid singleton; never stop other transport processes.
+    foreach($p in $prior){
+        Stop-HudProcess $p 'ORIGINAL_HUD_OLD_CODE_RESTARTED'
+    }
+    Start-Sleep -Milliseconds 400
+    $existing=@(Find-HudProcesses $original)
+    if($existing.Count -eq 0){
+        Start-Process -FilePath $python -WorkingDirectory $root -ArgumentList @('-B',('"'+$original+'"')) | Out-Null
+        Write-Output 'ORIGINAL_HUD_START=REQUESTED'
+    }else{
+        Write-Output 'ORIGINAL_HUD_START=EXISTING_PROCESS_REUSED'
+    }
+}
+# Interactive Windows sign-in may require more than 850ms for Tk to expose
+# its visible HWND. Wait with a bounded read-only check; never spawn twice.
+$active=@()
+$visible=@()
+for($i=0;$i -lt 12;$i++){
+    $active=@(Find-HudProcesses $original)
+    $visible=@($active | ForEach-Object {
+        Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+    } | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })
+    if($visible.Count -eq 1){break}
+    if($i -lt 11){Start-Sleep -Milliseconds 250}
+}
+if($active.Count -eq 0){throw 'ORIGINAL_HUD_NOT_RUNNING_AFTER_START'}
 if($visible.Count -ne 1){throw ('ORIGINAL_HUD_VISIBLE_WINDOW_COUNT='+$visible.Count)}
 Write-Output ('ORIGINAL_HUD_RUNNING_COUNT='+$visible.Count)
 Write-Output ('ORIGINAL_HUD_HOST_PROCESS_COUNT='+$active.Count)
