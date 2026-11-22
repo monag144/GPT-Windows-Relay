@@ -88,6 +88,29 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('courier_results.put(("error",details,str(exc)[:180]))', HUD_SOURCE)
         self.assertIn('startup_check.configure(state="normal" if editable else "disabled")', HUD_SOURCE)
 
+    def test_live_engine_remains_ready_for_new_commands_while_old_delivery_held(self):
+        # Only outbound result 002 is held; the native scanner remains
+        # armed for new actions without resending any older result.
+        action_id="PCE19-NATIVE-HEALTH-20261122-002"
+        status={"native_running":True,"native_armed":True,"native_off":False,
+                "auto_send":True,"phase":"DELIVERY_BLOCKED",
+                "delivery_blocked":True,"last_action":action_id,
+                "last_result":"PRE_SUBMIT_FAILED",
+                "last_delivery_error":"COMPOSER_SET_BUT_SEND_NOT_ENABLED"}
+        persisted={"outbound_deliveries":{
+            action_id:{"phase":"PRE_SUBMIT_FAILED","attempt_count":1}}}
+        with mock.patch.object(native,"get_status",return_value=status), \
+             mock.patch.object(hud,"read_json",return_value=persisted), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            snap=hud.native_snapshot()
+        self.assertEqual(snap["title"],"READY • HELD")
+        self.assertEqual(snap["title_phase"],"RECOVERY ADVICE")
+        self.assertIn("DELIVERY HELD",snap["phase"])
+        self.assertEqual(snap["native_delivery_phase"],"PRE_SUBMIT_FAILED")
+        self.assertTrue(snap["native_armed"])
+        self.assertTrue(snap["online"])
+        self.assertIn("DELIVERY BLOCKED:",snap["exact"])
+
     def test_force_clear_runs_only_standalone_powershell_composer_action(self):
         result=SimpleNamespace(returncode=0,stdout=(
             "COMPOSER_CLEAR=VERIFIED_EMPTY\\n"
