@@ -532,9 +532,11 @@ def runner():
             if cfg["armed"] and cfg["auto_send"] and not stop_requested():
                 try:
                     forward_report = forwarder.tick(HOME, enabled=True)
-                    if forward_report["forwarded"] or forward_report["held"]:
+                    if (forward_report["forwarded"] or forward_report["held"]
+                            or forward_report.get("route_errors")):
                         note("NATIVE_TEXT_ROUTED=" + str(forward_report["forwarded"]),
-                             "TEXT_HELD=" + str(forward_report["held"]))
+                             "TEXT_HELD=" + str(forward_report["held"]),
+                             "SOURCE_ERRORS=" + str(forward_report.get("route_errors", 0)))
                 except (forwarder.ForwardingError, OSError, ValueError) as exc:
                     # A bad route is isolated from native packet execution.
                     note("NATIVE_TEXT_ROUTE_ERROR=" + type(exc).__name__,
