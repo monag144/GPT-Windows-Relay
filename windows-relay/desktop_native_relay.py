@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent
 TOOLS = ROOT / "tools"
 SCANNER = TOOLS / "Watch-ChatGPT-ActionCandidates.ps1"
 SENDER = TOOLS / "Send-ChatGPT-DesktopHeartbeat.ps1"
+FOREGROUND_SENDER = TOOLS / "Send-Foreground-TextResult.ps1"
 HOME = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "GPTWindowsRelayDesktop"
 CONFIG = HOME / "desktop-control.json"
 STATE = HOME / "state.json"
@@ -489,8 +490,12 @@ def deliver(state: wr.State, aid: str):
     status_update(phase="DELIVERING", last_action=aid)
     ps = shutil.which("powershell.exe")
     force_clear_composer = delivery_force_clear_path(aid).is_file()
+    # Normal egress is app-neutral: the result is already owned by this relay.
+    # Explicit legacy FORCE RESEND remains bound to the original ChatGPT
+    # destination rather than taking over whichever application has focus.
+    sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER
     cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
-           "-File", str(SENDER), "-NativeResultPath", str(path),
+           "-File", str(sender_script), "-NativeResultPath", str(path),
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
     if force_clear_composer:
         cmd.append("-ForceClearComposer")
@@ -498,8 +503,10 @@ def deliver(state: wr.State, aid: str):
     error_code = "SENDER_NO_RECEIPT"
     stage = "STARTING"
     try:
-        response = subprocess.run(cmd, capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=70)
+        response = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=70,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         output = response.stdout
         for line in output.splitlines():
             if line.startswith("SENDER_STAGE="):
@@ -519,8 +526,23 @@ def deliver(state: wr.State, aid: str):
             elif line.startswith("HEARTBEAT_ERROR="):
                 # Sender errors are metadata; never persist the result packet.
                 error_code = line.partition("=")[2][:180]
+        if (sender_script == FOREGROUND_SENDER
+                and response.returncode == 0
+                and "RESULT=FOREGROUND_NO_TARGET" in output):
+            # No editor was touched; return the saved result to READY without
+            # counting a delivery attempt or creating a hold.
+            state.defer_outbound_delivery(aid)
+            status_update(phase="AWAITING_TEXT_FIELD", last_action=aid,
+                          last_result="READY", last_delivery_stage="NO_TARGET",
+                          last_delivery_error=None)
+            note("NATIVE_DELIVERY_WAITING_FOR_TEXT_FIELD=" + aid)
+            return
         if response.returncode == 0 and "RESULT=HEARTBEAT_SUBMITTED" in output:
             phase = "SUBMITTED"
+        elif (sender_script == FOREGROUND_SENDER
+              and response.returncode == 0
+              and "RESULT=TEXT_INSERTED_VERIFIED" in output):
+            phase = "TEXT_INSERTED"
         elif ("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN" not in output
               and "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY" in output):
             phase = "PRE_SUBMIT_FAILED"
@@ -552,11 +574,12 @@ def deliver(state: wr.State, aid: str):
         note("NATIVE_DELIVERY_BLOCKED_ERROR=" + error_code)
         note("NATIVE_DELIVERY_RETRY=OPERATOR_REQUIRED_NO_AUTO_RETRY")
     else:
-        status_update(phase=("IDLE" if phase == "SUBMITTED" else "DELIVERY_UNCERTAIN"),
+        completed=phase in {"SUBMITTED", "TEXT_INSERTED"}
+        status_update(phase=("IDLE" if completed else "DELIVERY_UNCERTAIN"),
                       last_action=aid, last_result=phase,
-                      delivery_blocked=(phase != "SUBMITTED"),
+                      delivery_blocked=not completed,
                       last_delivery_stage=stage,
-                      last_delivery_error=(None if phase == "SUBMITTED" else error_code))
+                      last_delivery_error=(None if completed else error_code))
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
