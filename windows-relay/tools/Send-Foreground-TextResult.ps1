@@ -588,8 +588,9 @@ try{
     }
     # For a named chat composer, a busy draft isn't an output target. The
     # unrelated text must not be submitted with our result.
-    $isChatComposer=([string]$target.editor.Current.Name -match
-                     '(?i)ask chatgpt|ask anything|message|prompt|compose|chat')
+    $isChatComposer=(([string]$target.editor.Current.Name -match
+                     '(?i)ask chatgpt|ask anything|message|prompt|compose|chat') -or
+                     (Test-ChatGPTSubmissionTarget $target))
     if($isChatComposer -and -not $allowSubmit){
         Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
