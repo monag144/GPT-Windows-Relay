@@ -281,6 +281,16 @@ function Assert-ComposableEmptyState($window,$composer){
     }
     Write-Output 'COMPOSER_BASELINE=UNFOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
 }
+function Test-ComposerClearPostInput($window,$composer){
+    # In a React-controlled editor, ValuePattern can still contain the old
+    # draft after keyboard Ctrl+A/Backspace. Verify via an independent UIA
+    # signal, never by the successful SendInput return count alone.
+    if(Test-ComposableEmptyState $window $composer){return $true}
+    if(Test-DisabledSendControlPresent $window){return $true}
+    if((Test-ComposerTextPatternEmpty $composer) -and
+       ($null -eq (Get-EnabledSend $window))){return $true}
+    return $false
+}
 function Clear-ComposerForForcedDelivery($window,$composer){
     # Explicit operator-approved clear only. UIA ValuePattern edits did not
     # reliably update ChatGPT's controlled editor; focused keyboard edits do.
@@ -302,7 +312,7 @@ function Clear-ComposerForForcedDelivery($window,$composer){
         Start-Sleep -Milliseconds 100
         try{
             $current=Get-Composer $window
-            if(Test-ComposableEmptyState $window $current){return $current}
+            if(Test-ComposerClearPostInput $window $current){return $current}
         }catch{
             # The editor may be transiently unavailable while ChatGPT redraws.
         }
@@ -437,8 +447,14 @@ try{
         }else{
             Assert-ChatGPTForeground $window
             $composer=Clear-ComposerForForcedDelivery $window $composer
-            Assert-ComposableEmptyState $window $composer
-            Write-Output 'COMPOSER_CLEAR=VERIFIED_EMPTY'
+            if(Test-ComposableEmptyState $window $composer){
+                Assert-ComposableEmptyState $window $composer
+                Write-Output 'COMPOSER_CLEAR=VERIFIED_EMPTY'
+            }elseif(Test-ComposerClearPostInput $window $composer){
+                Write-Output 'COMPOSER_CLEAR=INDEPENDENT_UIA_EMPTY_AFTER_KEYBOARD'
+            }else{
+                throw 'COMPOSER_FORCE_CLEAR_NOT_CONFIRMED'
+            }
         }
         Write-Output 'RESULT=COMPOSER_CLEARED_NO_SEND'
         exit 0
