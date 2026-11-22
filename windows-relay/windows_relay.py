@@ -132,7 +132,7 @@ class State:
         self.data.setdefault('last_action',None)
         outbound=self.data.setdefault('outbound_deliveries',{})
         if not isinstance(outbound,dict) or any(not isinstance(k,str) or not isinstance(v,dict) for k,v in outbound.items()): raise RelayError('corrupt outbound delivery state')
-        valid_phases={'READY','SUBMITTING','PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN','ABORTED'}
+        valid_phases={'READY','SUBMITTING','PRE_SUBMIT_FAILED','SUBMITTED','SUBMIT_UNCERTAIN','TEXT_INSERTED','ABORTED'}
         for delivery in outbound.values():
             phase=delivery.get('phase')
             if phase not in valid_phases: raise RelayError('corrupt outbound delivery phase')
@@ -389,6 +389,47 @@ class State:
                 delivery['reconciliation_evidence']='OPERATOR_CONFIRMED_CHATGPT_CONVERSATION_RECEIPT'
             self._mutate_and_save(mutate)
             return copy.deepcopy(delivery)
+
+    def force_clear_unresolved_deliveries(self,request_id:str,holds:dict|None=None):
+        """Operator-requested terminal closure; preserve every execution/result.
+
+        Active SUBMITTING and confirmed SUBMITTED/TEXT_INSERTED deliveries are
+        never modified. Each result closed here remains in outbound history as
+        ABORTED with its prior phase, request ID, attempt count, and hold
+        evidence. Retrying the same request ID is idempotent after a crash.
+        """
+        if not re.fullmatch(r'[0-9a-f]{32}',request_id):
+            raise RelayError('invalid force-clear request ID')
+        if holds is None: holds={}
+        with self.lock:
+            changed=[]
+            def mutate():
+                deliveries=self.data.setdefault('outbound_deliveries',{})
+                stamp=now()
+                for aid,delivery in deliveries.items():
+                    if not isinstance(delivery,dict): continue
+                    if (delivery.get('phase')=='ABORTED'
+                            and delivery.get('force_clear_request_id')==request_id):
+                        changed.append(aid)  # Previous atomic write succeeded.
+                        continue
+                    if delivery.get('phase') not in {'READY','PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN'}:
+                        continue
+                    old=delivery['phase']
+                    delivery['phase']='ABORTED'
+                    delivery['aborted_at']=stamp
+                    delivery['updated_at']=stamp
+                    delivery['force_clear_previous_phase']=old
+                    delivery['force_clear_disposition']='OPERATOR_DISCARDED_UNVERIFIED_DELIVERY'
+                    delivery['force_clear_request_id']=request_id
+                    hold=holds.get(aid)
+                    if isinstance(hold,dict):
+                        delivery['force_clear_hold_evidence']={
+                            k:hold[k] for k in ('stage','reason','held_utc')
+                            if isinstance(hold.get(k),str)
+                        }
+                    changed.append(aid)
+            self._mutate_and_save(mutate)
+            return sorted(changed)
 
     def abort_outbound_delivery(self,aid:str):
         """Terminally cancel a pre-submit delivery without touching execution."""
