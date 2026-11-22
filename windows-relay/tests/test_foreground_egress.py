@@ -140,6 +140,8 @@ class ForegroundResultTests(unittest.TestCase):
         call.assert_called_once()
         self.assertEqual(self.state.outbound_lookup(self.aid)["phase"],
                          "PRE_SUBMIT_FAILED")
+        self.assertEqual(self.state.outbound_lookup(self.aid)["last_sender_error"],
+                         "FOREIGN_RESULT_PATH_MISMATCH")
         self.assertTrue(native.delivery_held(self.aid))
 
     def test_explicit_legacy_force_resend_remains_charged_to_chatgpt_adapter(self):
@@ -318,6 +320,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(record["phase"], "SUBMITTED")
         self.assertEqual(record["attempt_count"], 1)
         self.assertEqual(record["submit_only_attempt_count"], 1)
+        self.assertEqual(record["last_sender_stage"], "CONFIRMED_IN_CONVERSATION")
         self.assertEqual(self.state.lookup(self.aid)["status"], "OK")
 
     def test_send_only_no_target_defers_without_spending_retry_budget(self):
