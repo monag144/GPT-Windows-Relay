@@ -26,6 +26,7 @@ class DeliveryFailureHoldTests(unittest.TestCase):
             "HOME":root,"CONFIG":root/"desktop-control.json",
             "STATE":root/"state.json","STATUS":root/"runtime-status.json",
             "OUTBOX":root/"outbox","DELIVERY_HOLDS":root/"delivery-holds",
+            "RECEIPT_REQUESTS":root/"receipt-reconciliations",
             "LOCK":root/"desktop-runner.lock"
         }.items():
             patch=mock.patch.object(native,name,value)
@@ -190,6 +191,67 @@ class DeliveryFailureHoldTests(unittest.TestCase):
         self.assertNotIn(self.id, current.list_claimable_outbound_ids())
         self.assertEqual(native.get_status()["last_result"], "SUBMITTED")
         self.assertFalse(native.get_status()["delivery_blocked"])
+
+    def test_live_runner_applies_confirmed_receipt_without_retry_or_state_race(self):
+        outbox, receipt = native.outbox_result(self.state,self.id)
+        delivery=self.state.data["outbound_deliveries"][self.id]
+        delivery["phase"]="PRE_SUBMIT_FAILED"
+        delivery["attempt_count"]=2
+        self.state.save()
+        native.hold_failed_delivery(self.id,"SEND_BUTTON_ENABLED",
+                                    "HEARTBEAT_ID_ALREADY_PRESENT_REFUSE_DUPLICATE")
+        hold=native.delivery_hold_path(self.id)
+        original_hold=hold.read_bytes()
+        original_result=self.state.lookup(self.id).copy()
+        with mock.patch.object(native,"runner_active",return_value=True), \
+             mock.patch.object(native.subprocess,"run") as no_send:
+            queued=native.request_confirmed_receipt(self.id,receipt)
+            self.assertEqual(queued,"QUEUED")
+            self.assertEqual(native.request_confirmed_receipt(self.id,receipt),
+                             "ALREADY_QUEUED")
+            self.assertEqual(self.state.outbound_lookup(self.id)["phase"],
+                             "PRE_SUBMIT_FAILED")
+            self.assertEqual(native.reconcile_receipt_requests(self.state),1)
+            self.assertEqual(native.reconcile_receipt_requests(self.state),0)
+        no_send.assert_not_called()
+        self.assertEqual(self.state.outbound_lookup(self.id)["phase"],"SUBMITTED")
+        self.assertEqual(self.state.outbound_lookup(self.id)["attempt_count"],2)
+        self.assertEqual(self.state.lookup(self.id),original_result)
+        self.assertEqual(hold.read_bytes(),original_hold)
+        self.assertTrue(outbox.is_file())
+        self.assertEqual(native.get_status()["last_delivery_stage"],
+                         "OPERATOR_RECEIPT_RECONCILED")
+        self.assertFalse(native.get_status()["delivery_blocked"])
+        self.assertEqual(list(native.RECEIPT_REQUESTS.glob("*.json")),[])
+
+    def test_queued_receipt_rejects_wrong_nonce_without_tampering_with_history(self):
+        _, receipt=native.outbox_result(self.state,self.id)
+        before=native.STATE.read_bytes()
+        with self.assertRaisesRegex(RuntimeError,"BINDING_MISMATCH"):
+            native.request_confirmed_receipt(self.id,
+                "NATIVE-RECEIPT-"+("0"*32))
+        self.assertEqual(native.STATE.read_bytes(),before)
+        self.assertFalse(native.RECEIPT_REQUESTS.is_dir())
+        delivery=self.state.data["outbound_deliveries"][self.id]
+        delivery["phase"]="PRE_SUBMIT_FAILED"
+        self.state.save()
+        native.request_confirmed_receipt(self.id,receipt)
+        request_files=list(native.RECEIPT_REQUESTS.glob("*.json"))
+        self.assertEqual(len(request_files),1)
+        request_files[0].write_text('{"id":"WRONG-ID","receipt":"not-a-nonce"}',
+                                    encoding="utf-8")
+        self.assertEqual(native.reconcile_receipt_requests(self.state),0)
+        self.assertTrue(request_files[0].is_file())
+        self.assertEqual(self.state.outbound_lookup(self.id)["phase"],
+                         "PRE_SUBMIT_FAILED")
+
+    def test_live_receipt_request_cannot_make_unsent_ready_result_submitted(self):
+        _,receipt=native.outbox_result(self.state,self.id)
+        self.assertEqual(self.state.outbound_lookup(self.id)["phase"],"READY")
+        native.request_confirmed_receipt(self.id,receipt)
+        self.assertEqual(native.reconcile_receipt_requests(self.state),0)
+        self.assertEqual(self.state.outbound_lookup(self.id)["phase"],"READY")
+        self.assertTrue(list(native.RECEIPT_REQUESTS.glob("*.json")))
 
     def test_receipt_mismatch_and_running_engine_fail_without_mutation(self):
         _, receipt = native.outbox_result(self.state, self.id)
