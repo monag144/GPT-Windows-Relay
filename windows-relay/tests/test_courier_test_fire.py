@@ -47,7 +47,7 @@ class TestFireTests(unittest.TestCase):
         receipt=fire.fire(self.home,self.ready,sleep=worker,timeout=3)
         self.assertEqual(receipt["result"],"PASS")
         self.assertEqual(receipt["route"],"local-test")
-        self.assertIn("TEST_FIRE",Path(receipt["source_file"]).name.upper())
+        self.assertIn("TEST-FIRE",Path(receipt["source_file"]).name.upper())
         self.assertEqual(receipt["receipt"],"FILE_WRITTEN")
         origin=Path(receipt["source_file"]).read_bytes()
         target=Path(receipt["destination_file"]).read_bytes()
