@@ -52,6 +52,29 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
         self.assertIn("ChatGPT could not be brought to the foreground", HUD)
 
+    def test_force_clear_restored_as_separate_chatgpt_editor_action(self):
+        self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
+        self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
+        self.assertIn('force_abort_btn.grid(row=1,column=1',HUD)
+        self.assertIn('force_command_btn.grid(row=1,column=0',HUD)
+        self.assertIn('force_clear_btn.configure(command=force_clear_composer)',HUD)
+        self.assertIn('force_abort_btn.configure(command=force_abort)',HUD)
+        self.assertIn('native_composer_clear()',HUD)
+        self.assertIn('"-ClearComposerOnly"',HUD)
+        self.assertIn('name="courier-composer-clear",daemon=True',HUD)
+        self.assertIn('Discard the current unsent ChatGPT composer text?',HUD)
+        self.assertIn('No relay packet will be sent, retried',HUD)
+        self.assertIn('force_clear_btn.configure(text="CLEARING…"',HUD)
+        clear_handler=HUD.split('    def force_clear_composer():',1)[1].split('    def force_abort():',1)[0]
+        for forbidden in ('force-delivery','abort-delivery','clear-pending-deliveries',
+                          'release_failed_delivery','SetValue('):
+            self.assertNotIn(forbidden,clear_handler)
+        clear_backend=HUD.split('def native_composer_clear():',1)[1].split('def native_delivery_control(',1)[0]
+        self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',clear_backend)
+        self.assertIn('"-ClearComposerOnly"',clear_backend)
+        self.assertNotIn('"-NativeResultPath"',clear_backend)
+        self.assertNotIn('"-ForceClearComposer"',clear_backend)
+
     def test_native_arm_and_big_go_preserve_original_hud_controls(self):
         self.assertIn("'native_armed':armed, 'native_off':off",HUD)
         self.assertIn('start_btn.configure(text="ARMED" if armed else "ARM"',HUD)
