@@ -164,7 +164,7 @@ def go() -> int:
     # singleton continues admitting NEW instructions. A GO readiness check
     # must distinguish those facts without releasing the held result.
     last_action=report.get("last_action")
-    if (phase=="DELIVERY_BLOCKED" and report.get("delivery_blocked")
+    if (phase in {"DELIVERY_BLOCKED", "FORWARDING_NO_CHATGPT"} and report.get("delivery_blocked")
             and not report.get("runner_error_type")
             and report.get("last_result")=="PRE_SUBMIT_FAILED"
             and isinstance(last_action,str) and last_action
