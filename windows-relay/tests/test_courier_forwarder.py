@@ -57,7 +57,8 @@ class TextForwarderTests(unittest.TestCase):
         original = "first line\nsecond line\t☃\n"
         (self.src / "sample.txt").write_bytes(original.encode("utf-8"))
         result = f.tick(self.home, enabled=True)
-        self.assertEqual(result, {"active": True, "forwarded": 1, "held": 0})
+        self.assertEqual(result, {"active": True, "forwarded": 1, "held": 0,
+                                  "route_errors": 0})
         outputs = list(self.dst.glob("*.txt"))
         self.assertEqual(len(outputs), 1)
         self.assertEqual(outputs[0].read_bytes(), original.encode("utf-8"))
@@ -110,6 +111,26 @@ class TextForwarderTests(unittest.TestCase):
         result = f.tick(self.home, enabled=True)
         self.assertEqual(result["forwarded"], 0)
         self.assertEqual(list(self.dst.iterdir()), [])
+
+    def test_unavailable_source_does_not_block_independent_route(self):
+        missing=Path(self.temp.name)/"app-not-started"
+        other=Path(self.temp.name)/"second-input"
+        other.mkdir()
+        (other/"new.txt").write_text("available", encoding="utf-8")
+        self.config()
+        raw=json.loads((self.home/"courier-forwarding.json").read_text())
+        raw["routes"].append({
+            "id":"offline-app",
+            "source":{"type":"directory","path":str(missing)},
+            "destination":{"type":"directory","path":str(self.dst)}
+        })
+        raw["routes"][0]["source"]["path"]=str(other)
+        (self.home/"courier-forwarding.json").write_text(
+            json.dumps(raw),encoding="utf-8")
+        result=f.tick(self.home,enabled=True)
+        self.assertEqual(result["forwarded"],1)
+        self.assertEqual(result["route_errors"],1)
+        self.assertEqual(next(self.dst.glob("*.txt")).read_text(),"available")
 
     def test_output_inside_any_source_tree_is_refused_before_processing(self):
         self.config({"type": "directory", "path": str(self.src / "out")})
