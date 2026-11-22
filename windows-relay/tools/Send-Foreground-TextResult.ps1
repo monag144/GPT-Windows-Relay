@@ -569,7 +569,14 @@ try{
     $sendBefore=Find-SendButton $target
     if(Test-EditorContainsMarker $target $NativeReceiptMarker){
         Write-Output 'SENDER_STAGE=RESULT_ALREADY_IN_EDIT_FIELD'
-        Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
+        if(Test-ChatGPTSubmissionTarget $target){
+            # A restored unsent ChatGPT draft is NOT a delivered message.
+            # Recovery can only submit it after a strict saved-frame check.
+            Write-Output 'SENDER_STAGE=CHAT_DRAFT_PENDING_SEND'
+            Write-Output 'RESULT=CHAT_SEND_PENDING'
+        }else{
+            Write-Output 'RESULT=TEXT_INSERTED_VERIFIED'
+        }
         exit 0
     }
     # When a chat has an enabled Send control BEFORE our insertion, it
