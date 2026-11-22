@@ -142,7 +142,10 @@ class CourierCoordinatorTests(unittest.TestCase):
         with mock.patch.object(courier,"IS_WINDOWS",True), \
              mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
              mock.patch("desktop_native_relay.launch_runner_if_absent") as activate, \
-             mock.patch("desktop_native_relay.runner_active",return_value=True), \
+             mock.patch("desktop_native_relay.get_status",return_value={
+                 "native_running":True,"native_armed":True,"native_off":False,
+                 "phase":"IDLE","delivery_blocked":False,"runner_error_type":None
+             }), \
              mock.patch.object(courier.subprocess,"run") as no_hud_reconcile, \
              mock.patch("builtins.print") as output:
             self.assertEqual(courier.go(),0)
@@ -150,6 +153,45 @@ class CourierCoordinatorTests(unittest.TestCase):
         no_hud_reconcile.assert_not_called()
         self.assertIn("COURIER_GO=NATIVE_RUNTIME_READY",
                       [str(x.args[0]) for x in output.call_args_list])
+
+    def test_go_does_not_claim_destination_ready_during_baseline(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        ready={"native_running":True,"native_armed":True,"native_off":False,
+               "phase":"WAITING_FOR_CHATGPT_APP","delivery_blocked":False,"runner_error_type":None}
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent") as launch, \
+             mock.patch("desktop_native_relay.get_status",return_value=ready), \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(courier.go(),0)
+        launch.assert_called_once()
+        messages=[str(x.args[0]) for x in output.call_args_list]
+        self.assertIn("COURIER_GO=WAITING_FOR_DESTINATION",messages)
+        self.assertNotIn("COURIER_GO=NATIVE_RUNTIME_READY",messages)
+
+    def test_go_refuses_blocked_delivery_despite_running_engine(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        report={"native_running":True,"native_armed":True,"native_off":False,
+                "phase":"DELIVERY_BLOCKED","delivery_blocked":True,"runner_error_type":None}
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent"), \
+             mock.patch("desktop_native_relay.get_status",return_value=report), \
+             mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError,"ENGINE_OR_DELIVERY_BLOCKED"):
+                courier.go()
+
+    def test_go_detects_policy_change_after_launch_without_resend(self):
+        courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
+        report={"native_running":True,"native_armed":False,"native_off":True,
+                "phase":"IDLE","delivery_blocked":False,"runner_error_type":None}
+        with mock.patch.object(courier,"IS_WINDOWS",True), \
+             mock.patch("desktop_native_relay.configuration",return_value={"off":False,"armed":True}), \
+             mock.patch("desktop_native_relay.launch_runner_if_absent"), \
+             mock.patch("desktop_native_relay.get_status",return_value=report), \
+             mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError,"POLICY_CHANGED_WHILE_ACTIVATING"):
+                courier.go()
 
     def test_go_respects_off_and_disarmed_without_launching(self):
         courier.PROFILE.write_text('{"version":1,"runtime":"native-desktop"}', encoding="utf-8")
