@@ -363,9 +363,15 @@ function Test-ExactOwnDraft($target,[string]$marker){
     # matching unique receipt must be visible in the same writable editor.
     try{
         $body=Read-EditorText $target
-        return ($body.Contains('[GPT_WINDOWS_RESULT]') -and
-                $body.Contains('[/GPT_WINDOWS_RESULT]') -and
-                $body.Contains($marker))
+        if(-not $body.Contains($marker) -or
+           -not $body.Contains('[GPT_WINDOWS_RESULT]') -or
+           -not $body.Contains('[/GPT_WINDOWS_RESULT]')){return $false}
+        # A nonce embedded in a user's mixed/edited draft isn't permission
+        # to hit Enter. Match the exact saved frame, permitting only line
+        # wrapping/whitespace normalization of the UIA representation.
+        $observed=($body -replace '\s+',' ').Trim()
+        $expected=($script:wire -replace '\s+',' ').Trim()
+        return ($observed -ceq $expected)
     }catch{return $false}
 }
 
