@@ -277,8 +277,11 @@ class TextForwarderTests(unittest.TestCase):
     def test_native_runner_routes_before_chatgpt_scanner(self):
         native = (ROOT / "desktop_native_relay.py").read_text(encoding="utf-8")
         scan = native.index("candidates = read_scan(require_app=True)")
-        forward = native.index("forward_report = forwarder.tick(HOME, enabled=True)")
+        forward = native.index("report = forwarder.tick(HOME, enabled=True)")
+        worker = native.index("threading.Thread(target=forward_worker")
         self.assertLess(forward, scan)
+        self.assertLess(worker, scan)
+        self.assertIn("name=\"command-courier-text-forwarder\"", native)
         self.assertIn('phase = ("FORWARDING_NO_CHATGPT" if forward_report["active"]', native)
         self.assertIn("if cfg[\"armed\"] and cfg[\"auto_send\"] and not stop_requested()", native)
         self.assertIn("NATIVE_TEXT_ROUTE_ERROR=", native)
