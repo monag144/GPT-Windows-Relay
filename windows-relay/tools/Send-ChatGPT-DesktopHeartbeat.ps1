@@ -201,6 +201,22 @@ function Test-DisabledSendControlPresent($window){
     }
     return ($found -ge 1)
 }
+# UIA can expose visible placeholder text through ValuePattern while its
+# independent TextPattern document range is genuinely empty. This is the only
+# fallback when the app does not publish a disabled named Send control.
+# Never infer emptiness from placeholder wording alone, TextPattern absence,
+# a failed read, or a merely disabled/unfocused editor.
+function Test-ComposerTextPatternEmpty($composer){
+    $textPattern=$null
+    try{
+        if(-not $composer.node.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern,[ref]$textPattern)){
+            return $false
+        }
+        if($null -eq $textPattern){return $false}
+        $text=[string]$textPattern.DocumentRange.GetText(-1)
+        return ($text.Length -eq 0)
+    }catch{return $false}
+}
 # A UIA Value can contain the visible placeholder instead of actual input.
 # Keep the state check pure so calls from a function returning a composer do
 # not accidentally return diagnostic strings as part of that composer.
@@ -210,7 +226,12 @@ function Test-ComposableEmptyState($window,$composer){
     $trimmed=$value.Trim()
     $looksLikeObservedPlaceholder=($trimmed -ceq 'Ask ChatGPT' -and $value.Length -le 16)
     if(-not $looksLikeObservedPlaceholder){return $false}
-    return (Test-DisabledSendControlPresent $window)
+    if(Test-DisabledSendControlPresent $window){return $true}
+    # Require an independent, exact empty TextPattern AND no enabled named
+    # Send control. If the provider exposes placeholder text in both patterns,
+    # refuse rather than risking a real draft that says "Ask ChatGPT".
+    if(-not (Test-ComposerTextPatternEmpty $composer)){return $false}
+    return ($null -eq (Get-EnabledSend $window))
 }
 function Assert-ComposableEmptyState($window,$composer){
     $value=[string]$composer.pattern.Current.Value
@@ -223,8 +244,16 @@ function Assert-ComposableEmptyState($window,$composer){
     if(-not $looksLikeObservedPlaceholder){
         throw 'COMPOSER_NOT_EMPTY_REFUSE_TO_OVERWRITE_USER_DRAFT'
     }
-    if(-not (Test-DisabledSendControlPresent $window)){
-        throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
+    $disabledNamedSend=Test-DisabledSendControlPresent $window
+    if(-not $disabledNamedSend){
+        if(-not (Test-ComposerTextPatternEmpty $composer)){
+            throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
+        }
+        if($null -ne (Get-EnabledSend $window)){
+            throw 'COMPOSER_PLACEHOLDER_AMBIGUOUS_SEND_STATE_REFUSE'
+        }
+        Write-Output 'COMPOSER_BASELINE=PLACEHOLDER_WITH_EMPTY_TEXTPATTERN_NO_ENABLED_SEND'
+        return
     }
     if($composer.node.Current.HasKeyboardFocus){
         Write-Output 'COMPOSER_BASELINE=FOCUSED_PLACEHOLDER_WITH_DISABLED_SEND'
@@ -305,7 +334,13 @@ $window=$null
 try{
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
-    if($NativeResultPath){
+    if($ProbeComposerOnly){
+        # Diagnostics must not run the 5-second command scanner or report the
+        # expected absent smoke canary as a spurious delivery failure.
+        $status='NOT_APPLICABLE'
+        $level=0
+        Write-Output 'DETECTION=READ_ONLY_UIA_PROBE'
+    }elseif($NativeResultPath){
         $status='NATIVE_RESULT'
         $level=0
         Write-Output 'DETECTION=NATIVE_RESULT'
@@ -377,6 +412,8 @@ try{
         Write-Output ('PROBE_DISABLED_SEND='+$disabledSend)
         Write-Output ('PROBE_ENABLED_SEND='+$enabledSend)
         Write-Output ('PROBE_UNNAMED_BUTTONS_NEAR_COMPOSER='+$unnamedNearby)
+        Write-Output ('PROBE_INDEPENDENT_TEXTPATTERN_EMPTY='+(Test-ComposerTextPatternEmpty $probe))
+        Write-Output ('PROBE_EMPTY_VERIFIED='+(Test-ComposableEmptyState $window $probe))
         Write-Output 'RESULT=COMPOSER_PROBE_COMPLETED_NO_SEND'
         exit 0
     }
@@ -541,9 +578,7 @@ try{
             $doc=Get-TargetDocument $window $canary
             $composer=Get-Composer $window
             $valueAfter=[string]$composer.pattern.Current.Value
-            $composerCleared=($valueAfter.Length -eq 0 -or
-                ($valueAfter.Trim() -ceq 'Ask ChatGPT' -and
-                 (Test-DisabledSendControlPresent $window)))
+            $composerCleared=(Test-ComposableEmptyState $window $composer)
             if((Has-Marker $doc $id) -and $composerCleared){
                 $confirmed=$true
                 break
