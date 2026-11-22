@@ -223,21 +223,25 @@ class ForegroundResultTests(unittest.TestCase):
             "Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'\n    }\n    if(",
             SENDER)
 
-    def test_chat_send_enter_only_after_unique_enabled_send_control(self):
-        self.assertIn("public static uint TypeEnter()", SENDER)
-        self.assertIn("keys[0].U.ki.wVk=0x0D", SENDER)
+    def test_chat_send_button_requires_full_saved_draft_and_never_enters(self):
+        # Even the FIRST delivery must click ChatGPT's explicit Send button:
+        # a typed result alone is not a submission and Enter is not recovery.
+        self.assertNotIn("TypeEnter()", SENDER)
         self.assertIn("function Find-SendButton(", SENDER)
         self.assertIn("$send=if($allowSubmit){Find-SendButton $target}else{$null}", SENDER)
         self.assertIn("if($null -eq $send){", SENDER)
-        self.assertIn("RESULT=TEXT_INSERTED_VERIFIED", SENDER)
-        self.assertIn("if($kind -eq 'ControlType.Edit'){", SENDER)
-        self.assertIn("[CourierForegroundInput]::TypeEnter() -ne [uint32]2", SENDER)
-        self.assertIn("UIA_GUARDED_SUBMIT_ENTER_BEGIN", SENDER)
-        self.assertIn("SENDER_STAGE=SUBMIT_KEY_COMPLETED", SENDER)
+        self.assertIn("RESULT=CHAT_SEND_PENDING", SENDER)
+        self.assertIn("Test-ExactOwnDraft $target $NativeReceiptMarker", SENDER)
+        self.assertIn("SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME", SENDER)
+        self.assertIn("Test-ConversationReceiptNotComposer $target $NativeReceiptMarker", SENDER)
+        self.assertIn("SENDER_STAGE=CHAT_TRANSCRIPT_ALREADY_HAS_RECEIPT", SENDER)
         self.assertLess(SENDER.index("if($null -eq $send){"),
-                        SENDER.index("if($kind -eq 'ControlType.Edit'){"))
+                        SENDER.index("SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME"))
+        self.assertLess(SENDER.index("CHAT_DRAFT_WAITING_FOR_EXACT_FRAME"),
+                        SENDER.index("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN"))
         self.assertIn("FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW", SENDER)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN", SENDER)
+        self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED", SENDER)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
 
     def test_electron_typing_recognized_without_stale_value_pattern(self):
@@ -253,12 +257,12 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("Test-EditorContainsMarker $target $NativeReceiptMarker){continue}", SENDER)
         self.assertIn("FOREGROUND_INSERTION_NOT_VERIFIED", SENDER)
 
-    def test_guarded_enter_submitted_receipt_updates_native_journal(self):
+    def test_guarded_click_submitted_receipt_updates_native_journal(self):
         which, process = self.sender(
             "SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED\n"
             "SENDER_STAGE=EDITOR_SEND_ENABLEMENT_VERIFIED\n"
-            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
-            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "SENDER_STAGE=CLICK_BEGIN\n"
+            "UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN\n"
             "SENDER_STAGE=CONFIRMED_IN_CONVERSATION\n"
             "RESULT=HEARTBEAT_SUBMITTED\n"
         )
@@ -271,10 +275,10 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(native.get_status()["last_delivery_stage"],
                          "CONFIRMED_IN_CONVERSATION")
 
-    def test_guarded_enter_unconfirmed_is_not_replayed(self):
+    def test_guarded_click_unconfirmed_is_not_replayed(self):
         which, process = self.sender(
-            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
-            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "SENDER_STAGE=CLICK_BEGIN\n"
+            "UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN\n"
             "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n", 5
         )
         with which, process as invoked:
