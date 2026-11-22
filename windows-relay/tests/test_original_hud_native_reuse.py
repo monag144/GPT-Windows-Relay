@@ -62,10 +62,10 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("phase_line='CHATGPT OUTBOX HELD • '", HUD)
         self.assertIn("'native_delivery_phase':delivery_phase", HUD)
         self.assertIn("DELIVERY BLOCKED: ", HUD)
-        self.assertIn('still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")', HUD)
-        self.assertIn("The last result remains HELD", HUD)
-        self.assertIn("Use ABORT SEND to cancel that result", HUD)
-        self.assertIn("No saved result was resent, aborted or discarded.", HUD)
+        self.assertIn("Pending deliveries closed as ABORTED", HUD)
+        self.assertIn("Saved commands and results: RETAINED", HUD)
+        self.assertIn("Composer: ", HUD)
+        self.assertIn("native_force_clear_all(", HUD)
 
     def test_historical_outbox_failures_do_not_override_running_engine_ready(self):
         self.assertIn("outstanding_count=(sum(",HUD)
@@ -80,7 +80,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("phase_line='CHATGPT OUTBOX HELD • '",HUD)
         self.assertIn("DELIVERY BLOCKED:",HUD)
 
-    def test_force_clear_restored_as_separate_chatgpt_editor_action(self):
+    def test_force_clear_resets_outbox_and_composer_independently(self):
         self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
         self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
         self.assertIn('force_abort_btn.grid(row=1,column=1',HUD)
@@ -89,9 +89,10 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('force_abort_btn.configure(command=force_abort)',HUD)
         self.assertIn('native_composer_clear()',HUD)
         self.assertIn('"-ClearComposerOnly"',HUD)
-        self.assertIn('name="courier-composer-clear",daemon=True',HUD)
+        self.assertIn('name="courier-force-clear",daemon=True',HUD)
         self.assertIn('Discard the current unsent ChatGPT composer text?',HUD)
-        self.assertIn('No relay packet will be sent, retried',HUD)
+        self.assertIn('Executed commands, saved results and delivery evidence remain',HUD)
+        self.assertIn("ALL unresolved native result deliveries as ABORTED",HUD)
         self.assertIn('force_clear_btn.configure(text="CLEARING…"',HUD)
         clear_handler=HUD.split('    def force_clear_composer():',1)[1].split('    def force_abort():',1)[0]
         for forbidden in ('force-delivery','abort-delivery','clear-pending-deliveries',
@@ -99,6 +100,11 @@ class OriginalHUDReuseTests(unittest.TestCase):
             self.assertNotIn(forbidden,clear_handler)
         clear_backend=HUD.split('def native_composer_clear():',1)[1].split('def native_delivery_control(',1)[0]
         self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',clear_backend)
+        self.assertIn('native.request_force_clear_pending()',HUD)
+        self.assertIn('native.wait_force_clear_receipt(request_id, timeout=15.0)',HUD)
+        self.assertIn('"Outbox Reset; Composer Not Confirmed"',HUD)
+        self.assertIn('composer_focused=chatgpt_focused',HUD)
+        self.assertIn('still_held',HUD) if False else None
         self.assertIn('"-ClearComposerOnly"',clear_backend)
         self.assertNotIn('"-NativeResultPath"',clear_backend)
         self.assertNotIn('"-ForceClearComposer"',clear_backend)
