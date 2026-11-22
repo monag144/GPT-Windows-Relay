@@ -126,10 +126,39 @@ class DesktopHeartbeatTests(unittest.TestCase):
         self.assertIn("if(Test-ComposableEmptyState $window $composer){return $composer}", function)
         self.assertIn("if(Test-ComposableEmptyState $window $current){return $current}", function)
         self.assertLess(function.index("if(Test-ComposableEmptyState $window $composer)"),
-                        function.index("$composer.pattern.SetValue('')"))
+                        function.index("[DesktopHeartbeatForeground]::ClearFocusedComposer()"))
+        self.assertIn("COMPOSER_CLEAR_NOT_FOCUSED_REFUSE_KEYBOARD", function)
+        self.assertIn("COMPOSER_CLEAR_KEYBOARD_INCOMPLETE=", function)
+        self.assertIn("if($sent -ne 6)", function)
+        self.assertIn("COMPOSER_FORCE_CLEAR_NOT_CONFIRMED", function)
+        self.assertNotIn("$composer.pattern.SetValue('')", function)
         self.assertNotIn("Write-Output", function)
         self.assertIn("FORCE_CLEAR_REQUIRES_SAVED_NATIVE_RESULT", SOURCE)
         self.assertIn("COMPOSER_FORCED_CLEAR=COMPLETED", SOURCE)
+
+    def test_explicit_force_clear_uses_real_focused_edit_and_no_send(self):
+        cls=SOURCE.split("public static uint ClearFocusedComposer() {",1)[1].split("\n    }",1)[0]
+        for marker in ("VirtualKey(VK_CONTROL,false)", "VirtualKey(VK_A,false)",
+                       "VirtualKey(VK_A,true)", "VirtualKey(VK_CONTROL,true)",
+                       "VirtualKey(VK_BACK,false)", "VirtualKey(VK_BACK,true)"):
+            self.assertIn(marker, cls)
+        self.assertIn("SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(INPUT)))",cls)
+        self.assertNotIn("VK_RETURN",cls)
+        self.assertNotIn("mouse_event(",cls)
+        clear=SOURCE.split("function Clear-ComposerForForcedDelivery($window,$composer){",1)[1].split(
+            "# UIA ValuePattern may normalize",1)[0]
+        self.assertIn("Assert-ChatGPTForeground $window",clear)
+        self.assertIn("$composer.node.SetFocus()",clear)
+        self.assertIn("HasKeyboardFocus",clear)
+        self.assertIn("ClearFocusedComposer()",clear)
+        self.assertIn("Test-ComposableEmptyState $window $current",clear)
+        self.assertNotIn("SetValue(",clear)
+        clear_only=SOURCE.split("if($ClearComposerOnly){",SOURCE.index(
+            "SENDER_STAGE=APP_WINDOW_FOUND"))[1].split("if($ProbeComposerOnly){",1)[0]
+        self.assertIn("COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY",clear_only)
+        self.assertIn("COMPOSER_CLEAR_RUNTIME_STATUS_UNREADABLE",clear_only)
+        self.assertIn("RESULT=COMPOSER_CLEARED_NO_SEND",clear_only)
+        self.assertNotIn("Set-ComposerTextBySendInput",clear_only)
 
     def test_preclick_failure_preserves_own_unsent_draft_without_erasure(self):
         # Previously Try-ClearOwnDraft silently called ValuePattern.SetValue('')
