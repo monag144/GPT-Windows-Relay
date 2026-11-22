@@ -80,6 +80,19 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('go_btn.configure(text="GO…" if go_state["busy"] else',HUD)
         self.assertIn('go_results.put(("waiting",None))',HUD)
 
+    def test_recovery_buttons_follow_actual_last_delivery_phase(self):
+        self.assertIn("'native_delivery_phase':delivery_phase",HUD)
+        self.assertIn("delivery_phase=snap.get('native_delivery_phase')",HUD)
+        self.assertIn("delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled'",HUD)
+        self.assertIn("delivery_phase in ('READY','PRE_SUBMIT_FAILED')",HUD)
+        self.assertNotIn("force_command_btn.configure(state='normal');",HUD)
+
+    def test_details_panel_is_not_rewritten_when_content_unchanged(self):
+        self.assertIn('details_cache={"text":None}',HUD)
+        self.assertIn('if value==details_cache["text"]:return',HUD)
+        self.assertLess(HUD.index('if value==details_cache["text"]:return'),
+                        HUD.index('details.configure(state="normal"); details.delete('))
+
     def test_hud_reconcile_reuses_existing_visible_process_until_source_changes(self):
         for marker in (
             "Get-Item -LiteralPath $original",
