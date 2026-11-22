@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -523,24 +524,34 @@ def runner():
         # Establish the first baseline only after its UIA document is ready.
         seen = set()
         baseline_ready = False
-        while not configuration()["off"]:
-            # Transport-neutral routes run BEFORE the ChatGPT UI scanner.
-            # They keep forwarding when ChatGPT is closed, its editor has a
-            # draft, or a prior ChatGPT outbound result remains held.
-            forward_report = {"active": False, "forwarded": 0, "held": 0}
-            cfg = configuration()
-            if cfg["armed"] and cfg["auto_send"] and not stop_requested():
+        # This worker has its own journal lock and does not use ChatGPT UIA.
+        # Slow API responses cannot delay the scanner or other native actions.
+        forward_activity = {"active": False}
+        def forward_worker():
+            while True:
                 try:
-                    forward_report = forwarder.tick(HOME, enabled=True)
-                    if (forward_report["forwarded"] or forward_report["held"]
-                            or forward_report.get("route_errors")):
-                        note("NATIVE_TEXT_ROUTED=" + str(forward_report["forwarded"]),
-                             "TEXT_HELD=" + str(forward_report["held"]),
-                             "SOURCE_ERRORS=" + str(forward_report.get("route_errors", 0)))
+                    policy = configuration()
+                    if policy["off"]:
+                        return
+                    if policy["armed"] and policy["auto_send"]:
+                        report = forwarder.tick(HOME, enabled=True)
+                        forward_activity["active"] = report["active"]
+                        if (report["forwarded"] or report["held"]
+                                or report.get("route_errors")):
+                            note("NATIVE_TEXT_ROUTED=" + str(report["forwarded"]),
+                                 "TEXT_HELD=" + str(report["held"]),
+                                 "SOURCE_ERRORS=" + str(report.get("route_errors", 0)))
+                    else:
+                        forward_activity["active"] = False
                 except (forwarder.ForwardingError, OSError, ValueError) as exc:
-                    # A bad route is isolated from native packet execution.
+                    forward_activity["active"] = False
                     note("NATIVE_TEXT_ROUTE_ERROR=" + type(exc).__name__,
                          str(exc)[:120])
+                time.sleep(1)
+        threading.Thread(target=forward_worker, name="command-courier-text-forwarder",
+                         daemon=True).start()
+        while not configuration()["off"]:
+            forward_report = dict(forward_activity)
             runner_stage = "SCANNING_CHATGPT_APP"
             try:
                 candidates = read_scan(require_app=True)
