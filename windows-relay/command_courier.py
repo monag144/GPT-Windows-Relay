@@ -160,6 +160,17 @@ def go() -> int:
     if report.get("native_off") or not report.get("native_armed"):
         raise RuntimeError("COURIER_GO_POLICY_CHANGED_WHILE_ACTIVATING")
     phase = str(report.get("phase") or "UNKNOWN").upper()
+    # An earlier pre-click outbound result can be held while this same
+    # singleton continues admitting NEW instructions. A GO readiness check
+    # must distinguish those facts without releasing the held result.
+    last_action=report.get("last_action")
+    if (phase=="DELIVERY_BLOCKED" and report.get("delivery_blocked")
+            and not report.get("runner_error_type")
+            and report.get("last_result")=="PRE_SUBMIT_FAILED"
+            and isinstance(last_action,str) and last_action
+            and native.delivery_held(last_action)):
+        print("COURIER_GO=EXECUTION_READY_DELIVERY_HELD")
+        return 0
     if report.get("runner_error_type") or phase in {
         "ERROR", "DELIVERY_BLOCKED", "DELIVERY_UNCERTAIN"
     } or report.get("delivery_blocked"):
