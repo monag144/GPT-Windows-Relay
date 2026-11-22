@@ -65,8 +65,9 @@ function Get-ForegroundEditable {
     $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
     $node=$editor
     $inside=$false
+    $windowId=($window.GetRuntimeId() -join ',')
     for($i=0;$i -lt 60 -and $null -ne $node;$i++){
-        if([System.Windows.Automation.Automation]::Compare($node,$window)){
+        if(($node.GetRuntimeId() -join ',') -ceq $windowId){
             $inside=$true
             break
         }
@@ -200,7 +201,10 @@ try{
         throw 'FOREIGN_RESULT_ID_RECEIPT_MISMATCH'
     }
     Assert-RunnerAllowed
-    $target=Get-ForegroundEditable
+    # An unavailable or non-UIA window is simply not an eligible text field.
+    # The result stays queued; it must not become a permanent failed delivery.
+    try{$target=Get-ForegroundEditable}
+    catch{$target=$null}
     if($null -eq $target){
         Write-Output 'SENDER_STAGE=AWAITING_FOREGROUND_TEXT_FIELD'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
@@ -311,7 +315,9 @@ try{
     Write-Output ('HEARTBEAT_ERROR='+$reason)
     if(-not $inputStarted){
         if($reason -in @('FOREGROUND_TARGET_CHANGED_DURING_INPUT',
-                        'FOCUSED_EDITOR_CHANGED_DURING_INPUT')){
+                        'FOCUSED_EDITOR_CHANGED_DURING_INPUT',
+                        'OPERATOR_AUTO_SEND_NOT_ARMED',
+                        'OPERATOR_STOP_ACTIVE')){
             Write-Output 'RESULT=FOREGROUND_NO_TARGET'
             exit 0
         }
