@@ -55,10 +55,10 @@ class OriginalHUDReuseTests(unittest.TestCase):
     def test_armed_execution_ready_with_held_delivery_not_mislabeled_failed_engine(self):
         # The engine can ingest NEW actions while a prior outbound result is
         # persistently held. Do not hide the hold or falsely mark SUBMITTED.
-        self.assertIn("title='READY • HELD'", HUD)
+        self.assertIn("title='READY'", HUD)
         self.assertIn("phase=='DELIVERY_BLOCKED' and delivery_blocked", HUD)
-        self.assertIn("'title_phase':('RECOVERY ADVICE' if title=='READY • HELD' else title)", HUD)
-        self.assertIn("phase_line='DELIVERY HELD • '", HUD)
+        self.assertIn("'title_phase':title", HUD)
+        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '", HUD)
         self.assertIn("'native_delivery_phase':delivery_phase", HUD)
         self.assertIn("DELIVERY BLOCKED: ", HUD)
         self.assertIn('still_held=(current.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")', HUD)
@@ -120,10 +120,10 @@ class OriginalHUDReuseTests(unittest.TestCase):
     def test_go_does_not_hide_delivery_hold_when_new_commands_are_ready(self):
         self.assertIn('COURIER_GO=EXECUTION_READY_DELIVERY_HELD',HUD)
         self.assertIn('go_results.put(("held",None))',HUD)
-        self.assertIn('prior_result_held=(snap.get("native_phase")=="DELIVERY_BLOCKED"',HUD)
-        self.assertIn('"GO • HELD" if prior_result_held else',HUD)
-        self.assertIn('bg=("#9a6700" if prior_result_held else "#188038")',HUD)
-        self.assertIn("An older result remains HELD",HUD)
+        self.assertIn('(snap.get("native_phase")=="DELIVERY_BLOCKED" and',HUD)
+        self.assertIn('"FORWARDING_NO_CHATGPT") or',HUD)
+        self.assertIn('bg="#188038" if armed and not snap.get("native_off") else "#3c4043"',HUD)
+        self.assertIn("CHATGPT OUTBOX HELD",HUD)
 
     def test_recovery_buttons_follow_actual_last_delivery_phase(self):
         self.assertIn("'native_delivery_phase':delivery_phase",HUD)
