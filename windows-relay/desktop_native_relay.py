@@ -39,6 +39,7 @@ OUTBOX = HOME / "outbox"
 STATUS = HOME / "runtime-status.json"
 LOCK = HOME / "desktop-runner.lock"
 DELIVERY_HOLDS = HOME / "delivery-holds"
+RECEIPT_REQUESTS = HOME / "receipt-reconciliations"
 SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
 MAX_TRANSPORT_BYTES = 100_000
 
@@ -367,15 +368,8 @@ def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
     return path, marker
 
 
-def acknowledge_confirmed_receipt(aid: str, receipt: str):
-    """Reconcile an already received native result; never send or execute.
-
-    Require the operator to stop the singleton first.  This prevents a second
-    State instance racing against the live runner's in-memory journal.
-    Historical hold markers and saved result/outbox evidence are retained.
-    """
-    if runner_active() or not stop_requested():
-        raise RuntimeError("NATIVE_RECEIPT_ACK_REQUIRES_STOPPED_DISARMED_RUNNER")
+def _verify_saved_receipt_binding(aid: str, receipt: str):
+    """Exact saved-result binding; never infer delivery from a bare action ID."""
     if not wr.ID_RE.fullmatch(aid):
         raise RuntimeError("NATIVE_RECEIPT_ACK_ACTION_INVALID")
     if not re.fullmatch(r"NATIVE-RECEIPT-[0-9a-f]{32}", receipt):
@@ -394,6 +388,75 @@ def acknowledge_confirmed_receipt(aid: str, receipt: str):
     if (not isinstance(payload, dict) or payload.get("id") != aid
             or payload.get("native_delivery_receipt") != receipt):
         raise RuntimeError("NATIVE_RECEIPT_ACK_BINDING_MISMATCH")
+
+
+def request_confirmed_receipt(aid: str, receipt: str):
+    """Queue a known received result for the ACTIVE runner to reconcile.
+
+    The CLI never opens its own writable State while the runner is active,
+    never resends the result, and never clears the operator's composer.
+    """
+    _verify_saved_receipt_binding(aid, receipt)
+    RECEIPT_REQUESTS.mkdir(parents=True, exist_ok=True)
+    target = RECEIPT_REQUESTS / wr.safe_result_filename(aid)
+    if target.is_file():
+        current = json.loads(target.read_text(encoding="utf-8"))
+        if current.get("id") != aid or current.get("receipt") != receipt:
+            raise RuntimeError("NATIVE_RECEIPT_ACK_CONFLICTING_REQUEST")
+        return "ALREADY_QUEUED"
+    write_json(target, {"id": aid, "receipt": receipt, "queued_utc": utc()})
+    note("NATIVE_RECEIPT_ACK=QUEUED", "ID=" + aid)
+    return "QUEUED"
+
+
+def reconcile_receipt_requests(state: wr.State):
+    """Apply explicit operator-confirmed receipts using the runner's State."""
+    if not RECEIPT_REQUESTS.is_dir():
+        return 0
+    completed = 0
+    for path in sorted(RECEIPT_REQUESTS.glob("*.json")):
+        try:
+            if path.is_symlink():
+                raise RuntimeError("NATIVE_RECEIPT_ACK_SYMLINK_REFUSED")
+            request = json.loads(path.read_text(encoding="utf-8"))
+            aid = request.get("id")
+            receipt = request.get("receipt")
+            if not isinstance(aid, str) or not isinstance(receipt, str):
+                raise RuntimeError("NATIVE_RECEIPT_ACK_REQUEST_INVALID")
+            if path.name != wr.safe_result_filename(aid):
+                raise RuntimeError("NATIVE_RECEIPT_ACK_FILENAME_MISMATCH")
+            _verify_saved_receipt_binding(aid, receipt)
+            before = state.outbound_lookup(aid)
+            if not before:
+                raise RuntimeError("NATIVE_RECEIPT_ACK_DELIVERY_NOT_FOUND")
+            if before.get("phase") == "SUBMITTED":
+                if before.get("reconciled_receipt") != receipt:
+                    raise RuntimeError("NATIVE_RECEIPT_ACK_ALREADY_SUBMITTED_DIFFERENTLY")
+            else:
+                state.reconcile_outbound_receipt(aid, receipt)
+            status_update(phase="IDLE", last_action=aid, last_result="SUBMITTED",
+                          delivery_blocked=False, last_delivery_error=None,
+                          last_delivery_stage="OPERATOR_RECEIPT_RECONCILED")
+            path.unlink()
+            note("NATIVE_RECEIPT_ACK=RECONCILED", "ID=" + aid)
+            completed += 1
+        except (OSError, ValueError, RuntimeError, wr.RelayError) as exc:
+            # Preserve the request and saved evidence for investigation. The
+            # problem must not prevent the runner from processing other work.
+            note("NATIVE_RECEIPT_ACK_HELD=" + type(exc).__name__)
+    return completed
+
+
+def acknowledge_confirmed_receipt(aid: str, receipt: str):
+    """Reconcile an already received native result; never send or execute.
+
+    Require the operator to stop the singleton first.  This prevents a second
+    State instance racing against the live runner's in-memory journal.
+    Historical hold markers and saved result/outbox evidence are retained.
+    """
+    if runner_active() or not stop_requested():
+        raise RuntimeError("NATIVE_RECEIPT_ACK_REQUIRES_STOPPED_DISARMED_RUNNER")
+    _verify_saved_receipt_binding(aid, receipt)
     state = wr.State(STATE)
     before = state.outbound_lookup(aid)
     after = state.reconcile_outbound_receipt(aid, receipt)
@@ -551,6 +614,9 @@ def runner():
         threading.Thread(target=forward_worker, name="command-courier-text-forwarder",
                          daemon=True).start()
         while not configuration()["off"]:
+            # One journal owner reconciles confirmed receipts regardless of
+            # whether ChatGPT is open. This never sends or reexecutes packets.
+            reconcile_receipt_requests(state)
             forward_report = dict(forward_activity)
             runner_stage = "SCANNING_CHATGPT_APP"
             try:
@@ -679,7 +745,7 @@ def main():
                                  "auto-send-on", "auto-send-off", "abort-delivery",
                                  "clear-pending-deliveries",
                                  "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
-                                 "acknowledge-receipt"))
+                                 "acknowledge-receipt", "queue-confirmed-receipt"))
     parser.add_argument("action_id", nargs="?")
     parser.add_argument("receipt", nargs="?")
 
@@ -690,6 +756,11 @@ def main():
         if not args.action_id or not args.receipt:
             raise SystemExit("acknowledge-receipt requires action ID and confirmed receipt")
         acknowledge_confirmed_receipt(args.action_id, args.receipt)
+        return 0
+    if args.command == "queue-confirmed-receipt":
+        if not args.action_id or not args.receipt:
+            raise SystemExit("queue-confirmed-receipt requires action ID and received result nonce")
+        request_confirmed_receipt(args.action_id, args.receipt)
         return 0
     if args.command == "retry-delivery":
         if not args.action_id:
