@@ -154,6 +154,10 @@ def native_snapshot():
     elif not armed: title='STOPPED'
     elif phase=='WAITING_FOR_CHATGPT_APP': title='WAITING'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
+    elif phase=='FORWARDING_NO_CHATGPT':
+        # A ChatGPT-only delivery hold must not label independent file/API
+        # routes as stopped or globally failed.
+        title='READY • HELD' if delivery_blocked else 'READY'
     elif phase=='DELIVERY_BLOCKED' and delivery_blocked:
         # A held outbound receipt must remain visibly held, but it does not
         # prevent the live armed engine from accepting NEW command packets.
