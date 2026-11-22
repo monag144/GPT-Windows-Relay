@@ -2,8 +2,10 @@
 
 Command Courier is the user-facing name for the runtime coordinator. The
 existing Windows relay engine and **original upper-right HUD** remain separate
-modules. The currently implemented transport is ChatGPT's native Windows
-desktop app; arbitrary destination apps are not implemented yet.
+modules. The original native ChatGPT transport remains available. An
+additional opt-in directory-source text forwarder supports file and HTTP
+destinations without a ChatGPT composer. Other app/API source adapters
+remain future work; see docs/guides/COMMAND_COURIER_TEXT_FORWARDING.md.
 
 From CMD in the repository root:
 
@@ -109,12 +111,12 @@ an intentional OFF/STOP. GO is an activation/attachment control: it does not
 create or submit a packet, force resend, abort, clear the queue, or change the
 selected destination. Automatic send remains controlled separately.
 
-**Future destinations:** Command Courier is intended to courier packets to
+**Destination evolution:** Command Courier is intended to courier text to
 selectable recipients, not to hardcode ChatGPT as a permanent product limitation.
-At this checkpoint only the native ChatGPT Windows app destination is
-implemented in the runtime profile. Add other destination adapters explicitly
-with their own dispatch, receipt/acknowledgement and deduplication contracts;
-do not claim that arbitrary endpoints are currently operational.
+The existing HUD native mode sends to ChatGPT Windows UI. A later opt-in
+file-source route now supports directory or HTTP output independent of UIA.
+Additional source and destination adapters still need explicit dispatch,
+receipt/acknowledgement and deduplication contracts.
 
 **Separate existing client:** `consumer/GO.bat` is the historical one-click
 browser-based GUI with its own browser setup and mission submission path.
@@ -247,15 +249,16 @@ ChatGPT-only dependency. In particular, blindly collecting *all* on-screen
 text could forward passwords, messages or unrelated app content; do not
 implement such indiscriminate monitoring without explicit scope.
 
-**Implementation gap (verified in this branch):** `desktop_native_relay.py`
-currently uses `Watch-ChatGPT-ActionCandidates.ps1` for ingress, extracts
-`[GPT_WINDOWS_ACTION]`, and uses `Send-ChatGPT-DesktopHeartbeat.ps1` for
-egress. `command_courier.py` accepts `native-desktop` or `disabled`; there
-is no transport-neutral `text-body -> configured destination` adapter yet.
-Therefore do not remove the working ChatGPT UIA editor guard prematurely.
-First add a distinct, end-to-end tested transport-neutral outbox/router
-interface and explicit input/output adapters, retaining the known-good native
-ChatGPT path for compatibility.
+**Implemented first non-UI transport (later revision):**
+`courier_forwarder.py` now watches an explicitly selected UTF-8 text
+directory and forwards exact bodies to a selected file directory or HTTP
+endpoint, with an independent journal, per-route holds, and no dependence
+on the ChatGPT composer. `desktop_native_relay.py` runs the router before
+the ChatGPT scanner; `command_courier.py route set/status/enable/disable`
+manages its configuration. The historical UIA command scanner, native
+result sender and HUD remain supported. Further app/API **input** adapters
+and Windows live acceptance are outstanding. Do not remove the ChatGPT
+editor guard from its own destination adapter prematurely.
 
 **Design correction:** The earlier instruction to FORCE CLEAR the ChatGPT
 composer *before testing any new command* was overly broad. A busy composer
