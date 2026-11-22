@@ -152,6 +152,7 @@ def native_snapshot():
     if off: title='OFF'
     elif not live: title='OFFLINE'
     elif not armed: title='STOPPED'
+    elif phase=='AWAITING_TEXT_FIELD': title='READY'
     elif phase=='WAITING_FOR_CHATGPT_APP': title='WAITING'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
     elif phase=='FORWARDING_NO_CHATGPT':
@@ -182,15 +183,17 @@ def native_snapshot():
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     if delivery_blocked:
         phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
+    elif phase=='AWAITING_TEXT_FIELD':
+        phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif outstanding_count:
         phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
     return {
         'online':live,'title':title,
         'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
-        'browser':('Text routes ACTIVE • ChatGPT UI optional'
+        'browser':('Text routes ACTIVE • foreground destination optional'
                    if phase=='FORWARDING_NO_CHATGPT' else
-                   'ChatGPT Windows app • UI Automation • no browser extension'),
+                   'Foreground text field • auto-detect • no configured input'),
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
@@ -999,7 +1002,7 @@ def run_ui():
                                 activebackground="#137333" if armed else "#1967d2")
             destination_ready=(snap.get("native_phase") in
                                ("BASELINED","IDLE","EXECUTING","DELIVERING",
-                                "FORWARDING_NO_CHATGPT") or
+                                "FORWARDING_NO_CHATGPT","AWAITING_TEXT_FIELD") or
                                (snap.get("native_phase")=="DELIVERY_BLOCKED" and
                                 snap.get("native_delivery_phase")=="PRE_SUBMIT_FAILED"))
             go_btn.configure(text="GO…" if go_state["busy"] else
