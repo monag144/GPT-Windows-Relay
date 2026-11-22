@@ -182,9 +182,9 @@ function Get-EnabledSend($window){
     return $found[0]
 }
 # A blank ChatGPT composer can expose its placeholder as the UIA Value.
-# Allow only the Katana-observed 11-char "Ask ChatGPT" placeholder plus
-# surrounding whitespace, and only if no Send control is enabled, the
-# composer is unfocused, and at least one disabled Send control is visible.
+# Allow only the exact Katana-observed "Ask ChatGPT" placeholder with either a
+# disabled named Send control, or independently empty TextPattern with no
+# enabled named Send control. Focus alone never proves emptiness.
 # Mere similarity to placeholder wording is NOT sufficient.
 function Test-DisabledSendControlPresent($window){
     $nodes=Descendants $window
