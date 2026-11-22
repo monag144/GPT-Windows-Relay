@@ -286,7 +286,7 @@ class TextForwarderTests(unittest.TestCase):
         self.assertIn('if policy["armed"] and policy["auto_send"]:', native)
         self.assertIn("NATIVE_TEXT_ROUTE_ERROR=", native)
         hud = (ROOT / "hud.py").read_text(encoding="utf-8")
-        self.assertIn("Text routes ACTIVE • ChatGPT UI optional", hud)
+        self.assertIn("Text routes ACTIVE • foreground destination optional", hud)
         coordinator = (ROOT / "command_courier.py").read_text(encoding="utf-8")
         self.assertIn('"FORWARDING_NO_CHATGPT"', coordinator)
 
