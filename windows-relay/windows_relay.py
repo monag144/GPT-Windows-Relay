@@ -261,26 +261,26 @@ class State:
             eligible.sort(key=lambda item:(item[0],item[1]))
             return [aid for _,aid in eligible]
     def list_claimable_submit_retries(self):
-        """Only saved, unconfirmed chat outcomes; never re-execute an action."""
+        """Only drafts with verified zero prior Send attempts may auto-submit."""
         with self.lock:
             if not self.armed or self.outbound_owner!='windows': return []
             eligible=[]
             for aid,d in self.data.get('outbound_deliveries',{}).items():
                 if not isinstance(aid,str) or not isinstance(d,dict): continue
-                if d.get('phase') not in {'SEND_PENDING','SUBMIT_UNCERTAIN'}: continue
+                if d.get('phase') not in {'SEND_PENDING'}: continue
                 if d.get('has_attachments') is not False: continue
                 if int(d.get('submit_only_attempt_count',0) or 0)>=1: continue
                 eligible.append((str(d.get('created_at') or ''),aid))
             return [aid for _,aid in sorted(eligible)]
 
     def claim_submit_only_retry(self,aid:str):
-        """One durable retry allowance for Send, never for input or EXEC."""
+        """One durable button press allowance for SEND_PENDING, never input or EXEC."""
         with self.lock:
             old=None
             def mutate():
                 nonlocal old
                 d=self.data.get('outbound_deliveries',{}).get(aid)
-                if not isinstance(d,dict) or d.get('phase') not in {'SEND_PENDING','SUBMIT_UNCERTAIN'}:
+                if not isinstance(d,dict) or d.get('phase') not in {'SEND_PENDING'}:
                     raise RelayError('outbound result not eligible for send-only retry')
                 if int(d.get('submit_only_attempt_count',0) or 0)>=1:
                     raise RelayError('send-only retry limit reached')
@@ -293,7 +293,7 @@ class State:
             return old
 
     def finish_submit_only_retry(self,aid:str,phase:str,*,no_target:bool=False,stage:str=''):
-        """Reconcile one UIA-only attempt; never repeat the saved execution."""
+        """Reconcile one UIA-only button attempt; no re-press or re-execution."""
         if phase not in {'SUBMITTED','SUBMIT_UNCERTAIN','SEND_PENDING'}:
             raise RelayError('invalid send-only retry outcome')
         with self.lock:
@@ -304,7 +304,7 @@ class State:
                 if not isinstance(d,dict) or d.get('phase')!='SUBMITTING':
                     raise RelayError('send-only attempt not in progress')
                 origin=d.get('retry_origin_phase')
-                if origin not in {'SEND_PENDING','SUBMIT_UNCERTAIN'}:
+                if origin not in {'SEND_PENDING'}:
                     raise RelayError('send-only retry origin missing')
                 if no_target:
                     d['phase']=origin
