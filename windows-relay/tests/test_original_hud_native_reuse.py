@@ -41,15 +41,16 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("auto-send-off", NATIVE)
         self.assertIn('policy["armed"] and policy["auto_send"] and not stop_requested()', NATIVE)
         self.assertIn("sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER", NATIVE)
-        self.assertIn("FORCE RESEND", HUD)
+        self.assertIn("FOCUS FOR SEND", HUD)
+        self.assertNotIn("FORCE RESEND", HUD)
         self.assertIn("ABORT SEND", HUD)
-        self.assertIn("Reconcile a known receipt", HUD)
-        self.assertIn("messagebox.askyesno(\"Force Resend\"", HUD)
         self.assertIn("CLEAR QUEUE", HUD)
         self.assertIn("abort-delivery", NATIVE)
         self.assertIn("clear-pending-deliveries", NATIVE)
-        self.assertIn("force-delivery", NATIVE)
-        self.assertIn('native_delivery_control("force-delivery",aid)', HUD)
+        # Legacy CLI remains isolated from HUD. It must never be a button
+        # that re-injects an already-saved result into the composer.
+        self.assertNotIn('native_delivery_control("force-delivery",aid)', HUD)
+        self.assertIn("def focus_for_send_retry():", HUD)
         self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
         self.assertIn("ChatGPT could not be brought to the foreground", HUD)
 
@@ -148,7 +149,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
     def test_recovery_buttons_follow_actual_last_delivery_phase(self):
         self.assertIn("'native_delivery_phase':delivery_phase",HUD)
         self.assertIn("delivery_phase=snap.get('native_delivery_phase')",HUD)
-        self.assertIn("delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled'",HUD)
+        self.assertIn("delivery_phase=='SEND_PENDING' and enabled",HUD)
         self.assertIn("delivery_phase in ('READY','PRE_SUBMIT_FAILED')",HUD)
         self.assertNotIn("force_command_btn.configure(state='normal');",HUD)
 
