@@ -131,3 +131,41 @@ unresolved. It remains visible as outbox history without blocking the relay.
 The earlier acknowledge-receipt CLI still works for a stopped/disarmed runner,
 but is no longer needed when the live singleton processes receipt requests.
 Avoid opening a second writable State while the runner is alive.
+
+
+## Temporary TEST FIRE diagnostics — PC Engineer 19
+
+The original 560 × 184 Command Courier HUD now has an operator-initiated
+debug panel inside **gear ⚙ → Settings** (expanded 560 × 386). It does not
+create a new window or change the compact lifecycle controls.
+
+- **TEST FIRE** injects a new, unique diagnostic text into the existing
+  configured **local-test** file route. When local-test does not exist, it
+  selects the sole enabled file-to-file route; if more than one is available,
+  it requires explicit route selection through the CLI. This button does
+  **not** send an arbitrary external API request or transmit into ChatGPT.
+- It waits for the real background forwarder, then checks BOTH its durable
+  DELIVERED journal phase AND exact destination-file bytes before showing
+  **PASS** with route, receipt, byte length and short nonce.
+- **CHECK ROUTES** reads configured/enabled route count, historical delivered
+  count and held count without forwarding anything.
+- It runs asynchronously, so neither test blocks the Tk main event loop.
+  ARM, Auto Send, OFF and actual native singleton status remain authoritative.
+  An unavailable route or missing acknowledgement shows a failure instead
+  of falsely claiming delivery.
+- Test inputs and outputs use `courier-test-fire-<nonce>.txt` names and are
+  intentionally left as inspectable diagnostic evidence. Historical result
+  files and native command execution are not touched.
+
+Equivalent CMD invocation from the repository root:
+
+    call "windows-relay\COMMAND-COURIER.cmd" test-fire
+
+To choose a specific enabled file-to-file route:
+
+    call "windows-relay\COMMAND-COURIER.cmd" test-fire --route local-test
+
+**Temporary:** The button and route-check pane are for engineering
+qualification and can be removed once target adapters and the continuous
+acceptance suite are established. This first test checks configured
+file-to-file delivery only, not ChatGPT UIA submission or remote HTTP POST.
