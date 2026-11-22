@@ -103,9 +103,9 @@ class CourierHudStartupTests(unittest.TestCase):
              mock.patch.object(hud,"read_json",return_value=persisted), \
              mock.patch.object(hud,"action_detail",return_value=(None,None)):
             snap=hud.native_snapshot()
-        self.assertEqual(snap["title"],"READY • HELD")
-        self.assertEqual(snap["title_phase"],"RECOVERY ADVICE")
-        self.assertIn("DELIVERY HELD",snap["phase"])
+        self.assertEqual(snap["title"],"READY")
+        self.assertEqual(snap["title_phase"],"READY")
+        self.assertIn("CHATGPT OUTBOX HELD",snap["phase"])
         self.assertEqual(snap["native_delivery_phase"],"PRE_SUBMIT_FAILED")
         self.assertTrue(snap["native_armed"])
         self.assertTrue(snap["online"])
