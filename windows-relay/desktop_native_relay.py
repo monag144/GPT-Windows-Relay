@@ -455,7 +455,7 @@ def reconcile_force_clear_requests(state: wr.State) -> int:
             for aid,delivery in state.data.get("outbound_deliveries",{}).items():
                 if not isinstance(delivery,dict):
                     continue
-                if delivery.get("phase") not in {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN"}:
+                if delivery.get("phase") not in {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN","SEND_PENDING"}:
                     continue
                 hold = delivery_hold_path(aid)
                 if hold.is_file():
@@ -475,7 +475,7 @@ def reconcile_force_clear_requests(state: wr.State) -> int:
                 delivery_force_clear_path(aid).unlink(missing_ok=True)
             remaining = sum(
                 isinstance(d, dict) and d.get("phase") in
-                {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN"}
+                {"READY","PRE_SUBMIT_FAILED","SUBMIT_UNCERTAIN","SEND_PENDING"}
                 for d in state.data.get("outbound_deliveries",{}).values())
             receipt = {"id":request_id, "result":"FORCE_CLEAR_COMPLETE",
                        "aborted_ids":affected, "aborted_count":len(affected),
@@ -645,6 +645,10 @@ def deliver(state: wr.State, aid: str):
               and response.returncode == 0
               and "RESULT=TEXT_INSERTED_VERIFIED" in output):
             phase = "TEXT_INSERTED"
+        elif (sender_script == FOREGROUND_SENDER
+              and response.returncode == 0
+              and "RESULT=CHAT_SEND_PENDING" in output):
+            phase = "SEND_PENDING"
         elif ("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN" not in output
               and "RESULT=HEARTBEAT_FAILED_NO_CONFIRMED_DELIVERY" in output):
             phase = "PRE_SUBMIT_FAILED"
@@ -685,6 +689,69 @@ def deliver(state: wr.State, aid: str):
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
+def recover_submit_only(state: wr.State, aid: str):
+    """One bounded saved-draft submit retry, never command execution."""
+    if stop_requested():
+        return
+    record = state.outbound_lookup(aid)
+    if (not record or record.get("phase") not in {"SEND_PENDING", "SUBMIT_UNCERTAIN"}
+            or int(record.get("submit_only_attempt_count", 0) or 0) >= 1
+            or record.get("has_attachments") is not False):
+        return
+    path, marker = outbox_result(state, aid)
+    previous = state.claim_submit_only_retry(aid)
+    status_update(phase="DELIVERING", last_action=aid,
+                  last_delivery_stage="SUBMIT_ONLY_VERIFICATION")
+    stage = "SUBMIT_ONLY_STARTING"
+    output = ""
+    code = -1
+    try:
+        ps = shutil.which("powershell.exe")
+        if not ps:
+            raise RuntimeError("SUBMIT_ONLY_POWERSHELL_UNAVAILABLE")
+        cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
+               "-File", str(FOREGROUND_SENDER), "-NativeResultPath", str(path),
+               "-NativeActionId", aid, "-NativeReceiptMarker", marker,
+               "-SubmitExistingOnly"]
+        response = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=70,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        output = response.stdout
+        code = response.returncode
+        for line in output.splitlines():
+            if line.startswith("SENDER_STAGE="):
+                part = line.partition("=")[2]
+                if re.fullmatch(r"[A-Z0-9_]{1,60}", part):
+                    stage = part
+        note("NATIVE_SUBMIT_ONLY_SENDER_STAGE=" + stage, "ID=" + aid)
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        stage = "SUBMIT_ONLY_" + type(exc).__name__.upper()
+        note("NATIVE_SUBMIT_ONLY_EXCEPTION=" + type(exc).__name__)
+    submitted = code == 0 and "RESULT=HEARTBEAT_SUBMITTED" in output
+    no_target = code == 0 and "RESULT=FOREGROUND_NO_TARGET" in output
+    phase = "SUBMITTED" if submitted else "SUBMIT_UNCERTAIN"
+    state.finish_submit_only_retry(aid, phase, no_target=no_target, stage=stage)
+    if no_target:
+        note("NATIVE_SUBMIT_ONLY_WAITING_FOR_OWN_DRAFT=" + aid)
+        return
+    if submitted:
+        if "SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT" in output:
+            state.record_submit_only_evidence(
+                aid, "UIA_EXISTING_TRANSCRIPT_RECEIPT")
+        status_update(phase="IDLE", last_action=aid, last_result="SUBMITTED",
+                      delivery_blocked=False, last_delivery_stage=stage,
+                      last_delivery_error=None)
+        note("NATIVE_SUBMIT_ONLY_SUBMITTED=" + aid)
+    else:
+        status_update(phase="DELIVERY_UNCERTAIN", last_action=aid,
+                      last_result="SUBMIT_UNCERTAIN", delivery_blocked=True,
+                      last_delivery_stage=stage,
+                      last_delivery_error="SUBMIT_ONLY_UNCONFIRMED")
+        note("NATIVE_SUBMIT_ONLY_UNCONFIRMED=" + aid,
+             "ORIGIN=" + previous, "NO_EXECUTION_RETRY")
+
+
 def runner():
     if os.name != "nt" or msvcrt is None:
         raise RuntimeError("NATIVE_WINDOWS_ONLY")
@@ -716,6 +783,7 @@ def runner():
         seen = set()
         baseline_ready = False
         next_foreground_probe = 0.0
+        next_submit_only_probe = 0.0
         # This worker has its own journal lock and does not use ChatGPT UIA.
         # Slow API responses cannot delay the scanner or other native actions.
         forward_activity = {"active": False}
@@ -749,6 +817,18 @@ def runner():
             # Manual FORCE CLEAR is applied by the same journal owner before
             # scanning new instructions or claiming any outbound delivery.
             reconcile_force_clear_requests(state)
+            # Send-only retry of a saved chat draft, never a command replay.
+            policy = configuration()
+            if (policy["armed"] and policy["auto_send"] and not stop_requested()
+                    and time.monotonic() >= next_submit_only_probe):
+                next_submit_only_probe = time.monotonic() + 5.0
+                try:
+                    candidates = state.list_claimable_submit_retries()
+                    if candidates:
+                        recover_submit_only(state, candidates[0])
+                except (RuntimeError, ValueError, wr.RelayError, OSError) as exc:
+                    note("NATIVE_SUBMIT_ONLY_LOOP_ERROR=" + type(exc).__name__,
+                         str(exc)[:120])
             # The output queue is INDEPENDENT of ChatGPT's packet scanner:
             # a pending result can be inserted into focused Notepad or another
             # foreground editor even when the ChatGPT app is closed.
