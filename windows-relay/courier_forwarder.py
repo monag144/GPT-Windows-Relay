@@ -223,7 +223,8 @@ def tick(home: Path, *, enabled: bool) -> dict:
                 break
             if entry.suffix.lower() != ".txt" or not entry.is_file() or entry.is_symlink():
                 continue
-            remaining -= 1
+            # Never spend the per-tick *new delivery* budget on already
+            # forwarded files; that would starve newer files as the folder grows.
             # Oversized and binary files are ignored rather than truncated.
             before = entry.stat()
             if before.st_size > MAX_TEXT_BYTES:
@@ -247,6 +248,7 @@ def tick(home: Path, *, enabled: bool) -> dict:
                 if not isinstance(record, dict):
                     raise ForwardingError("FORWARDING_LEDGER_ENTRY_INVALID")
                 continue  # DELIVERED, HELD, or interrupted attempt: no replay.
+            remaining -= 1
             state["deliveries"][key] = {
                 "route": route["id"], "file": entry.name,
                 "phase": "SUBMITTING", "created_utc": timestamp(),
