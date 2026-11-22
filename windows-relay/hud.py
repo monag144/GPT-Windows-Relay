@@ -155,13 +155,12 @@ def native_snapshot():
     elif phase=='WAITING_FOR_CHATGPT_APP': title='WAITING'
     elif phase in ('EXECUTING','DELIVERING'): title='RUNNING'
     elif phase=='FORWARDING_NO_CHATGPT':
-        # A ChatGPT-only delivery hold must not label independent file/API
-        # routes as stopped or globally failed.
-        title='READY • HELD' if delivery_blocked else 'READY'
-    elif phase=='DELIVERY_BLOCKED' and delivery_blocked:
-        # A held outbound receipt must remain visibly held, but it does not
-        # prevent the live armed engine from accepting NEW command packets.
-        title='READY • HELD'
+        title='READY'
+    elif (phase=='DELIVERY_BLOCKED' and delivery_blocked
+          and report.get('last_result')=='PRE_SUBMIT_FAILED'):
+        # Old ChatGPT sender receipt is held; ingress and file/API routes
+        # remain READY. Keep the held receipt visible in the secondary line.
+        title='READY'
     elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
     else: title='READY'
     state=read_json(native.STATE,{})
@@ -178,10 +177,10 @@ def native_snapshot():
         exact+='\nDELIVERY BLOCKED: '+delivery_error
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     if delivery_blocked:
-        phase_line='DELIVERY HELD • '+delivery_error[:75]
+        phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
     return {
         'online':live,'title':title,
-        'title_phase':('RECOVERY ADVICE' if title=='READY • HELD' else title),
+        'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':('Text routes ACTIVE • ChatGPT UI optional'
                    if phase=='FORWARDING_NO_CHATGPT' else
@@ -885,15 +884,12 @@ def run_ui():
             kind,error=go_results.get_nowait()
             go_state["busy"]=False
             go_state["error"]=error if kind=="error" else None
-            go_state["ready"]=(kind=="ok")
+            go_state["ready"]=(kind in ("ok","held"))
             go_state["waiting"]=(kind=="waiting")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
-            elif kind=="held":
-                messagebox.showinfo("Command Courier GO",
-                    "Native engine is ready for new instructions.\n\n"
-                    "An older result remains HELD; GO did not submit or "
-                    "discard it.",parent=root)
+            # A historical held ChatGPT receipt is secondary status, never
+            # a modal interruption to the courier's active forwarder.
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
         snap=snapshot()
@@ -907,18 +903,17 @@ def run_ui():
                                 bg="#188038" if armed else "#174ea6",
                                 activebackground="#137333" if armed else "#1967d2")
             destination_ready=(snap.get("native_phase") in
-                               ("BASELINED","IDLE","EXECUTING","DELIVERING"))
-            prior_result_held=(snap.get("native_phase")=="DELIVERY_BLOCKED" and
-                               snap.get("native_delivery_phase")=="PRE_SUBMIT_FAILED")
+                               ("BASELINED","IDLE","EXECUTING","DELIVERING",
+                                "FORWARDING_NO_CHATGPT") or
+                               (snap.get("native_phase")=="DELIVERY_BLOCKED" and
+                                snap.get("native_delivery_phase")=="PRE_SUBMIT_FAILED"))
             go_btn.configure(text="GO…" if go_state["busy"] else
                              ("GO ✓" if go_state["ready"] and snap["online"] and
                               armed and destination_ready else
-                              "GO • HELD" if prior_result_held else
                               "WAIT" if go_state["waiting"] and not destination_ready else "GO"),
                              state="disabled" if go_state["busy"] or not armed or snap.get("native_off")
                                    else "normal",
-                             bg=("#9a6700" if prior_result_held else "#188038")
-                                if armed and not snap.get("native_off") else "#3c4043",
+                             bg="#188038" if armed and not snap.get("native_off") else "#3c4043",
                              activebackground="#137333")
             enabled=bool(snap.get('auto_send'))
             auto_send_btn.configure(text='Auto Send: ON' if enabled else 'Auto Send: OFF',
