@@ -170,6 +170,10 @@ def native_snapshot():
     deliveries=state.get('outbound_deliveries',{})
     delivery=(deliveries.get(aid) if isinstance(deliveries,dict) else None)
     delivery_phase=str(delivery.get('phase') or '') if isinstance(delivery,dict) else ''
+    outstanding_count=sum(1 for item in deliveries.values()
+                          if isinstance(item,dict) and item.get('phase')
+                          in ('READY','PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN'))
+                          if isinstance(deliveries,dict) else 0
     cmd=command_preview(detail.get('command') if detail else '')
     exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
            if detail else 'ID: '+aid+'\nRESULT: '+result)
@@ -178,6 +182,8 @@ def native_snapshot():
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     if delivery_blocked:
         phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
+    elif outstanding_count:
+        phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
     return {
         'online':live,'title':title,
         'title_phase':title,
@@ -191,6 +197,7 @@ def native_snapshot():
         'auto_send':bool(report.get('auto_send')),
         'native_armed':armed, 'native_off':off, 'native_phase':phase,
         'native_delivery_phase':delivery_phase,
+        'outbound_unresolved_count':outstanding_count,
     }
 
 def native_control(action):
