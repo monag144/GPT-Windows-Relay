@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory=$true)][string]$NativeResultPath,
     [Parameter(Mandatory=$true)][string]$NativeActionId,
     [Parameter(Mandatory=$true)][string]$NativeReceiptMarker,
-    [switch]$SubmitExistingOnly
+    [switch]$SubmitExistingOnly,
+    [switch]$ManualForceSend
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -352,7 +353,8 @@ function Assert-RunnerAllowed {
     }
     $configPath=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayDesktop\desktop-control.json'
     $config=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if(-not $config.armed -or $config.off -or -not $config.auto_send){
+    if(-not $config.armed -or $config.off -or
+       (-not $config.auto_send -and -not $ManualForceSend)){
         throw 'OPERATOR_AUTO_SEND_NOT_ARMED'
     }
 }
