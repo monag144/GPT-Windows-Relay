@@ -944,12 +944,17 @@ def run_ui():
         snap=native_view.get("snap") or {}
         return str(snap.get("action") or "").removeprefix("LAST ").removeprefix("CURRENT ").strip()
     last_send_target={"hwnd":0,"seen":0.0}
+    manual_send={"id":None,"since":0.0,"result":None}
     def force_send_selected():
         # Real one-shot request, not ChatGPT-only focus and not a resend.
         # Keep operator-selected focus while runner owns the actual send.
         snap=native_view.get("snap") or {}
+        if manual_send["id"] and manual_send["result"] is None:
+            return  # The same HUD must not launch overlapping requests.
         try:
-            force_send_to_last_foreground(snap,last_send_target)
+            manual_send["id"]=force_send_to_last_foreground(snap,last_send_target)
+            manual_send["since"]=time.monotonic()
+            manual_send["result"]=None
         except (RuntimeError,ValueError,OSError) as exc:
             messagebox.showwarning("FORCE SEND",str(exc)[:250],parent=root)
 
@@ -1079,6 +1084,13 @@ def run_ui():
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
         remember_external_foreground(last_send_target)
+        if manual_send["id"] and manual_send["result"] is None:
+            import desktop_native_relay as native
+            receipt=read_json(native.FORCE_SEND_RECEIPTS /
+                              (manual_send["id"]+".json"),None)
+            if isinstance(receipt,dict) and receipt.get("id")==manual_send["id"]:
+                manual_send["result"]=str(receipt.get("result") or "UNKNOWN")
+                manual_send["since"]=time.monotonic()
         snap=snapshot()
         if snap.get('native_mode'):
             native_view["snap"]=snap
@@ -1119,16 +1131,24 @@ def run_ui():
             force_clear_btn.configure(text="CLEARING…" if clear_busy["value"] else "FORCE CLEAR",
                                       state="disabled" if clear_busy["value"] or
                                             snap.get("native_phase")=="DELIVERING" else "normal")
-            # Always expose the manual control while running, even if FORCE
-            # CLEAR left no eligible output: clicking explains the absence.
-            force_command_btn.configure(state='normal' if snap["online"] and armed
-                                        and not snap.get("native_off") else 'disabled',
-                                        bg="#174ea6" if snap.get("force_send_action") else "#3c4043")
+            # FORCE SEND stays visible after a clear; no phantom saved
+            # output is created. Never permit a second manual click while
+            # the first request is awaiting its real journal receipt.
+            sending=bool(manual_send["id"] and manual_send["result"] is None)
+            force_command_btn.configure(
+                text="SENDING…" if sending else "FORCE SEND",
+                state='normal' if snap["online"] and armed and
+                      not snap.get("native_off") and not sending else 'disabled',
+                bg="#174ea6" if snap.get("force_send_action") else "#3c4043")
             force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
             clear_queue_check.configure(state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
             relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
-            phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
+            manual_report=(manual_send["result"] if manual_send["id"] and
+                           time.monotonic()-manual_send["since"]<15 else None)
+            phase.configure(text=("FORCE SEND • "+manual_report) if manual_report
+                            else snap['phase'])
+            action.configure(text=snap['action'][:86])
             preview.configure(text=snap['preview']); set_details(snap['exact'])
             root.after(1000,refresh)
             return
