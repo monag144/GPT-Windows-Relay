@@ -94,7 +94,10 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn("d.get('phase')=='READY'", HUD_SOURCE)
         self.assertIn("d.get('phase')=='SEND_PENDING'", HUD_SOURCE)
         self.assertIn("FORCE CLEAR COMPLETE • no unsent result available", HUD_SOURCE)
-        self.assertIn('force_command_btn.configure(state=\'normal\' if snap["online"] and armed', HUD_SOURCE)
+        self.assertIn('text="SENDING…" if sending else "FORCE SEND"', HUD_SOURCE)
+        self.assertIn('not snap.get("native_off") and not sending else \'disabled\'', HUD_SOURCE)
+        self.assertIn('manual_send["id"]=force_send_to_last_foreground(', HUD_SOURCE)
+        self.assertIn('FORCE SEND • ', HUD_SOURCE)
         self.assertNotIn('native_delivery_control("force-delivery"', HUD_SOURCE)
         self.assertIn('def reconcile_force_send_requests(state: wr.State)', Path(native.__file__).read_text(encoding="utf-8"))
 
