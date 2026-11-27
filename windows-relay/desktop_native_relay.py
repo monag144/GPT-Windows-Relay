@@ -421,6 +421,15 @@ def request_force_send(aid: str, foreground_hwnd: int) -> str:
     return request_id
 
 
+def current_foreground_hwnd() -> int:
+    """Read-only foreground identity, patchable for synthetic offline tests."""
+    if os.name != "nt":
+        return 0
+    import ctypes
+    ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
+    return int(ctypes.windll.user32.GetForegroundWindow() or 0)
+
+
 def reconcile_force_send_requests(state: wr.State) -> int:
     """The singleton consumes manual sends before normal automatic delivery.
 
@@ -456,12 +465,8 @@ def reconcile_force_send_requests(state: wr.State) -> int:
                 outcome = "EXPIRED_NO_SEND"
             elif stop_requested():
                 outcome = "DISARMED_NO_SEND"
-            elif os.name != "nt":
-                outcome = "NON_WINDOWS_NO_SEND"
             else:
-                import ctypes
-                ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
-                foreground = int(ctypes.windll.user32.GetForegroundWindow() or 0)
+                foreground = current_foreground_hwnd()
                 if foreground != hwnd:
                     outcome = "WINDOW_CHANGED_NO_SEND"
                 else:
