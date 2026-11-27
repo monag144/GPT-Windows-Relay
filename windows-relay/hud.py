@@ -262,7 +262,13 @@ def force_send_to_last_foreground(snap: dict, last: dict) -> str:
         raise RuntimeError('The previously selected destination window is no longer available')
     if not user32.SetForegroundWindow(ctypes.c_void_p(hwnd)):
         raise RuntimeError('Windows refused to restore the previously selected destination window')
-    if int(user32.GetForegroundWindow() or 0)!=hwnd:
+    # Windows focus activation may settle asynchronously after the HUD click.
+    # This only observes focus; it never types or clicks in the target app.
+    for _ in range(5):
+        if int(user32.GetForegroundWindow() or 0)==hwnd:
+            break
+        time.sleep(0.05)
+    else:
         raise RuntimeError('Destination focus could not be verified; nothing sent')
     import desktop_native_relay as native
     return native.request_force_send(aid,hwnd)
