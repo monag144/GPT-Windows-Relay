@@ -289,7 +289,7 @@ function Test-EditorContainsMarker($target,[string]$marker){
 function Test-EmptyOrPlaceholder([string]$value){
     if([string]::IsNullOrWhiteSpace($value)){return $true}
     return ($value.Trim() -match
-            '^(?i:ask chatgpt|ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?)
+            '^(?i:ask chatgpt|ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?$'
 }
 
 function Assert-CurrentTarget($target){
