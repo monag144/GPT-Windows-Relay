@@ -80,19 +80,56 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('W,COMPACT_H,EXPANDED_H=560,184,386', HUD_SOURCE)
         self.assertNotIn('tk.Toplevel(', HUD_SOURCE)
 
-    def test_hud_focus_for_send_recovery_never_resends_whole_result(self):
-        self.assertIn('text="FOCUS FOR SEND"', HUD_SOURCE)
+    def test_force_send_button_performs_real_generic_manual_delivery(self):
+        self.assertIn('text="FORCE SEND"', HUD_SOURCE)
+        self.assertNotIn('text="FOCUS FOR SEND"', HUD_SOURCE)
         self.assertNotIn('text="FORCE RESEND"', HUD_SOURCE)
-        self.assertIn('def focus_for_send_retry():', HUD_SOURCE)
-        helper=HUD_SOURCE.split('    def focus_for_send_retry():',1)[1].split(
-            '    # FORCE CLEAR is the operator',1)[0]
-        self.assertIn('snap.get("native_delivery_phase")!="SEND_PENDING"', helper)
-        self.assertIn('not snap.get("auto_send")', helper)
-        self.assertIn('focus_chatgpt_for_forced_delivery()', helper)
-        self.assertNotIn('native_delivery_control(', helper)
-        self.assertNotIn('native_delivery_control("force-delivery"', helper)
-        self.assertIn('force_command_btn.configure(command=focus_for_send_retry)', HUD_SOURCE)
-        self.assertIn("delivery_phase=='SEND_PENDING' and enabled", HUD_SOURCE)
+        self.assertIn('def force_send_selected():', HUD_SOURCE)
+        self.assertIn('def remember_external_foreground(last: dict)', HUD_SOURCE)
+        self.assertIn('def force_send_to_last_foreground(snap: dict, last: dict)', HUD_SOURCE)
+        self.assertIn('native.request_force_send(aid,hwnd)', HUD_SOURCE)
+        self.assertIn('force_command_btn.configure(command=force_send_selected)', HUD_SOURCE)
+        self.assertIn('remember_external_foreground(last_send_target)', HUD_SOURCE)
+        self.assertIn("'force_send_action':force_send_action", HUD_SOURCE)
+        self.assertIn("d.get('phase')=='READY'", HUD_SOURCE)
+        self.assertIn("d.get('phase')=='SEND_PENDING'", HUD_SOURCE)
+        self.assertIn("FORCE CLEAR COMPLETE • no unsent result available", HUD_SOURCE)
+        self.assertIn('force_command_btn.configure(state=\'normal\' if snap["online"] and armed', HUD_SOURCE)
+        self.assertNotIn('native_delivery_control("force-delivery"', HUD_SOURCE)
+        self.assertIn('def reconcile_force_send_requests(state: wr.State)', Path(native.__file__).read_text(encoding="utf-8"))
+
+    def test_force_send_does_not_replay_aborted_result_after_force_clear(self):
+        result_id="PCE20-ABORTED-001"
+        status={"native_running":True, "native_armed":True, "native_off":False,
+                "auto_send":True, "phase":"FORWARDING_NO_CHATGPT",
+                "last_action":result_id,"last_result":"FORCE_CLEAR_COMPLETE",
+                "delivery_blocked":False}
+        journal={"outbound_deliveries":{
+            result_id:{"phase":"ABORTED","has_attachments":False,
+                       "created_at":"2026-11-27T00:00:00+00:00"}}}
+        with mock.patch.object(native,"get_status",return_value=status), \
+             mock.patch.object(hud,"read_json",return_value=journal), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            snap=hud.native_snapshot()
+        self.assertIsNone(snap["force_send_action"])
+        self.assertIn("no unsent result available",snap["phase"])
+
+    def test_force_send_selects_oldest_actual_eligible_unsubmitted_result(self):
+        status={"native_running":True, "native_armed":True, "native_off":False,
+                "auto_send":False, "phase":"IDLE", "last_action":"STALE",
+                "last_result":"FORCE_CLEAR_COMPLETE", "delivery_blocked":False}
+        journal={"outbound_deliveries":{
+            "DONE":{"phase":"SUBMITTED","has_attachments":False,"created_at":"1"},
+            "OLD":{"phase":"READY","has_attachments":False,"created_at":"2"},
+            "NEW":{"phase":"SEND_PENDING","submit_only_attempt_count":0,
+                   "has_attachments":False,"created_at":"3"},
+            "RETRIED":{"phase":"SEND_PENDING","submit_only_attempt_count":1,
+                       "has_attachments":False,"created_at":"0"}}}
+        with mock.patch.object(native,"get_status",return_value=status), \
+             mock.patch.object(hud,"read_json",return_value=journal), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            snap=hud.native_snapshot()
+        self.assertEqual(snap["force_send_action"],"OLD")
 
     def test_hud_toggle_does_not_claim_success_before_worker_receipt(self):
         self.assertIn('def on_startup_check():', HUD_SOURCE)
