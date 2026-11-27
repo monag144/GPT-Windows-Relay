@@ -611,19 +611,21 @@ try{
         }
         exit 0
     }
-    # When a chat has an enabled Send control BEFORE our insertion, it
-    # already contains someone else's draft. Defer without touching it.
-    if($null -ne $sendBefore){
-        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
-        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
-        exit 0
-    }
+    # A permanently enabled Send button does NOT prove the editor contains
+    # someone else's draft (Telegram/Discord and icon buttons may stay
+    # enabled). Inspect the actual selected editor instead; never mix with
+    # a nonempty existing draft before writing a saved result.
     $allowSubmit=Test-EmptyOrPlaceholder $before
     if($target.hasText){
         try{
             $allowSubmit=($allowSubmit -and
                          (Test-EmptyOrPlaceholder ([string]$target.text.DocumentRange.GetText(-1))))
         }catch{}
+    }
+    if($null -ne $sendBefore -and -not $allowSubmit){
+        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
+        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+        exit 0
     }
     # For a named chat composer, a busy draft isn't an output target. The
     # unrelated text must not be submitted with our result.
