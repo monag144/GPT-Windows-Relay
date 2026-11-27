@@ -352,7 +352,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn('phase = "SEND_PENDING"', NATIVE)
         self.assertIn("SEND_PENDING", (ROOT/"hud.py").read_text(encoding="utf-8"))
         self.assertIn("SEND_PENDING", (ROOT/"windows_relay.py").read_text(encoding="utf-8"))
-        self.assertIn("def recover_submit_only(state: wr.State, aid: str):", NATIVE)
+        self.assertIn("def recover_submit_only(state: wr.State, aid: str, *, manual: bool = False):", NATIVE)
         self.assertIn('"-SubmitExistingOnly"', NATIVE)
 
     def test_existing_own_chat_draft_is_pending_not_falsely_delivered(self):
