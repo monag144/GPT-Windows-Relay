@@ -290,6 +290,14 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED", SENDER)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
 
+    def test_persistently_enabled_send_button_does_not_block_empty_selected_composer(self):
+        # Telegram/Discord can expose enabled Send even with an empty field.
+        # The old early return rejected that valid target before injection.
+        self.assertIn("if($null -ne $sendBefore -and -not $allowSubmit){", SENDER)
+        self.assertNotIn("if($null -ne $sendBefore){", SENDER)
+        self.assertIn("$allowSubmit=Test-EmptyOrPlaceholder $before", SENDER)
+        self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
+
     def test_electron_typing_recognized_without_stale_value_pattern(self):
         self.assertIn("function Test-EditorContainsMarker(", SENDER)
         self.assertIn("function Test-EmptyOrPlaceholder(", SENDER)
