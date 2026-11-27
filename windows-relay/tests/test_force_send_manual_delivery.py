@@ -70,9 +70,21 @@ class ManualForceSendTests(unittest.TestCase):
             self.assertEqual(native.reconcile_force_send_requests(self.state), 1)
         dispatch.assert_called_once_with(self.state, self.aid, manual=True)
         recover.assert_not_called()
-        self.assertEqual(self.receipt(rid)["result"], "READY")
+        self.assertEqual(self.receipt(rid)["result"], "NO_TEXT_FIELD")  # Mock delivery did not change journal.
         self.assertFalse((native.FORCE_SEND_REQUESTS / (rid + ".json")).exists())
         self.assertEqual(native.reconcile_force_send_requests(self.state), 0)
+
+    def test_verified_text_insertion_is_reported_from_journal(self):
+        rid = self.request()
+        def inserted(state, aid, *, manual):
+            self.assertTrue(manual)
+            state.claim_outbound_delivery(aid)
+            state.finish_outbound_delivery(aid, "TEXT_INSERTED")
+        with mock.patch.object(native, "current_foreground_hwnd", return_value=self.hwnd), \
+             mock.patch.object(native, "deliver", side_effect=inserted) as dispatch:
+            self.assertEqual(native.reconcile_force_send_requests(self.state), 1)
+        dispatch.assert_called_once_with(self.state, self.aid, manual=True)
+        self.assertEqual(self.receipt(rid)["result"], "TEXT_INSERTED")
 
     def test_pending_draft_calls_send_only_not_reinsertion(self):
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
