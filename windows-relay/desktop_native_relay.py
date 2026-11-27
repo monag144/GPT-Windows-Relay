@@ -415,7 +415,7 @@ def request_force_send(aid: str, foreground_hwnd: int) -> str:
     FORCE_SEND_REQUESTS.mkdir(parents=True, exist_ok=True)
     write_json(FORCE_SEND_REQUESTS / (request_id + ".json"), {
         "id": request_id, "kind": "FORCE_SEND", "action_id": aid,
-        "foreground_hwnd": foreground_hwnd, "expires_epoch": time.time() + 15.0,
+        "foreground_hwnd": foreground_hwnd, "expires_epoch": time.time() + 45.0,
     })
     note("NATIVE_FORCE_SEND=QUEUED", "REQUEST=" + request_id, "ACTION=" + aid)
     return request_id
@@ -477,10 +477,14 @@ def reconcile_force_send_requests(state: wr.State) -> int:
                     elif phase == "READY" and not delivery_held(aid):
                         deliver(state, aid, manual=True)
                         outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                        if outcome == "READY": outcome = "NO_TEXT_FIELD"
+                        elif outcome == "SEND_PENDING": outcome = "SEND_NOT_AVAILABLE"
                     elif (phase == "SEND_PENDING"
                           and int(record.get("submit_only_attempt_count", 0) or 0) == 0):
                         recover_submit_only(state, aid, manual=True)
                         outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                        if outcome == "READY": outcome = "NO_TEXT_FIELD"
+                        elif outcome == "SEND_PENDING": outcome = "SEND_NOT_AVAILABLE"
                     else:
                         # ABORTED, SUBMITTED, TEXT_INSERTED, uncertain or held
                         # are NOT authorized by a Force Send click.
