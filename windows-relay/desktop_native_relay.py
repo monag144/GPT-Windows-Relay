@@ -43,6 +43,8 @@ DELIVERY_HOLDS = HOME / "delivery-holds"
 RECEIPT_REQUESTS = HOME / "receipt-reconciliations"
 FORCE_CLEAR_REQUESTS = HOME / "force-clear-requests"
 FORCE_CLEAR_RECEIPTS = HOME / "force-clear-receipts"
+FORCE_SEND_REQUESTS = HOME / "force-send-requests"
+FORCE_SEND_RECEIPTS = HOME / "force-send-receipts"
 SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
 MAX_TRANSPORT_BYTES = 100_000
 
@@ -393,6 +395,110 @@ def _verify_saved_receipt_binding(aid: str, receipt: str):
         raise RuntimeError("NATIVE_RECEIPT_ACK_BINDING_MISMATCH")
 
 
+def request_force_send(aid: str, foreground_hwnd: int) -> str:
+    """Request ONE manual dispatch of a saved, still-eligible result.
+
+    This does not open a second journal writer or execute an instruction.
+    The running singleton verifies the saved phase and the exact previously
+    focused foreground window before invoking the existing delivery owner.
+    """
+    if not isinstance(aid, str) or not wr.ID_RE.fullmatch(aid):
+        raise ValueError("FORCE_SEND_ACTION_ID_INVALID")
+    if type(foreground_hwnd) is not int or not (0 < foreground_hwnd <= 0xFFFFFFFFFFFFFFFF):
+        raise ValueError("FORCE_SEND_WINDOW_INVALID")
+    if not runner_active():
+        raise RuntimeError("FORCE_SEND_REQUIRES_RUNNING_SINGLETON")
+    cfg = configuration()
+    if not cfg["armed"] or cfg["off"]:
+        raise RuntimeError("FORCE_SEND_REQUIRES_ARMED_RUNNER")
+    request_id = uuid.uuid4().hex
+    FORCE_SEND_REQUESTS.mkdir(parents=True, exist_ok=True)
+    write_json(FORCE_SEND_REQUESTS / (request_id + ".json"), {
+        "id": request_id, "kind": "FORCE_SEND", "action_id": aid,
+        "foreground_hwnd": foreground_hwnd, "expires_epoch": time.time() + 15.0,
+    })
+    note("NATIVE_FORCE_SEND=QUEUED", "REQUEST=" + request_id, "ACTION=" + aid)
+    return request_id
+
+
+def reconcile_force_send_requests(state: wr.State) -> int:
+    """The singleton consumes manual sends before normal automatic delivery.
+
+    A request is claimed on disk before calling the sender, so a crash does
+    not resurrect the mouse click. The durable outbound journal is the
+    final authority on whether any message may be inserted or submitted.
+    """
+    if not FORCE_SEND_REQUESTS.is_dir():
+        return 0
+    processed = 0
+    for path in sorted(FORCE_SEND_REQUESTS.glob("*.json")):
+        claimed = path.with_suffix(".claimed")
+        request_id = path.stem
+        aid = ""
+        outcome = "REJECTED"
+        try:
+            if path.is_symlink() or not re.fullmatch(r"[0-9a-f]{32}", request_id):
+                raise ValueError("FORCE_SEND_REQUEST_INVALID_PATH")
+            req = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(req, dict) or req.get("id") != request_id or req.get("kind") != "FORCE_SEND":
+                raise ValueError("FORCE_SEND_REQUEST_INVALID")
+            aid = req.get("action_id")
+            hwnd = req.get("foreground_hwnd")
+            deadline = req.get("expires_epoch")
+            if not isinstance(aid, str) or not wr.ID_RE.fullmatch(aid):
+                raise ValueError("FORCE_SEND_ACTION_ID_INVALID")
+            if type(hwnd) is not int or hwnd <= 0 or type(deadline) not in (int, float):
+                raise ValueError("FORCE_SEND_REQUEST_FIELDS_INVALID")
+            # Atomic claim must precede all side effects; never replay a
+            # claimed request after a process crash.
+            path.replace(claimed)
+            if time.time() > deadline:
+                outcome = "EXPIRED_NO_SEND"
+            elif stop_requested():
+                outcome = "DISARMED_NO_SEND"
+            elif os.name != "nt":
+                outcome = "NON_WINDOWS_NO_SEND"
+            else:
+                import ctypes
+                ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
+                foreground = int(ctypes.windll.user32.GetForegroundWindow() or 0)
+                if foreground != hwnd:
+                    outcome = "WINDOW_CHANGED_NO_SEND"
+                else:
+                    record = state.outbound_lookup(aid)
+                    phase = record.get("phase") if isinstance(record, dict) else None
+                    if not isinstance(record, dict) or record.get("has_attachments") is not False:
+                        outcome = "NO_ELIGIBLE_RESULT"
+                    elif phase == "READY" and not delivery_held(aid):
+                        deliver(state, aid, manual=True)
+                        outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                    elif (phase == "SEND_PENDING"
+                          and int(record.get("submit_only_attempt_count", 0) or 0) == 0):
+                        recover_submit_only(state, aid, manual=True)
+                        outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                    else:
+                        # ABORTED, SUBMITTED, TEXT_INSERTED, uncertain or held
+                        # are NOT authorized by a Force Send click.
+                        outcome = "NO_ELIGIBLE_RESULT"
+            note("NATIVE_FORCE_SEND=" + outcome, "ACTION=" + aid, "REQUEST=" + request_id)
+            processed += 1
+        except (OSError, ValueError, RuntimeError, wr.RelayError) as exc:
+            note("NATIVE_FORCE_SEND=REJECTED", "ERROR=" + type(exc).__name__,
+                 "REQUEST=" + request_id)
+        finally:
+            if claimed.is_file():
+                FORCE_SEND_RECEIPTS.mkdir(parents=True, exist_ok=True)
+                write_json(FORCE_SEND_RECEIPTS / (request_id + ".json"), {
+                    "id": request_id, "action_id": aid, "result": outcome,
+                    "finished_utc": utc(),
+                })
+                claimed.unlink(missing_ok=True)
+            elif path.is_file() and not path.is_symlink():
+                # Invalid requests must not be retried every loop.
+                path.rename(path.with_suffix(".rejected"))
+    return processed
+
+
 def request_force_clear_pending() -> str:
     """Queue an operator-confirmed reset for the running journal owner.
 
@@ -577,7 +683,7 @@ def acknowledge_confirmed_receipt(aid: str, receipt: str):
     return after
 
 
-def deliver(state: wr.State, aid: str):
+def deliver(state: wr.State, aid: str, *, manual: bool = False):
     if stop_requested() or delivery_held(aid):
         return
     delivery = state.outbound_lookup(aid)
@@ -601,6 +707,8 @@ def deliver(state: wr.State, aid: str):
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
     if force_clear_composer:
         cmd.append("-ForceClearComposer")
+    if manual and sender_script == FOREGROUND_SENDER:
+        cmd.append("-ManualForceSend")
     phase = "SUBMIT_UNCERTAIN"
     error_code = "SENDER_NO_RECEIPT"
     stage = "STARTING"
@@ -694,7 +802,7 @@ def deliver(state: wr.State, aid: str):
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
-def recover_submit_only(state: wr.State, aid: str):
+def recover_submit_only(state: wr.State, aid: str, *, manual: bool = False):
     """At most one saved-draft Send click; never retry ambiguous submissions or EXEC."""
     if stop_requested():
         return
@@ -718,6 +826,8 @@ def recover_submit_only(state: wr.State, aid: str):
                "-File", str(FOREGROUND_SENDER), "-NativeResultPath", str(path),
                "-NativeActionId", aid, "-NativeReceiptMarker", marker,
                "-SubmitExistingOnly"]
+        if manual:
+            cmd.append("-ManualForceSend")
         response = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=70,
@@ -829,6 +939,9 @@ def runner():
             # Manual FORCE CLEAR is applied by the same journal owner before
             # scanning new instructions or claiming any outbound delivery.
             reconcile_force_clear_requests(state)
+            # Manual FORCE SEND consumes one receipt-bound queued result and
+            # works independently of Auto Send, without any EXEC replay.
+            reconcile_force_send_requests(state)
             # Send-only retry of a saved chat draft, never a command replay.
             policy = configuration()
             if (policy["armed"] and policy["auto_send"] and not stop_requested()
