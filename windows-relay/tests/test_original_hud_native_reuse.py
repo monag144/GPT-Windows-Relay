@@ -176,7 +176,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("Get-CimInstance Win32_Process", RECONCILE)
         self.assertIn("StringComparison]::OrdinalIgnoreCase", RECONCILE)
         self.assertIn("ORIGINAL_HUD_FILE=hud.py", RECONCILE)
-        self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP", RECONCILE)
+        self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_FOREGROUND", RECONCILE)
         self.assertIn("$label+'_ALREADY_EXITED_PID='", RECONCILE)
         self.assertIn("$label+'_STOP_FAILED_PID='", RECONCILE)
         self.assertIn("ORIGINAL_HUD_VISIBLE_WINDOW_COUNT=", RECONCILE)
