@@ -181,14 +181,27 @@ function Focus-CandidateEditor($window,$editor,[IntPtr]$handle){
 }
 
 function Get-ForegroundEditable {
+    # Diagnostic stages are metadata only: no window title, app name, editor
+    # content or conversation text is collected.
+    $script:targetProbe='BEGIN'
+    $script:targetProbePid=0
     $hwnd=[CourierForegroundInput]::GetForegroundWindow()
-    if($hwnd -eq [IntPtr]::Zero){return $null}
+    if($hwnd -eq [IntPtr]::Zero){
+        $script:targetProbe='NO_FOREGROUND_WINDOW';return $null
+    }
+    $procId=[uint32]0
+    [void][CourierForegroundInput]::GetWindowThreadProcessId($hwnd,[ref]$procId)
+    $script:targetProbePid=[int]$procId
+    $script:targetProbe='WINDOW_OBSERVED'
     $window=[System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
-    if($null -eq $window){return $null}
+    if($null -eq $window){
+        $script:targetProbe='UIA_WINDOW_NOT_AVAILABLE';return $null
+    }
     # Terminal text panes must not execute result-body code as keystrokes.
     $proc=Get-Process -Id ([int]$window.Current.ProcessId) -ErrorAction SilentlyContinue
     if($proc -and $proc.ProcessName -match
        '^(?i:cmd|powershell|pwsh|windowsterminal|openconsole|conhost|wt)$'){
+        $script:targetProbe='TERMINAL_FOREGROUND_BLOCKED'
         return $null
     }
     $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
@@ -212,19 +225,32 @@ function Get-ForegroundEditable {
         }
         if($named.Count -eq 1){$editor=$named[0]}
         elseif($all.Count -eq 1){$editor=$all[0]}
-        else{return $null}  # Ambiguous fields: never type into a guess.
-        if(-not (Focus-CandidateEditor $window $editor $hwnd)){return $null}
+        else{
+            $script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count+'_NAMED_'+$named.Count)
+            return $null
+        }  # Ambiguous fields: never type into a guess.
+        if(-not (Focus-CandidateEditor $window $editor $hwnd)){
+            $script:targetProbe='EDITOR_FOCUS_FAILED'
+            return $null
+        }
         $script:autoFocused=$true
     }
-    if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd -or
-       -not (Test-EditorOwnsFocus $editor)){return $null}
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd){
+        $script:targetProbe='FOREGROUND_CHANGED_BEFORE_READ';return $null
+    }
+    if(-not (Test-EditorOwnsFocus $editor)){
+        $script:targetProbe='EDITOR_NOT_FOCUSED_BEFORE_READ';return $null
+    }
     $value=$null
     $text=$null
     $hasValue=$editor.TryGetCurrentPattern(
         [System.Windows.Automation.ValuePattern]::Pattern,[ref]$value)
     $hasText=$editor.TryGetCurrentPattern(
         [System.Windows.Automation.TextPattern]::Pattern,[ref]$text)
-    if($hasValue -and $value.Current.IsReadOnly){return $null}
+    if($hasValue -and $value.Current.IsReadOnly){
+        $script:targetProbe='EDITOR_READ_ONLY';return $null
+    }
+    $script:targetProbe='ELIGIBLE'
     return @{window=$window;editor=$editor;handle=$hwnd;
              runtimeId=($editor.GetRuntimeId() -join ',');
              value=$value;text=$text;hasValue=$hasValue;hasText=$hasText}
@@ -670,8 +696,14 @@ try{
     # An unavailable or non-UIA window is simply not an eligible text field.
     # The result stays queued; it must not become a permanent failed delivery.
     try{$target=Get-ForegroundEditable}
-    catch{$target=$null}
+    catch{
+        $script:targetProbe='UIA_PROBE_EXCEPTION_'+$_.Exception.GetType().Name
+        $target=$null
+    }
     if($null -eq $target){
+        # PID + bounded stage only. Never disclose window title or field data.
+        Write-Output ('SENDER_TARGET_DIAGNOSTIC='+[string]$script:targetProbe)
+        Write-Output ('SENDER_TARGET_PID='+[string]$script:targetProbePid)
         Write-Output 'SENDER_STAGE=AWAITING_FOREGROUND_TEXT_FIELD'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
