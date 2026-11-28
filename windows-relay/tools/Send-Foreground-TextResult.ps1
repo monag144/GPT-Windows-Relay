@@ -185,6 +185,8 @@ function Get-ForegroundEditable {
     # content or conversation text is collected.
     $script:targetProbe='BEGIN'
     $script:targetProbePid=0
+    $script:targetProbeEditorRoles=0
+    $script:targetProbeEligible=0
     $hwnd=[CourierForegroundInput]::GetForegroundWindow()
     if($hwnd -eq [IntPtr]::Zero){
         $script:targetProbe='NO_FOREGROUND_WINDOW';return $null
@@ -216,7 +218,14 @@ function Get-ForegroundEditable {
             [System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.Condition]::TrueCondition)
         foreach($node in $descendants){
+            try{
+                if(([string]$node.Current.ControlType.ProgrammaticName) -in
+                   @('ControlType.Edit','ControlType.Document')){
+                    $script:targetProbeEditorRoles++
+                }
+            }catch{}
             if(-not (Test-EligibleEditor $window $node)){continue}
+            $script:targetProbeEligible++
             [void]$all.Add($node)
             $label=([string]$node.Current.Name)+' '+([string]$node.Current.AutomationId)
             if($label -match '(?i)ask(?:\s+\w+){0,3}|message|prompt|compose|reply|chat.?input|write.*message|text.?entry'){
@@ -704,6 +713,8 @@ try{
         # PID + bounded stage only. Never disclose window title or field data.
         Write-Output ('SENDER_TARGET_DIAGNOSTIC='+[string]$script:targetProbe)
         Write-Output ('SENDER_TARGET_PID='+[string]$script:targetProbePid)
+        Write-Output ('SENDER_EDITOR_ROLES='+[string]$script:targetProbeEditorRoles)
+        Write-Output ('SENDER_ELIGIBLE_FIELDS='+[string]$script:targetProbeEligible)
         Write-Output 'SENDER_STAGE=AWAITING_FOREGROUND_TEXT_FIELD'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
