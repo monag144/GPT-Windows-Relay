@@ -292,6 +292,41 @@ function Test-EmptyOrPlaceholder([string]$value){
             '^(?i:ask chatgpt|ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?$')
 }
 
+function Test-EditorIsCertainlyEmpty($target){
+    # All foreground apps obey the same empty-field rule, even Notepad.
+    # Every exposed readable pattern must agree that no user text exists.
+    # Unknown, stale or inaccessible values fail closed; no keyboard input.
+    $observed=0
+    try{
+        Assert-CurrentTarget $target
+        if($target.hasValue){
+            $pattern=$null
+            if(-not $target.editor.TryGetCurrentPattern(
+                [System.Windows.Automation.ValuePattern]::Pattern,[ref]$pattern)){
+                return $false
+            }
+            if($pattern.Current.IsReadOnly){return $false}
+            $observed++
+            if(-not (Test-EmptyOrPlaceholder ([string]$pattern.Current.Value))){
+                return $false
+            }
+        }
+        if($target.hasText){
+            $pattern=$null
+            if(-not $target.editor.TryGetCurrentPattern(
+                [System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){
+                return $false
+            }
+            $observed++
+            if(-not (Test-EmptyOrPlaceholder ([string]$pattern.DocumentRange.GetText(-1)))){
+                return $false
+            }
+        }
+        Assert-CurrentTarget $target
+    }catch{return $false}
+    return ($observed -gt 0)
+}
+
 function Assert-CurrentTarget($target){
     if([CourierForegroundInput]::GetForegroundWindow() -ne $target.handle){
         throw 'FOREGROUND_TARGET_CHANGED_DURING_INPUT'
@@ -611,19 +646,12 @@ try{
         }
         exit 0
     }
-    # A permanently enabled Send button does NOT prove the editor contains
-    # someone else's draft (Telegram/Discord and icon buttons may stay
-    # enabled). Inspect the actual selected editor instead; never mix with
-    # a nonempty existing draft before writing a saved result.
-    $allowSubmit=Test-EmptyOrPlaceholder $before
-    if($target.hasText){
-        try{
-            $allowSubmit=($allowSubmit -and
-                         (Test-EmptyOrPlaceholder ([string]$target.text.DocumentRange.GetText(-1))))
-        }catch{}
-    }
-    if($null -ne $sendBefore -and -not $allowSubmit){
-        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
+    # This rule applies to every writable editor, not just chat.
+    # A disabled/always-enabled Send control is not emptiness evidence.
+    # Never append to Notepad, a messenger draft, or an uncertain UIA field.
+    $allowSubmit=Test-EditorIsCertainlyEmpty $target
+    if(-not $allowSubmit){
+        Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
     }
