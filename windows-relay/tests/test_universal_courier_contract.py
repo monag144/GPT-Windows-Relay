@@ -136,6 +136,23 @@ class UniversalCourierTests(unittest.TestCase):
         self.assertIn("reconcile_explicit_output_requests(state)",running)
         self.assertIn("state.list_claimable_outbound_ids()",running)
 
+    def test_destination_category_has_no_provider_name_dependency(self):
+        sender=(ROOT/"tools"/"Send-Foreground-TextResult.ps1").read_text(encoding="utf-8")
+        detector=sender.split("function Get-ForegroundEditable {",1)[1].split(
+            "function Read-EditorText(",1)[0]
+        classifier=sender.split("function Get-EditorCategory(",1)[1].split(
+            "function Invoke-ExistingDraftSubmit(",1)[0]
+        self.assertIn("function Test-MessagingComposerTarget(",sender)
+        self.assertIn("MESSAGE_COMPOSER",classifier)
+        self.assertIn("TEXT_EDITOR",classifier)
+        self.assertIn("Find-SendButton $target",classifier)
+        self.assertIn("DESTINATION_CATEGORY=",sender)
+        self.assertNotIn("chatgpt",detector.lower())
+        self.assertNotIn("chatgpt",classifier.lower())
+        self.assertNotIn("ProcessName -ieq",classifier)
+        self.assertIn("ControlType.Edit",detector)
+        self.assertIn("ControlType.Document",detector)
+
     def test_all_apps_have_fail_closed_empty_check_before_unicode_input(self):
         source=(ROOT/"tools"/"Send-Foreground-TextResult.ps1").read_text(encoding="utf-8")
         self.assertIn("function Test-EditorIsCertainlyEmpty(",source)
