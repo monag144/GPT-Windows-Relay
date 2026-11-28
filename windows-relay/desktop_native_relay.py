@@ -977,15 +977,13 @@ def runner():
         if state.outbound_owner != "windows":
             state.data["outbound_owner"] = "windows"
             state.save()
-        note("NATIVE_CHATGPT_DESKTOP_RELAY_V1")
-        note("MODE=INDEPENDENT_NATIVE_DESKTOP_NO_BROWSER_EXTENSION")
+        note("NATIVE_UNIVERSAL_COMMAND_COURIER_V2")
+        note("MODE=EXPLICIT_OUTPUT_GENERIC_FOREGROUND_NO_TRANSCRIPT_SCANNER")
         note("CMD_PYTHON_POWERSHELL_BASE64=SUPPORTED")
         note("PERSISTENT_ARM=" + str(configuration()["armed"]).upper())
-        status_update(pid=os.getpid(), phase="BASELINING")
-        # Keep the singleton alive at sign-in even if ChatGPT starts later.
-        # Establish the first baseline only after its UIA document is ready.
-        seen = set()
-        baseline_ready = False
+        status_update(pid=os.getpid(), phase="IDLE")
+        # Explicit local request files, not third-party UI transcripts,
+        # are the only automatic source of new output.
         next_foreground_probe = 0.0
         next_submit_only_probe = 0.0
         # This worker has its own journal lock and does not use ChatGPT UIA.
@@ -1036,9 +1034,7 @@ def runner():
                 except (RuntimeError, ValueError, wr.RelayError, OSError) as exc:
                     note("NATIVE_SUBMIT_ONLY_LOOP_ERROR=" + type(exc).__name__,
                          str(exc)[:120])
-            # The output queue is INDEPENDENT of ChatGPT's packet scanner:
-            # a pending result can be inserted into focused Notepad or another
-            # foreground editor even when the ChatGPT app is closed.
+            # Deliver the saved output into the verified foreground app.
             policy = configuration()
             if (policy["armed"] and policy["auto_send"] and not stop_requested()
                     and time.monotonic() >= next_foreground_probe):
@@ -1052,71 +1048,28 @@ def runner():
                 except (RuntimeError, ValueError, wr.RelayError, OSError) as exc:
                     note("NATIVE_FOREGROUND_DELIVERY_ERROR=" + type(exc).__name__,
                          str(exc)[:120])
-            forward_report = dict(forward_activity)
-            runner_stage = "SCANNING_CHATGPT_APP"
+            runner_stage = "QUEUING_EXPLICIT_OUTPUT"
             try:
-                candidates = read_scan(require_app=True)
-                if not baseline_ready:
-                    seen.update(aid for aid, _ in candidates)
-                    baseline_ready = True
-                    note("NATIVE_BASELINE_COMMANDS_SUPPRESSED=" + str(len(candidates)))
-                    status_update(pid=os.getpid(), phase="BASELINED",
-                                  runner_error_type=None, runner_error_stage=None)
-                    time.sleep(1)
-                    continue
-                cfg = configuration()
+                cfg=configuration()
                 if state.armed != cfg["armed"]:
                     state.set_armed(cfg["armed"])
                 if cfg["armed"] and not stop_requested():
-                    runner_stage = "PROCESSING_NEW_INSTRUCTIONS"
-                    for aid, packet in candidates:
-                        if aid in seen:
-                            continue
-                        seen.add(aid)
-                        try:
-                            process_packet(packet, state)
-                        except (ValueError, wr.RelayError, OSError) as exc:
-                            note("NATIVE_ACTION_ERROR=" + aid, type(exc).__name__, str(exc)[:150])
-                    # Result delivery is now owned by the independent
-                    # foreground-output pass above; do not run it a second
-                    # time inside ChatGPT's input-scanner branch.
-                else:
-                    # Commands seen while stopped must never auto-execute on
-                    # a later arm, even if the app still displays them.
-                    seen.update(aid for aid, _ in candidates)
+                    reconcile_explicit_output_requests(state)
                 if not cfg["armed"]:
-                    display_phase = "DISARMED"
+                    display_phase="DISARMED"
                 else:
-                    prior = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
-                    display_phase = ("AWAITING_TEXT_FIELD"
-                                     if prior.get("phase") == "AWAITING_TEXT_FIELD"
-                                     else "DELIVERY_BLOCKED" if prior.get("delivery_blocked")
-                                     and prior.get("last_result") == "PRE_SUBMIT_FAILED"
-                                     else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
-                                     else "IDLE")
-                status_update(pid=os.getpid(), phase=display_phase,
-                              runner_error_type=None, runner_error_stage=None)
-            except RuntimeError as exc:
-                if str(exc) == "NATIVE_CHATGPT_APP_NOT_READY":
-                    baseline_ready = False
-                    # The independent text route can continue; unavailable
-                    # ChatGPT must not make the entire courier appear stopped.
-                    pending_phase = (json.loads(STATUS.read_text(encoding="utf-8"))
-                                     if STATUS.is_file() else {})
-                    phase = ("AWAITING_TEXT_FIELD"
-                             if pending_phase.get("phase") == "AWAITING_TEXT_FIELD"
-                             else "FORWARDING_NO_CHATGPT" if forward_report["active"]
-                             else "WAITING_FOR_CHATGPT_APP")
-                    status_update(pid=os.getpid(), phase=phase,
-                                  runner_error_type=None, runner_error_stage=None)
-                else:
-                    note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
-                    status_update(pid=os.getpid(), phase="ERROR",
-                                  runner_error_type=type(exc).__name__,
-                                  runner_error_stage=runner_stage)
-            except Exception as exc:
-                note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
-                status_update(pid=os.getpid(), phase="ERROR",
+                    prior=json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
+                    display_phase=("AWAITING_TEXT_FIELD"
+                                   if prior.get("phase")=="AWAITING_TEXT_FIELD"
+                                   else "DELIVERY_BLOCKED" if prior.get("delivery_blocked")
+                                   and prior.get("last_result")=="PRE_SUBMIT_FAILED"
+                                   else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
+                                   else "IDLE")
+                status_update(pid=os.getpid(),phase=display_phase,
+                              runner_error_type=None,runner_error_stage=None)
+            except (OSError,ValueError,RuntimeError,wr.RelayError) as exc:
+                note("COURIER_OUTPUT_INTAKE_ERROR="+type(exc).__name__)
+                status_update(pid=os.getpid(),phase="ERROR",
                               runner_error_type=type(exc).__name__,
                               runner_error_stage=runner_stage)
             time.sleep(1)
