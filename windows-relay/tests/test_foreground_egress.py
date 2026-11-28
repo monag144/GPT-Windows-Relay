@@ -168,7 +168,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("TEXT_INSERTED", NATIVE)
         self.assertIn("creationflags=getattr(subprocess, \"CREATE_NO_WINDOW\", 0)", NATIVE)
         hud = (ROOT / "hud.py").read_text(encoding="utf-8")
-        self.assertIn("Foreground text field • auto-detect • no configured input", hud)
+        self.assertIn("Foreground text field • auto-detect • explicit output intake", hud)
         self.assertIn("OUTPUT QUEUED • waiting for focused text field", hud)
         self.assertIn("elif phase=='AWAITING_TEXT_FIELD': title='READY'", hud)
         cli = (ROOT / "command_courier.py").read_text(encoding="utf-8")
