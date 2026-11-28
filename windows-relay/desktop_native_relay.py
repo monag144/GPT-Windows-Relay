@@ -311,7 +311,8 @@ def queue_explicit_output(text: str, *, source: str = "explicit-file", aid: str 
     if not isinstance(aid,str) or not wr.ID_RE.fullmatch(aid):
         raise ValueError("OUTPUT_ACTION_ID_INVALID")
     request_path = OUTPUT_REQUESTS / (wr.safe_result_filename(aid))
-    if request_path.exists() or (OUTPUT_RECEIPTS / request_path.name).exists():
+    if (request_path.exists() or request_path.with_suffix(".claimed").exists()
+            or (OUTPUT_RECEIPTS / request_path.name).exists()):
         raise ValueError("OUTPUT_ID_ALREADY_QUEUED")
     OUTPUT_REQUESTS.mkdir(parents=True,exist_ok=True)
     write_json(request_path, {
