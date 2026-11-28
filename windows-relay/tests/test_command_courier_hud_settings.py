@@ -143,8 +143,8 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn('startup_check.configure(state="normal" if editable else "disabled")', HUD_SOURCE)
 
     def test_live_engine_remains_ready_for_new_commands_while_old_delivery_held(self):
-        # Only outbound result 002 is held; the native scanner remains
-        # armed for new actions without resending any older result.
+        # Only outbound result 002 is held; the universal native output
+        # intake remains armed without resending any older result.
         action_id="PCE19-NATIVE-HEALTH-20261122-002"
         status={"native_running":True,"native_armed":True,"native_off":False,
                 "auto_send":True,"phase":"DELIVERY_BLOCKED",
@@ -159,7 +159,7 @@ class CourierHudStartupTests(unittest.TestCase):
             snap=hud.native_snapshot()
         self.assertEqual(snap["title"],"READY")
         self.assertEqual(snap["title_phase"],"READY")
-        self.assertIn("CHATGPT OUTBOX HELD",snap["phase"])
+        self.assertIn("COURIER OUTBOX HELD",snap["phase"])
         self.assertEqual(snap["native_delivery_phase"],"PRE_SUBMIT_FAILED")
         self.assertTrue(snap["native_armed"])
         self.assertTrue(snap["online"])
@@ -180,7 +180,7 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertEqual(snap["title"],"READY")
         self.assertEqual(snap["outbound_unresolved_count"],1)
         self.assertIn("CHAT SEND PENDING",snap["phase"])
-        self.assertNotIn("CHATGPT OUTBOX HELD",snap["phase"])
+        self.assertNotIn("COURIER OUTBOX HELD",snap["phase"])
         self.assertTrue(snap["online"])
 
     def test_stale_send_pending_status_does_not_override_actual_saved_phase(self):
