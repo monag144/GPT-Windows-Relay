@@ -206,7 +206,7 @@ function Get-ForegroundEditable {
             if(-not (Test-EligibleEditor $window $node)){continue}
             [void]$all.Add($node)
             $label=([string]$node.Current.Name)+' '+([string]$node.Current.AutomationId)
-            if($label -match '(?i)ask chatgpt|ask anything|message|prompt|compose|reply|chat.input|write.*message'){
+            if($label -match '(?i)message|prompt|compose|reply|chat.?input|write.*message|text.?entry'){
                 [void]$named.Add($node)
             }
         }
@@ -302,7 +302,7 @@ function Test-EditorContainsMarker($target,[string]$marker){
 function Test-EmptyOrPlaceholder([string]$value){
     if([string]::IsNullOrWhiteSpace($value)){return $true}
     return ($value.Trim() -match
-            '^(?i:ask chatgpt|ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?$')
+            '^(?i:ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?$')
 }
 
 function Test-EditorIsCertainlyEmpty($target){
@@ -470,26 +470,29 @@ function Test-ExactOwnDraft($target,[string]$marker){
     }catch{return $false}
 }
 
-function Test-MessagingComposerTarget($target){
-    # Message field semantics, not app branding, enable saved-draft recovery.
+function Get-EditorCategory($target){
+    # UIA capability category ONLY. No app/process name, URL, chat ID or
+    # vendor decides whether this is a message composer or plain text editor.
     try{
         $label=([string]$target.editor.Current.Name)+' '+
                ([string]$target.editor.Current.AutomationId)+' '+
                ([string]$target.editor.Current.HelpText)
-        if($label -match '(?i)ask chatgpt|ask anything|message|reply|chat.?input|compose|prompt|write.*message'){
-            return $true
+        if($label -match '(?i)\b(message|reply|compose|prompt|chat.?input|write.*message)\b'){
+            return 'MESSAGE_COMPOSER'
         }
-        # Compatibility with ChatGPT's unnamed editor, not the primary rule.
-        $proc=Get-Process -Id ([int]$target.window.Current.ProcessId) -ErrorAction Stop
-        return ($proc.ProcessName -ieq 'ChatGPT' -and
-                [string]::IsNullOrWhiteSpace([string]$target.editor.Current.Name))
-    }catch{return $false}
+        if($null -ne (Find-SendButton $target)){return 'MESSAGE_COMPOSER'}
+    }catch{}
+    return 'TEXT_EDITOR'
+}
+
+function Test-MessagingComposerTarget($target){
+    return ((Get-EditorCategory $target) -eq 'MESSAGE_COMPOSER')
 }
 
 function Invoke-ExistingDraftSubmit($target,$send){
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    # A recovered result may ONLY use ChatGPT's explicit, unique Send control.
+    # Recover only through a uniquely identified Send control in this foreground app.
     # Enter is not a Send-button substitute and must never create another post.
     if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}
     if(-not $send.Current.IsEnabled -or $send.Current.IsOffscreen){
@@ -549,7 +552,7 @@ function Recover-ExistingChatDraft($target,[string]$marker){
         return
     }
     # Before another Enter, allow a previously initiated send to settle.
-    # A slow ChatGPT response must not trigger an immediate duplicate.
+    # Slow recipient delivery must not trigger an immediate duplicate.
     for($settle=0;$settle -lt 10;$settle++){
         Start-Sleep -Milliseconds 250
         if(-not (Test-EditorContainsMarker $target $marker)){
@@ -674,6 +677,8 @@ try{
         exit 0
     }
     if($script:autoFocused){Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'}
+    $targetCategory=Get-EditorCategory $target
+    Write-Output ('DESTINATION_CATEGORY='+$targetCategory)
     Write-Output 'SENDER_STAGE=FOREGROUND_TEXT_FIELD_FOUND'
     if($SubmitExistingOnly){
         Recover-ExistingChatDraft $target $NativeReceiptMarker
@@ -684,7 +689,7 @@ try{
     if(Test-EditorContainsMarker $target $NativeReceiptMarker){
         Write-Output 'SENDER_STAGE=RESULT_ALREADY_IN_EDIT_FIELD'
         if(Test-MessagingComposerTarget $target){
-            # A restored unsent ChatGPT draft is NOT a delivered message.
+            # A restored unsent message draft is NOT a delivered message.
             # Recovery can only submit it after a strict saved-frame check.
             Write-Output 'SENDER_STAGE=CHAT_DRAFT_PENDING_SEND'
             Write-Output 'RESULT=CHAT_SEND_PENDING'
@@ -704,14 +709,9 @@ try{
     }
     # For a named chat composer, a busy draft isn't an output target. The
     # unrelated text must not be submitted with our result.
-    $isChatComposer=(([string]$target.editor.Current.Name -match
-                     '(?i)ask chatgpt|ask anything|message|prompt|compose|chat') -or
-                     (Test-MessagingComposerTarget $target))
-    if($isChatComposer -and -not $allowSubmit){
-        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
-        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
-        exit 0
-    }
+    # Destination category is derived from the actual text-field capabilities,
+    # never the running process or a specific AI/chat provider.
+    $isChatComposer=($targetCategory -eq 'MESSAGE_COMPOSER')
     $requiredSize=if([IntPtr]::Size -eq 8){40}else{28}
     if([CourierForegroundInput]::InputSize() -ne $requiredSize){
         throw 'FOREGROUND_INPUT_STRUCT_SIZE_INVALID'
@@ -843,7 +843,7 @@ try{
     if(-not $inputStarted){
         # These failures occur before ANY mouse-down, so a later attempt
         # may still click this same verified draft without risking a retry
-        # of a click that might already have reached ChatGPT.
+        # of a click that might already have reached the destination.
         if($SubmitExistingOnly -and $reason -in @(
             'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED',
             'SUBMIT_ONLY_SEND_CONTROL_NOT_READY',
