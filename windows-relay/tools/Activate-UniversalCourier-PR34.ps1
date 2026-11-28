@@ -63,12 +63,7 @@ $allowed=@(
     [IO.Path]::GetFullPath((Join-Path $oldProject 'windows-relay\hud.py')),
     [IO.Path]::GetFullPath($hud)
 )
-$candidates=@(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
-    $_.Name -in @('python.exe','pythonw.exe') -and
-    $allowed.Where({$_.Length -gt 0 -and
-      ([string]$PSItem.CommandLine).IndexOf(('"'+$_+'"'),[StringComparison]::OrdinalIgnoreCase) -ge 0}).Count -gt 0
-})
-# Use an explicit loop: $PSItem in a nested scriptblock is ambiguous.
+# Exact process CLI validation: never stop unrelated user applications.
 $candidates=@()
 foreach($proc in @(Get-CimInstance Win32_Process -ErrorAction Stop |
                    Where-Object {$_.Name -in @('python.exe','pythonw.exe')})){
