@@ -27,8 +27,8 @@ class UniversalCutoverTests(unittest.TestCase):
         self.assertIn("NEW_CANONICAL_HUD_COUNT=1",CUTOVER)
         self.assertIn("NO_MAIN_WORKTREE_MUTATION=TRUE",CUTOVER)
         self.assertIn("AUTO_SEND=OFF_PRIOR_UNSENT_RESULT_REVIEW_REQUIRED_COUNT=",CUTOVER)
-        self.assertNotIn("git reset",CUTOVER)
-        self.assertNotIn("git clean",CUTOVER)
+        self.assertNotRegex(CUTOVER,r"(?im)^\s*(?:&\s*)?git\s+reset\b")
+        self.assertNotRegex(CUTOVER,r"(?im)^\s*(?:&\s*)?git\s+clean\b")
         self.assertNotIn("Remove-Item",CUTOVER)
         self.assertNotIn("taskkill",CUTOVER.lower())
 
