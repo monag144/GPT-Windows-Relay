@@ -171,6 +171,11 @@ class UniversalCourierTests(unittest.TestCase):
         self.assertNotIn("Test-MessagingComposerTarget",check)
         self.assertIn("[switch]$PlainText",source)
         self.assertIn("FOREIGN_PLAINTEXT_RECEIPT_OR_CONTENT_MISMATCH",source)
+        self.assertIn("SENDER_TARGET_DIAGNOSTIC=",source)
+        self.assertIn("TERMINAL_FOREGROUND_BLOCKED",source)
+        self.assertIn("EDITOR_MATCH_COUNT_",source)
+        self.assertIn("UIA_PROBE_EXCEPTION_",source)
+        self.assertNotIn("Current.Name);Write-Output",source)
         self.assertNotIn("TypeEnter()",source)
 
 
