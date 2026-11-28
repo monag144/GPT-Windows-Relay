@@ -161,7 +161,7 @@ def native_snapshot():
         title='READY'
     elif (phase=='DELIVERY_BLOCKED' and delivery_blocked
           and report.get('last_result')=='PRE_SUBMIT_FAILED'):
-        # Old ChatGPT sender receipt is held; ingress and file/API routes
+        # Historical sender receipt is held; file/API routes
         # remain READY. Keep the held receipt visible in the secondary line.
         title='READY'
     elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
@@ -196,11 +196,11 @@ def native_snapshot():
         exact+='\nDELIVERY BLOCKED: '+delivery_error
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     # The durable delivery phase, not a potentially stale runner error,
-    # decides whether a saved ChatGPT draft is awaiting send-only recovery.
+    # decides whether a saved message draft awaits send-only recovery.
     if result=='SEND_PENDING' and delivery_phase=='SEND_PENDING':
         phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
     elif delivery_blocked:
-        phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
+        phase_line='COURIER OUTBOX HELD • '+delivery_error[:70]
     elif phase=='AWAITING_TEXT_FIELD':
         phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif phase=='WAITING_FOR_CHATGPT_APP':
@@ -208,14 +208,14 @@ def native_snapshot():
     elif result=='FORCE_CLEAR_COMPLETE' and not force_send_action:
         phase_line='FORCE CLEAR COMPLETE • no unsent result available'
     elif outstanding_count:
-        phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
+        phase_line='COURIER OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
     return {
         'online':live,'title':title,
         'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':('Text routes ACTIVE • foreground destination optional'
                    if phase=='FORWARDING_NO_CHATGPT' else
-                   'Foreground text field • auto-detect • no configured input'),
+                   'Foreground text field • auto-detect • explicit output intake'),
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
@@ -661,7 +661,7 @@ def run_ui():
                                activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
     debug_routes_btn.pack(side="left")
     debug_status=tk.Label(settings_frame,
-                          text="Ctrl+C in ChatGPT/Notepad, then SEND COPIED TEXT.",
+                          text="Copy text from any app, then SEND COPIED TEXT.",
                           font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w",
                           justify="left",wraplength=W-35)
     debug_status.pack(fill="x",pady=(1,0))
@@ -883,7 +883,7 @@ def run_ui():
     last_send_target={"hwnd":0,"seen":0.0}
     manual_send={"id":None,"since":0.0,"result":None}
     def force_send_selected():
-        # Real one-shot request, not ChatGPT-only focus and not a resend.
+        # One-shot request to the selected foreground app, never a resend.
         # Keep operator-selected focus while runner owns the actual send.
         snap=native_view.get("snap") or {}
         if manual_send["id"] and manual_send["result"] is None:
@@ -1013,7 +1013,7 @@ def run_ui():
             go_state["waiting"]=(kind=="waiting")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
-            # A historical held ChatGPT receipt is secondary status, never
+            # A historical held delivery receipt is secondary status, never
             # a modal interruption to the courier's active forwarder.
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
