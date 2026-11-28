@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Independent native ChatGPT Windows relay.
+"""Universal Command Courier: operator-supplied output, foreground-field delivery.
 
-The browser integration, browser bridge.json, port 8766 and Firefox extension
-are not used. State, arming, execution journal and result delivery are native.
-Operator acceptance of desktop accessibility as an instruction source is explicit.
+No third-party conversation scanning, inferred instructions or application
+allowlist is permitted in the active native runner. The original execution
+journal is retained for historical results and exact-once delivery.
 """
 from __future__ import annotations
 import argparse
@@ -30,8 +30,6 @@ import courier_forwarder as forwarder
 
 ROOT = Path(__file__).resolve().parent
 TOOLS = ROOT / "tools"
-SCANNER = TOOLS / "Watch-ChatGPT-ActionCandidates.ps1"
-SENDER = TOOLS / "Send-ChatGPT-DesktopHeartbeat.ps1"
 FOREGROUND_SENDER = TOOLS / "Send-Foreground-TextResult.ps1"
 HOME = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "GPTWindowsRelayDesktop"
 CONFIG = HOME / "desktop-control.json"
@@ -45,8 +43,9 @@ FORCE_CLEAR_REQUESTS = HOME / "force-clear-requests"
 FORCE_CLEAR_RECEIPTS = HOME / "force-clear-receipts"
 FORCE_SEND_REQUESTS = HOME / "force-send-requests"
 FORCE_SEND_RECEIPTS = HOME / "force-send-receipts"
-SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
-MAX_TRANSPORT_BYTES = 100_000
+OUTPUT_REQUESTS = HOME / "explicit-output-requests"
+OUTPUT_RECEIPTS = HOME / "explicit-output-receipts"
+MAX_EXPLICIT_OUTPUT_BYTES = 16000
 
 
 def note(*parts):
@@ -224,53 +223,6 @@ def get_status() -> dict:
     }
 
 
-def read_scan(*, require_app: bool = False) -> list[tuple[str, str]]:
-    if not SCANNER.exists():
-        raise RuntimeError("NATIVE_UIA_SCANNER_MISSING")
-    ps = shutil.which("powershell.exe")
-    if not ps:
-        raise RuntimeError("WINDOWS_POWERSHELL_MISSING")
-    cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass",
-           "-File", str(SCANNER), "-WatchSeconds", "2",
-           "-IntervalSeconds", "1", "-EmitPackets"]
-    proc = subprocess.run(cmd, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=25)
-    if proc.returncode:
-        raise RuntimeError("UIA_SCANNER_EXIT_%s: %s" % (proc.returncode, proc.stderr[-300:]))
-    if require_app:
-        # At Windows sign-in the ChatGPT app/editor can start later than the
-        # engine. Never treat an absent app as an empty accepted baseline:
-        # old packets could otherwise be mistaken for newly issued commands.
-        report = set(proc.stdout.splitlines())
-        ready = "CHATGPT_APP_FOUND=True" in report
-        document_rows = [x for x in report if x.startswith("DOCUMENT_READS=")]
-        try:
-            documents = int(document_rows[0].partition("=")[2]) if len(document_rows) == 1 else 0
-        except ValueError:
-            documents = 0
-        if not ready or documents < 1:
-            raise RuntimeError("NATIVE_CHATGPT_APP_NOT_READY")
-    items = []
-    current_id = None
-    for line in proc.stdout.splitlines():
-        if not SOURCE_RE.match(line):
-            continue
-        if line.startswith("CANDIDATE_ID="):
-            current_id = line.removeprefix("CANDIDATE_ID=")
-        elif line.startswith("CANDIDATE_PACKET_B64=") and current_id is not None:
-            encoded = line.removeprefix("CANDIDATE_PACKET_B64=")
-            if len(encoded) > MAX_TRANSPORT_BYTES * 2:
-                current_id = None
-                continue
-            try:
-                packet = base64.b64decode(encoded, validate=True).decode("utf-8")
-                action = wr.extract(packet)
-                if action.id == current_id:
-                    items.append((current_id, packet))
-            except (ValueError, UnicodeError, wr.RelayError):
-                pass
-            current_id = None
-    return items
 
 
 def kill_process_tree(pid: int):
@@ -343,8 +295,119 @@ def process_packet(packet: str, state: wr.State):
     status_update(phase="RESULT_READY", last_result=result["status"])
 
 
+def queue_explicit_output(text: str, *, source: str = "explicit-file", aid: str | None = None) -> str:
+    """Local file/clipboard/API result intake; only the running owner journals.
+
+    No command execution, transcript reading, UI automation, or direct
+    State() mutation occurs in this client-side function.
+    """
+    if source not in {"explicit-file","explicit-clipboard","authorized-api"}:
+        raise ValueError("OUTPUT_SOURCE_INVALID")
+    if (not isinstance(text,str) or not text.strip()
+            or "\x00" in text or len(text.encode("utf-8")) > MAX_EXPLICIT_OUTPUT_BYTES):
+        raise ValueError("OUTPUT_TEXT_INVALID")
+    if aid is None:
+        aid = "COURIER-" + uuid.uuid4().hex
+    if not isinstance(aid,str) or not wr.ID_RE.fullmatch(aid):
+        raise ValueError("OUTPUT_ACTION_ID_INVALID")
+    request_path = OUTPUT_REQUESTS / (wr.safe_result_filename(aid))
+    if request_path.exists() or (OUTPUT_RECEIPTS / request_path.name).exists():
+        raise ValueError("OUTPUT_ID_ALREADY_QUEUED")
+    OUTPUT_REQUESTS.mkdir(parents=True,exist_ok=True)
+    write_json(request_path, {
+        "version":1,"kind":"EXPLICIT_OUTPUT","id":aid,
+        "source":source,"text":text,
+        "text_sha256":hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "queued_utc":utc(),
+    })
+    note("COURIER_EXPLICIT_OUTPUT_QUEUED="+aid, "BYTES="+str(len(text.encode("utf-8"))))
+    return aid
+
+
+def queue_output_file(file_path: str, *, aid: str | None = None) -> str:
+    """Read ONLY a deliberately named local UTF-8 .txt source file."""
+    path = Path(file_path)
+    if path.is_symlink() or not path.is_file() or path.suffix.lower() != ".txt":
+        raise ValueError("OUTPUT_SOURCE_MUST_BE_LOCAL_TXT_FILE")
+    if path.stat().st_size > MAX_EXPLICIT_OUTPUT_BYTES:
+        raise ValueError("OUTPUT_SOURCE_TOO_LARGE")
+    return queue_explicit_output(path.read_text(encoding="utf-8"),
+                                 source="explicit-file",aid=aid)
+
+
+def reconcile_explicit_output_requests(state: wr.State) -> int:
+    """Single native journal owner consumes explicitly queued local text."""
+    if not OUTPUT_REQUESTS.is_dir():
+        return 0
+    processed=0
+    for path in sorted(OUTPUT_REQUESTS.glob("*.json"))[:24]:
+        if path.is_symlink():
+            continue
+        claimed=path.with_suffix(".claimed")
+        aid=path.stem
+        outcome="REJECTED"
+        try:
+            if not wr.ID_RE.fullmatch(aid):
+                raise ValueError("OUTPUT_INVALID_REQUEST_ID")
+            # Remove the pending entry atomically before any journal write.
+            path.replace(claimed)
+            request=json.loads(claimed.read_text(encoding="utf-8"))
+            raw_text=request.get("text")
+            if (not isinstance(request,dict) or request.get("version")!=1 or
+                    request.get("kind")!="EXPLICIT_OUTPUT" or request.get("id")!=aid or
+                    request.get("source") not in
+                    {"explicit-file","explicit-clipboard","authorized-api"} or
+                    not isinstance(raw_text,str) or not raw_text.strip() or
+                    len(raw_text.encode("utf-8")) > MAX_EXPLICIT_OUTPUT_BYTES or
+                    request.get("text_sha256")!=hashlib.sha256(raw_text.encode("utf-8")).hexdigest()):
+                raise ValueError("OUTPUT_INVALID_REQUEST")
+            created=state.enqueue_text_output(aid, raw_text, source=request["source"])
+            outcome="READY" if created else "ALREADY_QUEUED"
+            processed+=1
+            note("COURIER_EXPLICIT_OUTPUT="+outcome, "ID="+aid)
+        except (OSError,ValueError,wr.RelayError) as exc:
+            note("COURIER_EXPLICIT_OUTPUT=REJECTED","ID="+aid,
+                 "ERROR="+type(exc).__name__)
+        finally:
+            if claimed.is_file():
+                OUTPUT_RECEIPTS.mkdir(parents=True,exist_ok=True)
+                write_json(OUTPUT_RECEIPTS / path.name, {
+                    "id":aid,"result":outcome,"finished_utc":utc(),
+                })
+                claimed.unlink(missing_ok=True)
+    return processed
+
+
 def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
-    source = wr.read_outbound_wire_result(state, aid)
+    delivery=state.outbound_lookup(aid)
+    source=wr.read_outbound_wire_result(state, aid)
+    if delivery and delivery.get("wire_format") == "plain_text":
+        # Plain text remains byte-for-byte identical to the supplied source.
+        # Receipt is bound in a sidecar, never injected into the destination.
+        digest=hashlib.sha256(source.encode("utf-8")).hexdigest()
+        if digest != delivery.get("text_sha256"):
+            raise RuntimeError("COURIER_PLAINTEXT_HASH_MISMATCH")
+        OUTBOX.mkdir(parents=True,exist_ok=True)
+        path=OUTBOX / (wr.safe_result_filename(aid).removesuffix(".json")+".txt")
+        meta=path.with_suffix(".receipt.json")
+        if meta.is_file():
+            saved=json.loads(meta.read_text(encoding="utf-8"))
+            if (saved.get("id")!=aid or saved.get("text_sha256")!=digest or
+                    not re.fullmatch(r"NATIVE-RECEIPT-[0-9a-f]{32}",
+                                     str(saved.get("receipt") or ""))):
+                raise RuntimeError("COURIER_PLAINTEXT_RECEIPT_MISMATCH")
+        elif path.is_file():
+            raise RuntimeError("COURIER_ORPHANED_OUTBOX_DO_NOT_RESEND")
+        else:
+            saved={"id":aid,"text_sha256":digest,
+                   "receipt":"NATIVE-RECEIPT-"+uuid.uuid4().hex}
+            write_json(meta,saved)
+        if path.is_file():
+            if path.read_text(encoding="utf-8") != source:
+                raise RuntimeError("COURIER_EXISTING_OUTBOX_MISMATCH")
+        else:
+            path.write_text(source,encoding="utf-8")
+        return path,saved["receipt"]
     # A unique receipt proves a newly rendered result, not merely an old
     # command or previous mention of the action ID.
     marker = "NATIVE-RECEIPT-" + uuid.uuid4().hex
