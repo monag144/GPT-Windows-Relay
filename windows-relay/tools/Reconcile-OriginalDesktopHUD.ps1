@@ -102,4 +102,4 @@ if($visible.Count -ne 1){throw ('ORIGINAL_HUD_VISIBLE_WINDOW_COUNT='+$visible.Co
 Write-Output ('ORIGINAL_HUD_RUNNING_COUNT='+$visible.Count)
 Write-Output ('ORIGINAL_HUD_HOST_PROCESS_COUNT='+$active.Count)
 Write-Output 'ORIGINAL_HUD_FILE=hud.py'
-Write-Output 'ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP'
+Write-Output 'ORIGINAL_HUD_TRANSPORT=NATIVE_FOREGROUND'
