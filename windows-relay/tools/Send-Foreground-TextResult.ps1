@@ -206,7 +206,7 @@ function Get-ForegroundEditable {
             if(-not (Test-EligibleEditor $window $node)){continue}
             [void]$all.Add($node)
             $label=([string]$node.Current.Name)+' '+([string]$node.Current.AutomationId)
-            if($label -match '(?i)message|prompt|compose|reply|chat.?input|write.*message|text.?entry'){
+            if($label -match '(?i)ask(?:\s+\w+){0,3}|message|prompt|compose|reply|chat.?input|write.*message|text.?entry'){
                 [void]$named.Add($node)
             }
         }
@@ -477,7 +477,7 @@ function Get-EditorCategory($target){
         $label=([string]$target.editor.Current.Name)+' '+
                ([string]$target.editor.Current.AutomationId)+' '+
                ([string]$target.editor.Current.HelpText)
-        if($label -match '(?i)\b(message|reply|compose|prompt|chat.?input|write.*message)\b'){
+        if($label -match '(?i)\b(ask|message|reply|compose|prompt|chat.?input|write.*message)\b'){
             return 'MESSAGE_COMPOSER'
         }
         if($null -ne (Find-SendButton $target)){return 'MESSAGE_COMPOSER'}
