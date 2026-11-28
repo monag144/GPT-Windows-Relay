@@ -168,7 +168,8 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("TEXT_INSERTED", NATIVE)
         self.assertIn("creationflags=getattr(subprocess, \"CREATE_NO_WINDOW\", 0)", NATIVE)
         hud = (ROOT / "hud.py").read_text(encoding="utf-8")
-        self.assertIn("Foreground text field • auto-detect • explicit output intake", hud)
+        self.assertIn("Foreground field: automatic detection • ", hud)
+        self.assertIn("Detected field: ", hud)
         self.assertIn("OUTPUT QUEUED • waiting for focused text field", hud)
         self.assertIn("elif phase=='AWAITING_TEXT_FIELD': title='READY'", hud)
         cli = (ROOT / "command_courier.py").read_text(encoding="utf-8")
@@ -198,7 +199,11 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("Get-ChatGPTWindow", SENDER)
         generic_path=SENDER.split("function Get-ForegroundEditable {",1)[1].split(
             "function Read-EditorText(",1)[0]
-        self.assertNotIn("ProcessName -ieq 'ChatGPT'", generic_path)
+        self.assertNotIn("ProcessName -ieq 'ChatGPT'", SENDER)
+        self.assertIn("function Get-EditorCategory($target){", SENDER)
+        self.assertIn("DESTINATION_CATEGORY=", SENDER)
+        self.assertIn("MESSAGE_COMPOSER", SENDER)
+        self.assertIn("TEXT_EDITOR", SENDER)
         self.assertNotIn("VK_RETURN", SENDER)
         self.assertNotIn("SendKeys", SENDER)
         self.assertNotIn("subprocess.run(", SENDER)
@@ -297,7 +302,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("if($null -ne $sendBefore){", SENDER)
         self.assertIn("$allowSubmit=Test-EditorIsCertainlyEmpty $target", SENDER)
         self.assertIn("if(-not $allowSubmit){", SENDER)
-        self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
+        self.assertIn("FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY", SENDER)
 
     def test_electron_typing_recognized_without_stale_value_pattern(self):
         self.assertIn("function Test-EditorContainsMarker(", SENDER)
@@ -306,7 +311,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("EDITOR_SEND_ENABLEMENT_VERIFIED", SENDER)
         self.assertIn("$sendBefore=Find-SendButton $target", SENDER)
         self.assertIn("$null -eq $sendBefore", SENDER)
-        self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
+        self.assertIn("FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY", SENDER)
         self.assertIn("RESULT=FOREGROUND_NO_TARGET", SENDER)
         self.assertIn("Test-TranscriptMarker $target $NativeReceiptMarker", SENDER)
         self.assertIn("Test-EditorContainsMarker $target $NativeReceiptMarker){continue}", SENDER)
