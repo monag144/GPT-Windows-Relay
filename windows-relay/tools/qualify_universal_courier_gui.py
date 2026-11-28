@@ -139,6 +139,9 @@ def main():
                 summary["sender_rc"]=sender.returncode
                 summary["sender_result"]=" | ".join(x.strip() for x in output.splitlines()
                                   if x.startswith(("RESULT=","SENDER_STAGE=","HEARTBEAT_ERROR=")))[-1100:]
+                if sender.returncode or not summary["sender_result"]:
+                    summary["sender_stderr_tail"]=sender.stderr[-1200:]
+                    summary["sender_stdout_tail"]=sender.stdout[-700:]
             except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
                 summary["error"]=type(exc).__name__+":"+str(exc)[:180]
             finally:
@@ -181,9 +184,14 @@ def main():
                           summary["editor_ok"] and summary["message_ok"] and clicks==0)
             summary["status"]="PASS" if accepted else "FAIL"
             results.append(summary)
+            fault=str(summary.get("error") or summary.get("sender_stderr_tail") or
+                      (summary.get("sender_stdout_tail") if not accepted else "") or "")
             print(name+"="+summary["status"]+"; clicks="+str(clicks)+
                   "; editor_ok="+str(summary["editor_ok"])+
-                  "; sender="+summary["sender_result"][-360:].replace("\n"," | "),flush=True)
+                  "; rc="+str(summary["sender_rc"])+
+                  "; sender="+summary["sender_result"][-300:].replace("\n"," | ")+
+                  ("; diagnostic="+fault[-380:].replace("\n"," | ") if fault else ""),
+                  flush=True)
     finally:
         foreground_restored=bool(original and user32.SetForegroundWindow(original))
         print("PREVIOUS_FOREGROUND_RESTORED="+str(foreground_restored).upper(),flush=True)
