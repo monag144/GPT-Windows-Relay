@@ -106,7 +106,9 @@ def main():
             gui=None
             summary={"case":name,"status":"FAIL","sender_rc":None,
                      "sender_result":"","clicks":None,"editor_ok":False,
-                     "message_ok":False}
+                     "message_ok":False,"fixture_pid":None,
+                     "foreground_before_pid":None,"foreground_after_pid":None,
+                     "sender_target_pid":None,"target_diagnostic":None}
             try:
                 gui=subprocess.Popen([str(exe),title,str(case),initial,
                                       "send" if has_send else "editor"],
@@ -124,6 +126,8 @@ def main():
                 expect(hwnd and (case/"ready.txt").is_file(),"FIXTURE_WINDOW_NOT_READY")
                 pid=ctypes.c_ulong()
                 user32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+                summary["fixture_pid"]=int(gui.pid)
+                summary["foreground_before_pid"]=int(pid.value)
                 expect(pid.value==gui.pid,"WINDOW_OWNER_MISMATCH_REFUSE_INPUT")
                 expect(int(user32.GetForegroundWindow() or 0)==hwnd,
                        "FIXTURE_NOT_FOREGROUND_REFUSE_INPUT")
@@ -138,7 +142,19 @@ def main():
                 (case/"sender-output.txt").write_text(output,encoding="utf-8")
                 summary["sender_rc"]=sender.returncode
                 summary["sender_result"]=" | ".join(x.strip() for x in output.splitlines()
-                                  if x.startswith(("RESULT=","SENDER_STAGE=","HEARTBEAT_ERROR=")))[-1100:]
+                                  if x.startswith(("RESULT=","SENDER_STAGE=","HEARTBEAT_ERROR=",
+                                                   "SENDER_TARGET_DIAGNOSTIC=",
+                                                   "SENDER_TARGET_PID=")))[-1100:]
+                for line in output.splitlines():
+                    if line.startswith("SENDER_TARGET_DIAGNOSTIC="):
+                        summary["target_diagnostic"]=line.partition("=")[2][:90]
+                    if line.startswith("SENDER_TARGET_PID="):
+                        summary["sender_target_pid"]=line.partition("=")[2][:18]
+                after_pid=ctypes.c_ulong()
+                hwnd_after=int(user32.GetForegroundWindow() or 0)
+                if hwnd_after:
+                    user32.GetWindowThreadProcessId(hwnd_after,ctypes.byref(after_pid))
+                summary["foreground_after_pid"]=int(after_pid.value)
                 if sender.returncode or not summary["sender_result"]:
                     summary["sender_stderr_tail"]=sender.stderr[-1200:]
                     summary["sender_stdout_tail"]=sender.stdout[-700:]
@@ -189,7 +205,9 @@ def main():
             print(name+"="+summary["status"]+"; clicks="+str(clicks)+
                   "; editor_ok="+str(summary["editor_ok"])+
                   "; rc="+str(summary["sender_rc"])+
-                  "; sender="+summary["sender_result"][-300:].replace("\n"," | ")+
+                  "; fixture_pid="+str(summary["fixture_pid"])+
+                  "; sender_target_pid="+str(summary["sender_target_pid"])+
+                  "; sender="+summary["sender_result"][-380:].replace("\n"," | ")+
                   ("; diagnostic="+fault[-380:].replace("\n"," | ") if fault else ""),
                   flush=True)
     finally:
