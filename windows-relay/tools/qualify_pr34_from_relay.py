@@ -37,7 +37,14 @@ def suite(name,where,args):
     print(name+"="+("PASS" if ok else "FAIL")+"; "+(counts[-1] if counts else "NO_COUNT")+
           "; "+(results[-1] if results else "NO_SUMMARY"),flush=True)
     if not ok:
-        print(name+"_ERRORS="+out[-1900:].replace("\r"," ").replace("\n"," | "),flush=True)
+        # Print concise failure IDs and exception messages, not the entire
+        # source excerpt (a 20KB assertion can obscure the useful diagnosis).
+        failures=re.findall(r"^(?:FAIL|ERROR):[^\\r\\n]+",out,re.M)
+        causes=re.findall(r"^(?:AssertionError|SyntaxError|ModuleNotFoundError|RuntimeError):[^\\r\\n]{0,250}",out,re.M)
+        print(name+"_FAILING_TESTS="+" | ".join(failures[:12]),flush=True)
+        print(name+"_ASSERTIONS="+" | ".join(causes[:12]),flush=True)
+        if not failures and not causes:
+            print(name+"_ERROR_TAIL="+out[-750:].replace("\r"," ").replace("\n"," | "),flush=True)
     return ok
 
 def main():
