@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory=$true)][string]$NativeActionId,
     [Parameter(Mandatory=$true)][string]$NativeReceiptMarker,
     [switch]$SubmitExistingOnly,
-    [switch]$ManualForceSend
+    [switch]$ManualForceSend,
+    [switch]$PlainText
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -250,7 +251,19 @@ function Read-EditorText($target){
     return $value
 }
 
+function Test-PlainOwnText($value){
+    # Normalize only line presentation; never accept a partial prefix or
+    # appended unrelated draft as the saved payload.
+    $expected=($script:wire -replace '\s+',' ').Trim()
+    $actual=([string]$value -replace '\s+',' ').Trim()
+    return ($expected.Length -gt 0 -and $actual -ceq $expected)
+}
+
 function Test-EditorContainsMarker($target,[string]$marker){
+    if($PlainText){
+        try{return (Test-PlainOwnText (Read-EditorText $target))}
+        catch{return $false}
+    }
     # UIA patterns are queried fresh after each input batch; React editors
     # can replace their underlying UIA elements during an update.
     $node=$target.editor
@@ -396,6 +409,10 @@ function Assert-RunnerAllowed {
 
 
 function Test-ConversationReceiptNotComposer($target,[string]$marker){
+    # The receipt is sidecar-bound for unmodified raw output, not embedded.
+    # Short identical snippets cannot establish an independent chat receipt.
+    $expected=($script:wire -replace '\s+',' ').Trim()
+    if($PlainText -and $expected.Length -lt 16){return $false}
     # Chat messages may appear as Text nodes or Document controls.
     # Exclude editor, descendants and ancestors from receipt evidence.
     $nodes=$target.window.FindAll(
@@ -408,6 +425,16 @@ function Test-ConversationReceiptNotComposer($target,[string]$marker){
             if($node.Current.IsOffscreen){continue}
             if((Test-IsSelfOrChild $node $target.editor) -or
                (Test-IsSelfOrChild $target.editor $node)){continue}
+            if($PlainText){
+                $shown=[string]$node.Current.Name
+                $view=$null
+                if($node.TryGetCurrentPattern(
+                    [System.Windows.Automation.TextPattern]::Pattern,[ref]$view)){
+                    $shown=[string]$view.DocumentRange.GetText(-1)
+                }
+                if((Test-PlainOwnText $shown)){return $true}
+                continue
+            }
             if($role -eq 'ControlType.Text' -and
                ([string]$node.Current.Name).Contains($marker)){return $true}
             $pattern=$null
@@ -422,6 +449,10 @@ function Test-ConversationReceiptNotComposer($target,[string]$marker){
 }
 
 function Test-ExactOwnDraft($target,[string]$marker){
+    if($PlainText){
+        try{return (Test-PlainOwnText (Read-EditorText $target))}
+        catch{return $false}
+    }
     if(-not (Test-EditorContainsMarker $target $marker)){return $false}
     # Do not submit a mixed human draft: both frame delimiters and the
     # matching unique receipt must be visible in the same writable editor.
@@ -601,20 +632,36 @@ try{
         throw 'FOREIGN_RESULT_PATH_MISMATCH'
     }
     $raw=[IO.File]::ReadAllBytes($NativeResultPath)
-    if($raw.Length -lt 30 -or $raw.Length -gt 180000){
+    if($raw.Length -lt 1 -or $raw.Length -gt $(if($PlainText){16000}else{180000})){
         throw 'FOREIGN_RESULT_SIZE_INVALID'
     }
     $utf8=New-Object System.Text.UTF8Encoding($false,$true)
     $script:wire=$utf8.GetString($raw)
-    if(-not $script:wire.StartsWith('[GPT_WINDOWS_RESULT]') -or
-       -not $script:wire.TrimEnd().EndsWith('[/GPT_WINDOWS_RESULT]')){
-        throw 'FOREIGN_RESULT_FRAME_INVALID'
-    }
-    $payload=$script:wire.Substring('[GPT_WINDOWS_RESULT]'.Length)
-    $payload=$payload.Substring(0,$payload.LastIndexOf('[/GPT_WINDOWS_RESULT]')) | ConvertFrom-Json
-    if($payload.id -cne $NativeActionId -or
-       $payload.native_delivery_receipt -cne $NativeReceiptMarker){
-        throw 'FOREIGN_RESULT_ID_RECEIPT_MISMATCH'
+    if($PlainText){
+        # Verify the outbox source ID, sidecar receipt and exact SHA-256.
+        # The destination receives only text; no invisible tracking footer.
+        $sidecar=[IO.Path]::ChangeExtension($NativeResultPath,'.receipt.json')
+        $meta=Get-Content -LiteralPath $sidecar -Raw -Encoding UTF8 | ConvertFrom-Json
+        $hasher=[Security.Cryptography.SHA256]::Create()
+        try{
+            $digest=[BitConverter]::ToString($hasher.ComputeHash($raw)).Replace('-','').ToLowerInvariant()
+        }finally{$hasher.Dispose()}
+        if($meta.id -cne $NativeActionId -or
+           $meta.receipt -cne $NativeReceiptMarker -or
+           $meta.text_sha256 -cne $digest){
+            throw 'FOREIGN_PLAINTEXT_RECEIPT_OR_CONTENT_MISMATCH'
+        }
+    }else{
+        if(-not $script:wire.StartsWith('[GPT_WINDOWS_RESULT]') -or
+           -not $script:wire.TrimEnd().EndsWith('[/GPT_WINDOWS_RESULT]')){
+            throw 'FOREIGN_RESULT_FRAME_INVALID'
+        }
+        $payload=$script:wire.Substring('[GPT_WINDOWS_RESULT]'.Length)
+        $payload=$payload.Substring(0,$payload.LastIndexOf('[/GPT_WINDOWS_RESULT]')) | ConvertFrom-Json
+        if($payload.id -cne $NativeActionId -or
+           $payload.native_delivery_receipt -cne $NativeReceiptMarker){
+            throw 'FOREIGN_RESULT_ID_RECEIPT_MISMATCH'
+        }
     }
     Assert-RunnerAllowed
     # An unavailable or non-UIA window is simply not an eligible text field.
