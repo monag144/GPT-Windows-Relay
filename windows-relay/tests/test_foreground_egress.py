@@ -220,7 +220,11 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("SetCursorPos", SENDER)
         self.assertIn("if($named.Count -eq 1)", SENDER)
         self.assertIn("elseif($all.Count -eq 1)", SENDER)
-        self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
+        # Ambiguous candidate sets must still fail closed, but the sender
+        # now records their count before refusing to select a field.
+        self.assertIn("else{", SENDER)
+        self.assertIn("$script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count", SENDER)
+        self.assertIn("return $null", SENDER)
         self.assertIn("$editor=Resolve-FocusedEditor $window $focused", SENDER)
         self.assertIn("IsPassword", SENDER)
         self.assertIn("Read-EditorText $target", SENDER)
@@ -245,7 +249,11 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("function Test-IsSelfOrChild(", SENDER)
         self.assertIn("Test-EditorOwnsFocus $editor", SENDER)
         self.assertIn("Test-EditorOwnsFocus $target.editor", SENDER)
-        self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
+        # Ambiguous candidate sets must still fail closed, but the sender
+        # now records their count before refusing to select a field.
+        self.assertIn("else{", SENDER)
+        self.assertIn("$script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count", SENDER)
+        self.assertIn("return $null", SENDER)
 
     def test_generic_send_button_semantics_and_no_enter_fallback(self):
         sender=SENDER.split("function Find-SendButton(",1)[1].split(
