@@ -40,7 +40,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("auto-send-on", NATIVE)
         self.assertIn("auto-send-off", NATIVE)
         self.assertIn('policy["armed"] and policy["auto_send"] and not stop_requested()', NATIVE)
-        self.assertIn("sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER", NATIVE)
+        self.assertIn("sender_script = FOREGROUND_SENDER", NATIVE)
         self.assertIn("FORCE SEND", HUD)
         self.assertNotIn("FOCUS FOR SEND", HUD)
         self.assertIn("ABORT SEND", HUD)
@@ -51,7 +51,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         # that re-injects an already-saved result into the composer.
         self.assertNotIn('native_delivery_control("force-delivery",aid)', HUD)
         self.assertIn("def force_send_selected():", HUD)
-        self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
+        self.assertNotIn("def focus_chatgpt_for_forced_delivery():", HUD)
         self.assertIn("Select a text field in the destination app", HUD)
 
     def test_armed_execution_ready_with_held_delivery_not_mislabeled_failed_engine(self):
@@ -81,33 +81,18 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("phase_line='CHATGPT OUTBOX HELD • '",HUD)
         self.assertIn("DELIVERY BLOCKED:",HUD)
 
-    def test_force_clear_resets_outbox_and_composer_independently(self):
+    def test_force_clear_only_resets_courier_journal_not_application_composer(self):
         self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
-        self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
         self.assertIn('force_abort_btn.grid(row=1,column=1',HUD)
         self.assertIn('force_command_btn.grid(row=1,column=0',HUD)
         self.assertIn('force_clear_btn.configure(command=force_clear_composer)',HUD)
-        self.assertIn('force_abort_btn.configure(command=force_abort)',HUD)
-        self.assertIn('native_composer_clear()',HUD)
-        self.assertIn('"-ClearComposerOnly"',HUD)
-        self.assertIn('name="courier-force-clear",daemon=True',HUD)
-        self.assertIn('Discard the current unsent ChatGPT composer text?',HUD)
-        self.assertIn('Executed commands, saved results and delivery evidence remain',HUD)
-        self.assertIn("ALL unresolved native result deliveries as ABORTED",HUD)
-        self.assertIn('force_clear_btn.configure(text="CLEARING…"',HUD)
-        clear_handler=HUD.split('    def force_clear_composer():',1)[1].split('    def force_abort():',1)[0]
-        for forbidden in ('force-delivery','abort-delivery','clear-pending-deliveries',
-                          'release_failed_delivery','SetValue('):
-            self.assertNotIn(forbidden,clear_handler)
-        clear_backend=HUD.split('def native_composer_clear():',1)[1].split('def native_delivery_control(',1)[0]
-        self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',clear_backend)
         self.assertIn('native.request_force_clear_pending()',HUD)
-        self.assertIn('native.wait_force_clear_receipt(request_id, timeout=15.0)',HUD)
-        self.assertIn('Outbox Reset; Composer Not Confirmed',HUD)
-        self.assertIn('composer_focused=chatgpt_focused',HUD)
-        self.assertIn('"-ClearComposerOnly"',clear_backend)
-        self.assertNotIn('"-NativeResultPath"',clear_backend)
-        self.assertNotIn('"-ForceClearComposer"',clear_backend)
+        self.assertIn('native.wait_force_clear_receipt(request_id,timeout=15.0)',HUD)
+        self.assertIn("Nothing will be resent. Continue?",HUD)
+        self.assertIn('"composer":"NOT_TOUCHED"',HUD)
+        self.assertNotIn('def native_composer_clear():',HUD)
+        self.assertNotIn("focus_chatgpt_for_forced_delivery()",HUD)
+        self.assertNotIn("ClearComposerOnly",HUD)
 
     def test_native_arm_and_big_go_preserve_original_hud_controls(self):
         self.assertIn("'native_armed':armed, 'native_off':off",HUD)
