@@ -217,6 +217,7 @@ def get_status() -> dict:
         "delivery_blocked": live.get("delivery_blocked", False),
         "last_delivery_error": live.get("last_delivery_error"),
         "destination_category": live.get("destination_category"),
+        "runner_source_sha256": live.get("runner_source_sha256"),
         "last_delivery_stage": live.get("last_delivery_stage"),
         "runner_error_type": live.get("runner_error_type"),
         "runner_error_stage": live.get("runner_error_stage"),
@@ -994,7 +995,9 @@ def runner():
         note("MODE=EXPLICIT_OUTPUT_GENERIC_FOREGROUND_NO_TRANSCRIPT_SCANNER")
         note("CMD_PYTHON_POWERSHELL_BASE64=SUPPORTED")
         note("PERSISTENT_ARM=" + str(configuration()["armed"]).upper())
-        status_update(pid=os.getpid(), phase="IDLE")
+        status_update(pid=os.getpid(), phase="IDLE",
+                      runner_source_sha256=hashlib.sha256(
+                          Path(__file__).read_bytes()).hexdigest())
         # Explicit local request files, not third-party UI transcripts,
         # are the only automatic source of new output.
         next_foreground_probe = 0.0
