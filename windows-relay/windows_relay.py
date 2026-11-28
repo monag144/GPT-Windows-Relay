@@ -378,6 +378,52 @@ class State:
                     self.data['processed'].pop(removable,None)
             self._mutate_and_save(mutate)
 
+    def enqueue_text_output(self, aid: str, text: str, *, source: str = 'explicit-file'):
+        """Journal deliberately supplied text without executing or scanning an app.
+
+        Only the running native singleton may call this method against its
+        owned state file. A repeated request ID never creates another output.
+        """
+        if not isinstance(aid,str) or not ID_RE.fullmatch(aid):
+            raise RelayError('explicit output ID invalid')
+        if (not isinstance(text,str) or not text.strip()
+                or len(text.encode('utf-8')) > 16000 or '\x00' in text):
+            raise RelayError('explicit output text invalid')
+        if source not in {'explicit-file','explicit-clipboard','authorized-api'}:
+            raise RelayError('explicit output source invalid')
+        digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
+        with self.lock:
+            if aid in self.data['processed'] or aid in self.data.get('outbound_deliveries',{}):
+                existing=self.data.get('outbound_deliveries',{}).get(aid)
+                if (isinstance(existing,dict) and existing.get('wire_format')=='plain_text'
+                        and existing.get('text_sha256')==digest):
+                    return False
+                raise RelayError('explicit output ID collision')
+            if self.outbound_owner!='windows':
+                raise RelayError('native outbound owner required')
+            saved=save_outbound_wire_result(self,aid,text)
+            def mutate():
+                timestamp=now()
+                self.data['processed'][aid]={
+                    'status':'OUTPUT_READY','session':'courier.native',
+                    'payload_hash':digest,'saved_result_path':saved,
+                    'finished_at':timestamp,'source':source,
+                }
+                self.data.setdefault('outbound_deliveries',{})[aid]={
+                    'id':aid,'session':'courier.native','payload_hash':digest,
+                    'wire_format':'plain_text','text_sha256':digest,
+                    'source':source,'saved_result_path':saved,'wire_result_path':saved,
+                    'has_attachments':False,'phase':'READY',
+                    'created_at':timestamp,'updated_at':timestamp,
+                }
+                self.data['last_action']={
+                    'id':aid,'session':'courier.native','shell':'none',
+                    'command':'(operator-supplied text)','status':'OUTPUT_READY',
+                    'finished_at':timestamp,
+                }
+            self._mutate_and_save(mutate)
+            return True
+
     def claim_outbound_delivery(self,aid:str):
         with self.lock:
             claimed=None
@@ -747,7 +793,12 @@ def validated_outbound_wire_path(state:State,aid:str,delivery:dict[str,Any])->Pa
     if path.parent!=root or not path.is_file(): raise RelayError('outbound wire result unavailable')
     try: wire=path.read_text(encoding='utf-8')
     except (OSError,UnicodeDecodeError) as exc: raise RelayError('outbound wire result unreadable') from exc
-    if not wire or len(wire)>250000 or aid not in wire: raise RelayError('outbound wire result invalid')
+    if delivery.get('wire_format')=='plain_text':
+        if (not wire or len(wire.encode('utf-8'))>16000 or
+                hashlib.sha256(wire.encode('utf-8')).hexdigest()!=delivery.get('text_sha256')):
+            raise RelayError('explicit outbound content mismatch')
+    elif not wire or len(wire)>250000 or aid not in wire:
+        raise RelayError('outbound wire result invalid')
     return path
 
 def outbound_result_file(state:State,aid:str)->str:
