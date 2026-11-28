@@ -198,6 +198,35 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertNotIn("CHAT SEND PENDING",snap["phase"])
         self.assertEqual(snap["outbound_unresolved_count"],0)
 
+    def test_auto_send_off_is_a_visible_delivery_pause_not_chatgpt_dependency(self):
+        aid="COURIER-PAUSED-001"
+        status={"native_running":True,"native_armed":True,
+                "native_off":False,"auto_send":False,
+                "phase":"IDLE","last_action":aid,"last_result":"READY",
+                "destination_category":"MESSAGE_COMPOSER",
+                "delivery_blocked":False}
+        journal={"outbound_deliveries":{aid:{
+            "phase":"READY","has_attachments":False,
+            "created_at":"2026-11-27T23:00:00+00:00"
+        }}}
+        with mock.patch.object(native,"get_status",return_value=status), \
+             mock.patch.object(hud,"read_json",return_value=journal), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            snap=hud.native_snapshot()
+        self.assertEqual(snap["force_send_action"],aid)
+        self.assertIn("AUTO SEND OFF",snap["phase"])
+        self.assertIn("enable Auto Send or use FORCE SEND",snap["phase"])
+        self.assertIn("message composer",snap["browser"])
+        self.assertNotIn("ChatGPT",snap["browser"])
+        status["auto_send"]=True
+        status["destination_category"]="TEXT_EDITOR"
+        with mock.patch.object(native,"get_status",return_value=status), \
+             mock.patch.object(hud,"read_json",return_value=journal), \
+             mock.patch.object(hud,"action_detail",return_value=(None,None)):
+            resumed=hud.native_snapshot()
+        self.assertNotIn("AUTO SEND OFF",resumed["phase"])
+        self.assertIn("plain text editor",resumed["browser"])
+
     def test_force_clear_is_journal_only_and_never_touches_chatgpt_or_other_apps(self):
         receipt={"id":"a"*32,"result":"FORCE_CLEAR_COMPLETE",
                  "aborted_count":2,"unresolved_remaining":0}
