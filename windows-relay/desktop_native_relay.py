@@ -347,13 +347,17 @@ def reconcile_explicit_output_requests(state: wr.State) -> int:
         aid=path.stem
         outcome="REJECTED"
         try:
-            if not wr.ID_RE.fullmatch(aid):
-                raise ValueError("OUTPUT_INVALID_REQUEST_ID")
             # Remove the pending entry atomically before any journal write.
             path.replace(claimed)
             request=json.loads(claimed.read_text(encoding="utf-8"))
+            if not isinstance(request,dict):
+                raise ValueError("OUTPUT_INVALID_REQUEST")
+            aid=request.get("id")
+            if (not isinstance(aid,str) or not wr.ID_RE.fullmatch(aid)
+                    or path.name!=wr.safe_result_filename(aid)):
+                raise ValueError("OUTPUT_INVALID_REQUEST_ID")
             raw_text=request.get("text")
-            if (not isinstance(request,dict) or request.get("version")!=1 or
+            if (request.get("version")!=1 or
                     request.get("kind")!="EXPLICIT_OUTPUT" or request.get("id")!=aid or
                     request.get("source") not in
                     {"explicit-file","explicit-clipboard","authorized-api"} or
