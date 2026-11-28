@@ -216,6 +216,7 @@ def get_status() -> dict:
         "last_result": live.get("last_result"),
         "delivery_blocked": live.get("delivery_blocked", False),
         "last_delivery_error": live.get("last_delivery_error"),
+        "destination_category": live.get("destination_category"),
         "last_delivery_stage": live.get("last_delivery_stage"),
         "runner_error_type": live.get("runner_error_type"),
         "runner_error_stage": live.get("runner_error_stage"),
@@ -785,7 +786,8 @@ def deliver(state: wr.State, aid: str, *, manual: bool = False):
     path, marker = outbox_result(state, aid)
     state.claim_outbound_delivery(aid)  # SUBMITTING persisted before click.
     note("NATIVE_DELIVERY_ATTEMPT=" + aid)
-    status_update(phase="DELIVERING", last_action=aid)
+    status_update(phase="DELIVERING", last_action=aid,
+                  destination_category=None)
     ps = shutil.which("powershell.exe")
     sender_script = FOREGROUND_SENDER
     cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
@@ -804,6 +806,12 @@ def deliver(state: wr.State, aid: str, *, manual: bool = False):
             errors="replace", timeout=70,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         output = response.stdout
+        for line in output.splitlines():
+            if line.startswith("DESTINATION_CATEGORY="):
+                category=line.partition("=")[2]
+                if category in {"MESSAGE_COMPOSER","TEXT_EDITOR"}:
+                    status_update(destination_category=category)
+                    note("NATIVE_DESTINATION_CATEGORY="+category)
         for line in output.splitlines():
             if line.startswith("SENDER_STAGE="):
                 stage_label = line.partition("=")[2]
