@@ -150,8 +150,11 @@ class UniversalCourierTests(unittest.TestCase):
         self.assertNotIn("chatgpt",detector.lower())
         self.assertNotIn("chatgpt",classifier.lower())
         self.assertNotIn("ProcessName -ieq",classifier)
-        self.assertIn("ControlType.Edit",detector)
-        self.assertIn("ControlType.Document",detector)
+        eligibility=sender.split("function Test-EligibleEditor(",1)[1].split(
+            "function Test-IsSelfOrChild(",1)[0]
+        self.assertIn("Test-EligibleEditor $window $node",detector)
+        self.assertIn("ControlType.Edit",eligibility)
+        self.assertIn("ControlType.Document",eligibility)
 
     def test_all_apps_have_fail_closed_empty_check_before_unicode_input(self):
         source=(ROOT/"tools"/"Send-Foreground-TextResult.ps1").read_text(encoding="utf-8")
