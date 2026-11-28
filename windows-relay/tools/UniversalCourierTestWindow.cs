@@ -50,6 +50,7 @@ internal sealed class UniversalCourierFixture : Form
                                       new UTF8Encoding(false));
                     posted.Text = value;
                     editor.Clear();
+                    send.Enabled = false;  // Mirrors a delivered, cleared composer.
                 }
             };
             Controls.Add(send);
