@@ -445,6 +445,17 @@ def _verify_saved_receipt_binding(aid: str, receipt: str):
     path = OUTBOX / (wr.safe_result_filename(aid).removesuffix(".json") + ".txt")
     if not path.is_file():
         raise RuntimeError("NATIVE_RECEIPT_ACK_OUTBOX_MISSING")
+    sidecar = path.with_suffix(".receipt.json")
+    if sidecar.is_file():
+        try:
+            row=json.loads(sidecar.read_text(encoding="utf-8"))
+            digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("NATIVE_RECEIPT_ACK_PLAINTEXT_INVALID") from exc
+        if (row.get("id")!=aid or row.get("receipt")!=receipt
+                or row.get("text_sha256")!=digest):
+            raise RuntimeError("NATIVE_RECEIPT_ACK_PLAINTEXT_MISMATCH")
+        return
     try:
         wire = path.read_text(encoding="utf-8")
         if (len(wire) > 250000 or not wire.startswith(wr.RO)
@@ -764,22 +775,20 @@ def deliver(state: wr.State, aid: str, *, manual: bool = False):
     if delivery.get("has_attachments") is not False:
         note("NATIVE_ATTACHMENT_RESULT_FILE_ONLY=" + aid)
         return
+    if delivery_force_clear_path(aid).is_file():
+        raise RuntimeError("LEGACY_CHATGPT_FORCE_DELIVERY_DISABLED")
     path, marker = outbox_result(state, aid)
     state.claim_outbound_delivery(aid)  # SUBMITTING persisted before click.
     note("NATIVE_DELIVERY_ATTEMPT=" + aid)
     status_update(phase="DELIVERING", last_action=aid)
     ps = shutil.which("powershell.exe")
-    force_clear_composer = delivery_force_clear_path(aid).is_file()
-    # Normal egress is app-neutral: the result is already owned by this relay.
-    # Explicit legacy FORCE RESEND remains bound to the original ChatGPT
-    # destination rather than taking over whichever application has focus.
-    sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER
+    sender_script = FOREGROUND_SENDER
     cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
            "-File", str(sender_script), "-NativeResultPath", str(path),
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
-    if force_clear_composer:
-        cmd.append("-ForceClearComposer")
-    if manual and sender_script == FOREGROUND_SENDER:
+    if delivery.get("wire_format") == "plain_text":
+        cmd.append("-PlainText")
+    if manual:
         cmd.append("-ManualForceSend")
     phase = "SUBMIT_UNCERTAIN"
     error_code = "SENDER_NO_RECEIPT"
@@ -846,8 +855,7 @@ def deliver(state: wr.State, aid: str, *, manual: bool = False):
         error_code = type(exc).__name__
         note("NATIVE_DELIVERY_EXCEPTION=" + error_code)
     finally:
-        if force_clear_composer:
-            delivery_force_clear_path(aid).unlink(missing_ok=True)
+        pass
     # Persist the durable outbound phase before any native-only hold update.
     state.finish_outbound_delivery(aid, phase)
     state.record_outbound_sender_diagnostic(
@@ -898,6 +906,8 @@ def recover_submit_only(state: wr.State, aid: str, *, manual: bool = False):
                "-File", str(FOREGROUND_SENDER), "-NativeResultPath", str(path),
                "-NativeActionId", aid, "-NativeReceiptMarker", marker,
                "-SubmitExistingOnly"]
+        if record.get("wire_format") == "plain_text":
+            cmd.append("-PlainText")
         if manual:
             cmd.append("-ManualForceSend")
         response = subprocess.run(
@@ -1195,10 +1205,7 @@ def main():
         release_failed_delivery(wr.State(STATE), args.action_id)
         return 0
     if args.command == "force-delivery":
-        if not args.action_id:
-            raise SystemExit("force-delivery requires an action ID")
-        release_failed_delivery(wr.State(STATE), args.action_id, force_clear_composer=True)
-        return 0
+        raise SystemExit("LEGACY_CHATGPT_FORCE_RESEND_DISABLED_USE_HUD_FORCE_SEND")
     if args.command == "abort-delivery":
         if not args.action_id: raise SystemExit("abort-delivery requires an action ID")
         abort_failed_delivery(wr.State(STATE), args.action_id)
