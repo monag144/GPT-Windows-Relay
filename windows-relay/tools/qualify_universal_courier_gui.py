@@ -144,7 +144,9 @@ def main():
                 summary["sender_result"]=" | ".join(x.strip() for x in output.splitlines()
                                   if x.startswith(("RESULT=","SENDER_STAGE=","HEARTBEAT_ERROR=",
                                                    "SENDER_TARGET_DIAGNOSTIC=",
-                                                   "SENDER_TARGET_PID=")))[-1100:]
+                                                   "SENDER_TARGET_PID=",
+                                                   "SENDER_EDITOR_ROLES=",
+                                                   "SENDER_ELIGIBLE_FIELDS=")))[-1100:]
                 for line in output.splitlines():
                     if line.startswith("SENDER_TARGET_DIAGNOSTIC="):
                         summary["target_diagnostic"]=line.partition("=")[2][:90]
