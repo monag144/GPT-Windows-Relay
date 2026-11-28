@@ -478,7 +478,8 @@ class ForegroundResultTests(unittest.TestCase):
             "function Recover-ExistingChatDraft(",1)[0]
         self.assertNotIn("TypeEnter()", click_helper)
         self.assertIn("if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}", click_helper)
-        self.assertIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
+        self.assertNotIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
+        self.assertIn("function Get-EditorCategory($target){", SENDER)
         self.assertIn("if(-not (Test-MessagingComposerTarget $target) -and", SENDER)
         self.assertIn("$null -eq (Find-SendButton $target)", SENDER)
         submit_helper = SENDER.split("function Recover-ExistingChatDraft(",1)[1].split(
