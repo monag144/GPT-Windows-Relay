@@ -198,110 +198,39 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertNotIn("CHAT SEND PENDING",snap["phase"])
         self.assertEqual(snap["outbound_unresolved_count"],0)
 
-    def test_force_clear_runs_only_standalone_powershell_composer_action(self):
-        result=SimpleNamespace(returncode=0,stdout=(
-            "COMPOSER_CLEAR=VERIFIED_EMPTY\\n"
-            "RESULT=COMPOSER_CLEARED_NO_SEND\\n"),stderr="")
-        with mock.patch.object(native,"get_status",return_value={"native_running":False,"phase":"IDLE"}), \
-             mock.patch.object(hud.subprocess,"run",return_value=result) as run:
-            self.assertEqual(hud.native_composer_clear(),"COMPOSER_CLEARED_NO_SEND")
-        args=run.call_args.args[0]
-        self.assertIn("-ClearComposerOnly",args)
-        self.assertIn("-STA",args)
-        self.assertNotIn("-NativeResultPath",args)
-        self.assertNotIn("-ForceClearComposer",args)
-        self.assertNotIn("abort-delivery",args)
-        self.assertNotIn("force-delivery",args)
-        self.assertNotIn("clear-pending-deliveries",args)
-        self.assertEqual(run.call_args.kwargs["check"],False)
-        self.assertTrue(run.call_args.kwargs["capture_output"])
-
-    def test_force_clear_refuses_ambiguous_or_failed_composer_result(self):
-        result=SimpleNamespace(returncode=1,stdout=(
-            "HEARTBEAT_ERROR=EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2\\n"
-            "RESULT=COMPOSER_CLEAR_FAILED_NO_SEND\\n"),stderr="")
-        with mock.patch.object(native,"get_status",return_value={"native_running":False,"phase":"IDLE"}), \
-             mock.patch.object(hud.subprocess,"run",return_value=result):
-            with self.assertRaisesRegex(RuntimeError,"EXPECTED_ONE_WRITABLE_COMPOSER_FOUND=2"):
-                hud.native_composer_clear()
-
-    def test_force_clear_does_not_interfere_with_inflight_native_sender(self):
-        with mock.patch.object(native,"get_status",return_value={
-            "native_running":True,"phase":"DELIVERING"
-        }),mock.patch.object(hud.subprocess,"run") as run:
-            with self.assertRaisesRegex(RuntimeError,"REFUSE_DURING_NATIVE_DELIVERY"):
-                hud.native_composer_clear()
-        run.assert_not_called()
-
-    def test_force_clear_closes_pending_even_if_composer_verification_fails(self):
+    def test_force_clear_is_journal_only_and_never_touches_chatgpt_or_other_apps(self):
         receipt={"id":"a"*32,"result":"FORCE_CLEAR_COMPLETE",
-                 "aborted_count":2,"aborted_ids":["001","002"],
-                 "unresolved_remaining":0}
-        with mock.patch.object(hud,"native_composer_clear",
-                               side_effect=RuntimeError("COMPOSER_FORCE_CLEAR_NOT_CONFIRMED")) as composer, \
-             mock.patch.object(native,"request_force_clear_pending",
-                               return_value="a"*32) as request, \
-             mock.patch.object(native,"wait_force_clear_receipt",
-                               return_value=receipt) as waiting:
+                 "aborted_count":2,"unresolved_remaining":0}
+        with mock.patch.object(native,"request_force_clear_pending",return_value="a"*32) as request, \
+             mock.patch.object(native,"wait_force_clear_receipt",return_value=receipt) as waiting, \
+             mock.patch.object(hud.subprocess,"run") as send:
             report=hud.native_force_clear_all(composer_focused=True)
-        composer.assert_called_once_with()
         request.assert_called_once_with()
         waiting.assert_called_once_with("a"*32,timeout=15.0)
+        send.assert_not_called()
+        self.assertEqual(report["composer"],"NOT_TOUCHED")
         self.assertEqual(report["receipt"]["aborted_count"],2)
-        self.assertEqual(report["receipt"]["unresolved_remaining"],0)
-        self.assertIn("NOT_CONFIRMED: COMPOSER_FORCE_CLEAR_NOT_CONFIRMED",
-                      report["composer"])
+        source=(ROOT/"hud.py").read_text(encoding="utf-8")
+        self.assertNotIn("def native_composer_clear(",source)
+        self.assertNotIn("def focus_chatgpt_for_forced_delivery(",source)
+        self.assertNotIn("Send-ChatGPT-DesktopHeartbeat.ps1",source)
+        self.assertIn("No application's text field will be",source)
 
-    def test_force_clear_without_chatgpt_focus_still_resolves_outbox(self):
-        receipt={"id":"b"*32,"result":"FORCE_CLEAR_COMPLETE",
-                 "aborted_count":2,"unresolved_remaining":0}
-        with mock.patch.object(hud,"native_composer_clear") as never_editor, \
-             mock.patch.object(native,"request_force_clear_pending",
-                               return_value="b"*32), \
-             mock.patch.object(native,"wait_force_clear_receipt",
-                               return_value=receipt):
-            report=hud.native_force_clear_all(composer_focused=False)
-        never_editor.assert_not_called()
-        self.assertEqual(report["composer"],"SKIPPED_CHATGPT_NOT_FOCUSED")
-        self.assertEqual(report["receipt"]["aborted_count"],2)
-
-    def test_force_clear_never_claims_success_without_runner_receipt(self):
-        with mock.patch.object(hud,"native_composer_clear",
-                               return_value="COMPOSER_CLEARED_NO_SEND"), \
-             mock.patch.object(native,"request_force_clear_pending",
-                               return_value="c"*32), \
+    def test_force_clear_requires_confirmed_journal_receipt(self):
+        with mock.patch.object(native,"request_force_clear_pending",return_value="b"*32), \\
              mock.patch.object(native,"wait_force_clear_receipt",
                                side_effect=RuntimeError("request pending")):
-            with self.assertRaisesRegex(RuntimeError,
-                                         "OUTBOX_CLEAR_UNCONFIRMED_REQUEST"):
-                hud.native_force_clear_all(composer_focused=True)
-        source=(ROOT/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1").read_text(encoding="utf-8")
-        self.assertIn("function Test-ComposerClearPostInput(",source)
-        self.assertIn("COMPOSER_CLEAR=INDEPENDENT_UIA_EMPTY_AFTER_KEYBOARD",source)
-        self.assertIn("Test-DisabledSendControlPresent $window",source)
+            with self.assertRaisesRegex(RuntimeError,"request pending"):
+                hud.native_force_clear_all()
 
-    def test_delayed_app_at_login_does_not_form_empty_execution_baseline(self):
-        with tempfile.TemporaryDirectory() as temp:
-            scanner = Path(temp) / "scanner.ps1"
-            scanner.touch()
-            empty = SimpleNamespace(returncode=0, stdout=(
-                "CHATGPT_APP_FOUND=False\nDOCUMENT_READS=0\n"
-            ), stderr="")
-            ready = SimpleNamespace(returncode=0, stdout=(
-                "CHATGPT_APP_FOUND=True\nDOCUMENT_READS=1\n"
-            ), stderr="")
-            with mock.patch.object(native, "SCANNER", scanner), \
-                 mock.patch.object(native.shutil, "which", return_value="powershell.exe"), \
-                 mock.patch.object(native.subprocess, "run", side_effect=[empty, ready]):
-                with self.assertRaisesRegex(RuntimeError, "NATIVE_CHATGPT_APP_NOT_READY"):
-                    native.read_scan(require_app=True)
-                self.assertEqual(native.read_scan(require_app=True), [])
-        source = (ROOT / "desktop_native_relay.py").read_text(encoding="utf-8")
-        self.assertIn("baseline_ready = False", source)
-        self.assertIn('else "FORWARDING_NO_CHATGPT" if forward_report["active"]', source)
-        self.assertIn('else "WAITING_FOR_CHATGPT_APP")', source)
-        self.assertIn('baseline_ready = False', source)
-        self.assertIn("candidates = read_scan(require_app=True)", source)
+    def test_native_runtime_never_scans_chatgpt_conversation(self):
+        source=(ROOT/"desktop_native_relay.py").read_text(encoding="utf-8")
+        runner=source.split("def runner():",1)[1].split("HUD_MODE =",1)[0]
+        self.assertIn("reconcile_receipt_requests(state)",runner)
+        self.assertIn("reconcile_explicit_output_requests(state)",runner)
+        self.assertNotIn("read_scan(",source)
+        self.assertNotIn("SCANNING_CHATGPT_APP",source)
+        self.assertNotIn("Watch-ChatGPT-ActionCandidates.ps1",source)
 
 
 if __name__ == "__main__":
