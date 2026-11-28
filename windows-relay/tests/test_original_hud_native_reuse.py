@@ -60,7 +60,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("title='READY'", HUD)
         self.assertIn("phase=='DELIVERY_BLOCKED' and delivery_blocked", HUD)
         self.assertIn("'title_phase':title", HUD)
-        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '", HUD)
+        self.assertIn("phase_line='COURIER OUTBOX HELD • '", HUD)
         self.assertIn("'native_delivery_phase':delivery_phase", HUD)
         self.assertIn("DELIVERY BLOCKED: ", HUD)
         self.assertIn("Pending deliveries closed as ABORTED", HUD)
@@ -71,14 +71,14 @@ class OriginalHUDReuseTests(unittest.TestCase):
     def test_historical_outbox_failures_do_not_override_running_engine_ready(self):
         self.assertIn("outstanding_count=(sum(",HUD)
         self.assertIn("'outbound_unresolved_count':outstanding_count",HUD)
-        self.assertIn("CHATGPT OUTBOX HISTORY • ",HUD)
+        self.assertIn("COURIER OUTBOX HISTORY • ",HUD)
         self.assertIn("title='READY'",HUD)
         self.assertIn("'title_phase':title",HUD)
         self.assertIn('go_state["ready"]=(kind in ("ok","held"))',HUD)
         self.assertIn('bg="#188038" if armed and not snap.get("native_off")',HUD)
         self.assertNotIn('GO • HELD',HUD)
         self.assertNotIn('READY • HELD',HUD)
-        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '",HUD)
+        self.assertIn("phase_line='COURIER OUTBOX HELD • '",HUD)
         self.assertIn("DELIVERY BLOCKED:",HUD)
 
     def test_force_clear_only_resets_courier_journal_not_application_composer(self):
@@ -129,7 +129,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('"FORWARDING_NO_CHATGPT","AWAITING_TEXT_FIELD",', HUD)
         self.assertIn('"WAITING_FOR_CHATGPT_APP") or', HUD)
         self.assertIn('bg="#188038" if armed and not snap.get("native_off") else "#3c4043"',HUD)
-        self.assertIn("CHATGPT OUTBOX HELD",HUD)
+        self.assertIn("COURIER OUTBOX HELD",HUD)
 
     def test_recovery_buttons_follow_actual_last_delivery_phase(self):
         self.assertIn("'native_delivery_phase':delivery_phase",HUD)
