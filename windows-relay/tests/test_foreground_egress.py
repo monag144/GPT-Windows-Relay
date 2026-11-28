@@ -102,7 +102,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(native.get_status()["last_result"], "TEXT_INSERTED")
         args = invoke.call_args.args[0]
         self.assertIn(str(native.FOREGROUND_SENDER), args)
-        self.assertNotIn(str(native.SENDER), args)
+        self.assertNotIn("-ForceClearComposer", args)
         self.assertEqual(native.get_status()["phase"], "IDLE")
 
     def test_chat_submitted_only_with_send_and_transcript_receipt(self):
@@ -144,24 +144,25 @@ class ForegroundResultTests(unittest.TestCase):
                          "FOREIGN_RESULT_PATH_MISMATCH")
         self.assertTrue(native.delivery_held(self.aid))
 
-    def test_explicit_legacy_force_resend_remains_charged_to_chatgpt_adapter(self):
-        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\n")
+    def test_legacy_chatgpt_only_force_resend_disabled(self):
         native.DELIVERY_HOLDS.mkdir(parents=True, exist_ok=True)
         native.delivery_force_clear_path(self.aid).write_text("{}")
-        with which, process as call:
-            native.deliver(self.state, self.aid)
-        args = call.call_args.args[0]
-        self.assertIn(str(native.SENDER), args)
-        self.assertIn("-ForceClearComposer", args)
-        self.assertNotIn(str(native.FOREGROUND_SENDER), args)
+        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\\n")
+        with which, process as sender:
+            with self.assertRaisesRegex(RuntimeError,"LEGACY_CHATGPT_FORCE_DELIVERY_DISABLED"):
+                native.deliver(self.state, self.aid)
+        sender.assert_not_called()
+        self.assertEqual(self.state.outbound_lookup(self.aid)["phase"],"READY")
 
     def test_source_changes_make_output_independent_from_chatgpt_scanner(self):
         owner = NATIVE.split("def runner():", 1)[1].split("HUD_MODE =", 1)[0]
         self.assertIn("FOREGROUND_SENDER", NATIVE)
         self.assertIn("state.defer_outbound_delivery(aid)", NATIVE)
         self.assertIn("next_foreground_probe = time.monotonic() + 2.0", owner)
-        self.assertLess(owner.index("for aid in state.list_claimable_outbound_ids()"),
-                        owner.index("candidates = read_scan(require_app=True)"))
+        self.assertIn("reconcile_explicit_output_requests(state)",owner)
+        self.assertNotIn("read_scan(",owner)
+        self.assertNotIn("process_packet(",owner)
+        self.assertNotIn("SCANNING_CHATGPT_APP",owner)
         self.assertEqual(owner.count("for aid in state.list_claimable_outbound_ids()"), 1)
         self.assertIn("AWAITING_TEXT_FIELD", owner)
         self.assertIn("TEXT_INSERTED", NATIVE)
@@ -293,9 +294,9 @@ class ForegroundResultTests(unittest.TestCase):
     def test_persistently_enabled_send_button_does_not_block_empty_selected_composer(self):
         # Telegram/Discord can expose enabled Send even with an empty field.
         # The old early return rejected that valid target before injection.
-        self.assertIn("if($null -ne $sendBefore -and -not $allowSubmit){", SENDER)
         self.assertNotIn("if($null -ne $sendBefore){", SENDER)
-        self.assertIn("$allowSubmit=Test-EmptyOrPlaceholder $before", SENDER)
+        self.assertIn("$allowSubmit=Test-EditorIsCertainlyEmpty $target", SENDER)
+        self.assertIn("if(-not $allowSubmit){", SENDER)
         self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
 
     def test_electron_typing_recognized_without_stale_value_pattern(self):
@@ -401,7 +402,7 @@ class ForegroundResultTests(unittest.TestCase):
         args = invoked.call_args.args[0]
         self.assertIn("-SubmitExistingOnly", args)
         self.assertIn(str(native.FOREGROUND_SENDER), args)
-        self.assertNotIn(str(native.SENDER), args)
+        self.assertNotIn("-ForceClearComposer", args)
         record = self.state.outbound_lookup(self.aid)
         self.assertEqual(record["phase"], "SUBMITTED")
         self.assertEqual(record["attempt_count"], 1)
