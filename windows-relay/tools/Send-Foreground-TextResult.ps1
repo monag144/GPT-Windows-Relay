@@ -320,7 +320,7 @@ function Test-EditorIsCertainlyEmpty($target){
             }
             if($pattern.Current.IsReadOnly){return $false}
             $observed++
-            if(-not (Test-EmptyOrPlaceholder ([string]$pattern.Current.Value))){
+            if(-not [string]::IsNullOrWhiteSpace([string]$pattern.Current.Value)){
                 return $false
             }
         }
@@ -331,7 +331,7 @@ function Test-EditorIsCertainlyEmpty($target){
                 return $false
             }
             $observed++
-            if(-not (Test-EmptyOrPlaceholder ([string]$pattern.DocumentRange.GetText(-1)))){
+            if(-not [string]::IsNullOrWhiteSpace([string]$pattern.DocumentRange.GetText(-1))){
                 return $false
             }
         }
