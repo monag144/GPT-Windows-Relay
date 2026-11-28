@@ -217,7 +217,7 @@ class CourierHudStartupTests(unittest.TestCase):
         self.assertIn("No application's text field will be",source)
 
     def test_force_clear_requires_confirmed_journal_receipt(self):
-        with mock.patch.object(native,"request_force_clear_pending",return_value="b"*32), \\
+        with mock.patch.object(native,"request_force_clear_pending",return_value="b"*32), \
              mock.patch.object(native,"wait_force_clear_receipt",
                                side_effect=RuntimeError("request pending")):
             with self.assertRaisesRegex(RuntimeError,"request pending"):
