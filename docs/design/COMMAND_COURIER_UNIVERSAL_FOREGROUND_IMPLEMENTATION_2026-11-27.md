@@ -35,6 +35,16 @@ No command payload is accepted by these paths. They enqueue text only. For a cus
 5. If multiple eligible fields exist and none is selected, Courier must leave the output `READY`. Manual focus to one field takes priority over automatic selection.
 6. FORCE CLEAR is an explicit journal reset only. It cannot erase Discord, ChatGPT, Telegram, or any other app draft.
 
+## Category-driven foreground targeting (2026-11-27 update)
+
+- The sender chooses a visible, writable UIA field by **focus, uniqueness, and emptiness**, not by ChatGPT, Gemini, Grok, Claude, Discord or Notepad process identities. A selected field wins; ambiguous unfocused fields remain untouched.
+- The detected **field category** is either `MESSAGE_COMPOSER` (generic Ask / message / reply / compose / prompt semantics or an unambiguous visible Send control) or `TEXT_EDITOR` (writable ordinary editor). ChatGPT is simply a potential member of the former category; it is **not** an allowlisted special case.
+- The sender reports `DESTINATION_CATEGORY`; the native runner records it; the HUD displays the last detected field category. These are capability labels, not assertions that a named provider has authorized or received a message.
+- **Auto Send OFF is an explicit operator pause**, not a provider restriction or a field-detection error. With OFF, no automatic foreground delivery occurs; one eligible result may still be delivered manually via FORCE SEND. The HUD must say why it is paused instead of misleadingly reporting generic readiness.
+- To resume autonomous delivery, select the intended empty text field and explicitly enable Auto Send. Do **not** silently override OFF or re-send older results. The cutover utility permits `-EnableAutoSend` only when no previously eligible unsent results remain.
+- The controlled cutover utility is `tools/Activate-UniversalCourier-PR34.ps1`. Run it **outside the relay being replaced**, after its last response has been acknowledged. It re-runs both test suites, stops the old native singleton, closes only canonical relay HUD processes, starts the new engine/HUD, and verifies the native source SHA-256 and single HUD identity.
+- The new universal engine intentionally **does not read commands from ChatGPT screen content**. After cutover, further command execution must use an independent authorized channel; text from clipboard/file/local-API stdin can be queued for delivery but is not executed.
+
 ## Release gates
 
 - Python compilation of all modified modules and test files.
