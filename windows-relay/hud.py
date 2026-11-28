@@ -138,7 +138,7 @@ def command_preview(command,limit=92):
 NATIVE_MODE_FILE=Path(os.environ.get('LOCALAPPDATA',Path.home()))/'GPTWindowsRelayDesktop'/'hud-mode.json'
 def native_mode():
     mode=read_json(NATIVE_MODE_FILE,{})
-    return mode.get('transport')=='native-chatgpt-app'
+    return mode.get('transport') in {'native-foreground','native-chatgpt-app'}
 
 def native_snapshot():
     import desktop_native_relay as native
@@ -296,85 +296,16 @@ def native_auto_send(enabled):
                      cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
 
-def focus_chatgpt_for_forced_delivery():
-    """Hand the foreground from the clicked HUD directly to ChatGPT.
+def native_force_clear_all(*, composer_focused: bool = False) -> dict:
+    """Close unresolved Courier deliveries only; NEVER edit a foreign app.
 
-    The sender itself is a child process and Windows may reject its focus
-    request.  This function runs in the foreground HUD click handler instead.
-    It neither restores, resizes nor moves the ChatGPT window.
-    """
-    if os.name != "nt": return False
-    user32=ctypes.windll.user32; kernel32=ctypes.windll.kernel32
-    QueryFullProcessImageNameW=kernel32.QueryFullProcessImageNameW
-    QueryFullProcessImageNameW.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_wchar_p,ctypes.POINTER(ctypes.c_uint)]
-    QueryFullProcessImageNameW.restype=ctypes.c_bool
-    kernel32.OpenProcess.argtypes=[ctypes.c_uint,ctypes.c_bool,ctypes.c_uint]
-    kernel32.OpenProcess.restype=ctypes.c_void_p
-    candidates=[]
-    CALLBACK=ctypes.WINFUNCTYPE(ctypes.c_bool,ctypes.c_void_p,ctypes.c_void_p)
-    def visit(hwnd,_):
-        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd): return True
-        pid=ctypes.c_uint(); user32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
-        handle=kernel32.OpenProcess(0x1000,False,pid.value)  # QUERY_LIMITED_INFORMATION
-        if not handle: return True
-        try:
-            size=ctypes.c_uint(32768); image=ctypes.create_unicode_buffer(size.value)
-            if QueryFullProcessImageNameW(handle,0,image,ctypes.byref(size)) and Path(image.value).name.lower()=="chatgpt.exe":
-                candidates.append(hwnd)
-        finally:
-            kernel32.CloseHandle(handle)
-        return True
-    user32.EnumWindows(CALLBACK(visit),None)
-    return bool(candidates and user32.SetForegroundWindow(candidates[0]))
-
-def native_composer_clear():
-    """Explicit editor-only recovery; never touches the saved delivery journal.
-
-    The PowerShell owner verifies the exact ChatGPT window and composer and
-    returns a distinct no-send receipt. Run this from a HUD worker thread.
+    Preserve all saved outputs and journal evidence; no GUI text field is
+    cleared, focused, read or submitted by this maintenance action.
     """
     import desktop_native_relay as native
-    status=native.get_status()
-    if status.get("native_running") and status.get("phase")=="DELIVERING":
-        raise RuntimeError("COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY")
-    script=Path(__file__).resolve().parent/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1"
-    if not script.is_file():raise RuntimeError("Native ChatGPT composer helper unavailable")
-    powershell="powershell.exe"
-    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
-    proc=subprocess.run([powershell,"-NoLogo","-NoProfile","-ExecutionPolicy","Bypass",
-                         "-STA","-File",str(script),"-ClearComposerOnly"],
-                        cwd=str(script.parent),capture_output=True,text=True,
-                        encoding="utf-8",errors="replace",timeout=20,check=False,
-                        creationflags=flags)
-    if proc.returncode or "RESULT=COMPOSER_CLEARED_NO_SEND" not in proc.stdout:
-        diagnostic=next((line.partition("=")[2] for line in proc.stdout.splitlines()
-                         if line.startswith("HEARTBEAT_ERROR=")),None)
-        raise RuntimeError((diagnostic or "COMPOSER_CLEAR_NOT_CONFIRMED")[:180])
-    return "COMPOSER_CLEARED_NO_SEND"
-
-
-def native_force_clear_all(*, composer_focused: bool) -> dict:
-    """Operator-confirmed destructive reset with two independent receipts.
-
-    Composer focus/keyboard verification is best-effort; old outbox results
-    are closed by the active runner even if ChatGPT's UIA readback fails.
-    Neither path sends a message, reexecutes an action or deletes results.
-    """
-    import desktop_native_relay as native
-    composer="SKIPPED_CHATGPT_NOT_FOCUSED"
-    if composer_focused:
-        try:
-            composer=native_composer_clear()
-        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-            composer="NOT_CONFIRMED: " + str(exc)[:150]
     request_id=native.request_force_clear_pending()
-    try:
-        receipt=native.wait_force_clear_receipt(request_id, timeout=15.0)
-    except (RuntimeError, ValueError, OSError) as exc:
-        raise RuntimeError(
-            "OUTBOX_CLEAR_UNCONFIRMED_REQUEST="+request_id+
-            " COMPOSER="+composer+" "+str(exc)[:100]) from exc
-    return {"composer":composer, "receipt":receipt}
+    receipt=native.wait_force_clear_receipt(request_id,timeout=15.0)
+    return {"composer":"NOT_TOUCHED","receipt":receipt}
 
 
 def native_delivery_control(command,action_id=None):
@@ -971,23 +902,20 @@ def run_ui():
     def force_clear_composer():
         snap=native_view.get("snap") or {}
         if not native_mode() or clear_busy["value"] or snap.get("native_phase")=="DELIVERING":return
-        if not messagebox.askyesno("Force Clear — Discard Pending Work",
-                "Discard the current unsent ChatGPT composer text?\n\n"
-                "Also close ALL unresolved native result deliveries as ABORTED, "
-                "including held/uncertain results? This cannot be undone.\n\n"
-                "Executed commands, saved results and delivery evidence remain "
-                "in the audit journal. Nothing will be resent. Continue?",
+        if not messagebox.askyesno("Force Clear — Close Pending Outputs",
+                "Mark ALL unresolved Courier deliveries as ABORTED?\n\n"
+                "This cannot be undone. No application's text field will be "
+                "focused, cleared or modified.\n\n"
+                "Saved outputs and delivery evidence remain in the journal. "
+                "Nothing will be resent. Continue?",
                 parent=root):
             return
-        # Foreground focus is needed for the editor-only keyboard attempt.
-        # A failed focus must NOT prevent the separately confirmed outbox reset.
-        chatgpt_focused=focus_chatgpt_for_forced_delivery()
+        # Force Clear never touches external applications.
         clear_busy["value"]=True
         force_clear_btn.configure(state="disabled",text="CLEARING…")
         def worker():
             try:
-                clear_results.put(("ok",native_force_clear_all(
-                    composer_focused=chatgpt_focused)))
+                clear_results.put(("ok",native_force_clear_all()))
             except Exception as exc:
                 clear_results.put(("error",str(exc)[-300:]))
         threading.Thread(target=worker,name="courier-force-clear",daemon=True).start()
