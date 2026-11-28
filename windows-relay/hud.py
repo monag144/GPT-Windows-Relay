@@ -201,6 +201,8 @@ def native_snapshot():
         phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
     elif delivery_blocked:
         phase_line='COURIER OUTBOX HELD • '+delivery_error[:70]
+    elif live and armed and not off and force_send_action and not report.get('auto_send'):
+        phase_line='AUTO SEND OFF • queued output; enable Auto Send or use FORCE SEND'
     elif phase=='AWAITING_TEXT_FIELD':
         phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif phase=='WAITING_FOR_CHATGPT_APP':
@@ -209,13 +211,18 @@ def native_snapshot():
         phase_line='FORCE CLEAR COMPLETE • no unsent result available'
     elif outstanding_count:
         phase_line='COURIER OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
+    category=str(report.get('destination_category') or '')
+    category_label={'MESSAGE_COMPOSER':'message composer',
+                    'TEXT_EDITOR':'plain text editor'}.get(category)
+    field_line=('Detected field: '+category_label+' • '
+                if category_label else 'Foreground field: automatic detection • ')
     return {
         'online':live,'title':title,
         'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':('Text routes ACTIVE • foreground destination optional'
                    if phase=='FORWARDING_NO_CHATGPT' else
-                   'Foreground text field • auto-detect • explicit output intake'),
+                   field_line+'explicit output intake'),
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
