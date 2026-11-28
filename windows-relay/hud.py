@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue,sys
+import argparse,ctypes,json,os,re,subprocess,tkinter as tk,urllib.request,threading,queue,sys,time
 from tkinter import messagebox
 from datetime import datetime,timezone
 from pathlib import Path
@@ -138,7 +138,7 @@ def command_preview(command,limit=92):
 NATIVE_MODE_FILE=Path(os.environ.get('LOCALAPPDATA',Path.home()))/'GPTWindowsRelayDesktop'/'hud-mode.json'
 def native_mode():
     mode=read_json(NATIVE_MODE_FILE,{})
-    return mode.get('transport')=='native-chatgpt-app'
+    return mode.get('transport') in {'native-foreground','native-chatgpt-app'}
 
 def native_snapshot():
     import desktop_native_relay as native
@@ -161,7 +161,7 @@ def native_snapshot():
         title='READY'
     elif (phase=='DELIVERY_BLOCKED' and delivery_blocked
           and report.get('last_result')=='PRE_SUBMIT_FAILED'):
-        # Old ChatGPT sender receipt is held; ingress and file/API routes
+        # Historical sender receipt is held; file/API routes
         # remain READY. Keep the held receipt visible in the secondary line.
         title='READY'
     elif phase in ('ERROR','DELIVERY_BLOCKED','DELIVERY_UNCERTAIN') or delivery_blocked: title='STALLED'
@@ -177,6 +177,18 @@ def native_snapshot():
                            if isinstance(item,dict) and item.get('phase')
                            in ('READY','PRE_SUBMIT_FAILED','SUBMIT_UNCERTAIN','SEND_PENDING'))
                        if isinstance(deliveries,dict) else 0)
+    # FORCE SEND operates on an actual unresolved saved output, not the
+    # stale LAST action shown in the HUD. Force Clear intentionally aborts
+    # these records, and an aborted output must never be silently replayed.
+    send_candidates=sorted(
+        (str(d.get('created_at') or ''), key, d.get('phase'))
+        for key,d in (deliveries.items() if isinstance(deliveries,dict) else [])
+        if isinstance(key,str) and isinstance(d,dict)
+        and d.get('has_attachments') is False
+        and (d.get('phase')=='READY' or
+             (d.get('phase')=='SEND_PENDING' and
+              int(d.get('submit_only_attempt_count',0) or 0)==0)))
+    force_send_action=send_candidates[0][1] if send_candidates else None
     cmd=command_preview(detail.get('command') if detail else '')
     exact=(('ID: '+aid+'\nRESULT: '+result+'\nSHELL: '+str(detail.get('shell') or '-')+'\n\n'+str(detail.get('command') or '(command not retained)'))
            if detail else 'ID: '+aid+'\nRESULT: '+result)
@@ -184,32 +196,90 @@ def native_snapshot():
         exact+='\nDELIVERY BLOCKED: '+delivery_error
     phase_line=(phase+' • '+('running' if live else 'not running')+' • result '+result)
     # The durable delivery phase, not a potentially stale runner error,
-    # decides whether a saved ChatGPT draft is awaiting send-only recovery.
+    # decides whether a saved message draft awaits send-only recovery.
     if result=='SEND_PENDING' and delivery_phase=='SEND_PENDING':
         phase_line='CHAT SEND PENDING • saved draft awaiting verified send-only retry'
     elif delivery_blocked:
-        phase_line='CHATGPT OUTBOX HELD • '+delivery_error[:70]
+        phase_line='COURIER OUTBOX HELD • '+delivery_error[:70]
+    elif live and armed and not off and force_send_action and not report.get('auto_send'):
+        phase_line='AUTO SEND OFF • queued output; enable Auto Send or use FORCE SEND'
     elif phase=='AWAITING_TEXT_FIELD':
         phase_line='OUTPUT QUEUED • waiting for focused text field'
     elif phase=='WAITING_FOR_CHATGPT_APP':
         phase_line='UI SOURCE NOT OPEN • foreground sender READY'
+    elif result=='FORCE_CLEAR_COMPLETE' and not force_send_action:
+        phase_line='FORCE CLEAR COMPLETE • no unsent result available'
     elif outstanding_count:
-        phase_line='CHATGPT OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
+        phase_line='COURIER OUTBOX HISTORY • '+str(outstanding_count)+' unresolved'
+    category=str(report.get('destination_category') or '')
+    category_label={'MESSAGE_COMPOSER':'message composer',
+                    'TEXT_EDITOR':'plain text editor'}.get(category)
+    field_line=('Detected field: '+category_label+' • '
+                if category_label else 'Foreground field: automatic detection • ')
     return {
         'online':live,'title':title,
         'title_phase':title,
         'backend':('Native '+('ONLINE' if live else 'OFFLINE')+' • '+('OFF' if off else ('ARMED' if armed else 'DISARMED'))),
         'browser':('Text routes ACTIVE • foreground destination optional'
                    if phase=='FORWARDING_NO_CHATGPT' else
-                   'Foreground text field • auto-detect • no configured input'),
+                   field_line+'explicit output intake'),
         'phase':phase_line,
         'action':'CURRENT '+aid if phase=='EXECUTING' else 'LAST '+aid,
         'preview':cmd,'exact':exact,'conversation_lock_enabled':None,'native_mode':True,
         'auto_send':bool(report.get('auto_send')),
         'native_armed':armed, 'native_off':off, 'native_phase':phase,
         'native_delivery_phase':delivery_phase,
+        'force_send_action':force_send_action,
         'outbound_unresolved_count':outstanding_count,
     }
+
+def remember_external_foreground(last: dict) -> None:
+    """Keep the selected destination before clicking the HUD steals focus."""
+    if os.name != "nt":
+        return
+    user32=ctypes.windll.user32
+    user32.GetForegroundWindow.restype=ctypes.c_void_p
+    hwnd=int(user32.GetForegroundWindow() or 0)
+    if not hwnd or not user32.IsWindowVisible(ctypes.c_void_p(hwnd)):
+        return
+    pid=ctypes.c_ulong()
+    user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd),ctypes.byref(pid))
+    if pid.value and pid.value != os.getpid():
+        last.update(hwnd=hwnd,seen=time.monotonic())
+
+
+def force_send_to_last_foreground(snap: dict, last: dict) -> str:
+    """Explicit FORCE SEND: restore a non-HUD destination and ask the owner.
+
+    This does not execute, reinsert, clear the draft, or submit from the HUD.
+    The singleton validates the exact saved result and foreground identity
+    before any injection; its journal prevents a second uncertain click.
+    """
+    if not snap.get('native_mode') or not snap.get('online') or not snap.get('native_armed') or snap.get('native_off'):
+        raise RuntimeError('Force Send requires the running, armed native relay')
+    aid=snap.get('force_send_action')
+    if not aid:
+        raise RuntimeError('No queued unsent result. FORCE CLEAR closed the earlier deliveries; run a NEW command to produce an output.')
+    hwnd=last.get('hwnd')
+    if os.name != "nt" or not isinstance(hwnd,int) or hwnd<=0 or time.monotonic()-last.get('seen',0)>30:
+        raise RuntimeError('Select a text field in the destination app before pressing FORCE SEND')
+    user32=ctypes.windll.user32
+    user32.GetForegroundWindow.restype=ctypes.c_void_p
+    if not user32.IsWindow(ctypes.c_void_p(hwnd)) or not user32.IsWindowVisible(ctypes.c_void_p(hwnd)):
+        raise RuntimeError('The previously selected destination window is no longer available')
+    if not user32.SetForegroundWindow(ctypes.c_void_p(hwnd)):
+        raise RuntimeError('Windows refused to restore the previously selected destination window')
+    # Windows focus activation may settle asynchronously after the HUD click.
+    # This only observes focus; it never types or clicks in the target app.
+    for _ in range(5):
+        if int(user32.GetForegroundWindow() or 0)==hwnd:
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError('Destination focus could not be verified; nothing sent')
+    import desktop_native_relay as native
+    return native.request_force_send(aid,hwnd)
+
 
 def native_control(action):
     if action not in {'start','stop','restart','off','kill'}: raise ValueError('unsupported native control')
@@ -233,85 +303,16 @@ def native_auto_send(enabled):
                      cwd=str(Path(native.__file__).resolve().parent),stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
 
-def focus_chatgpt_for_forced_delivery():
-    """Hand the foreground from the clicked HUD directly to ChatGPT.
+def native_force_clear_all(*, composer_focused: bool = False) -> dict:
+    """Close unresolved Courier deliveries only; NEVER edit a foreign app.
 
-    The sender itself is a child process and Windows may reject its focus
-    request.  This function runs in the foreground HUD click handler instead.
-    It neither restores, resizes nor moves the ChatGPT window.
-    """
-    if os.name != "nt": return False
-    user32=ctypes.windll.user32; kernel32=ctypes.windll.kernel32
-    QueryFullProcessImageNameW=kernel32.QueryFullProcessImageNameW
-    QueryFullProcessImageNameW.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_wchar_p,ctypes.POINTER(ctypes.c_uint)]
-    QueryFullProcessImageNameW.restype=ctypes.c_bool
-    kernel32.OpenProcess.argtypes=[ctypes.c_uint,ctypes.c_bool,ctypes.c_uint]
-    kernel32.OpenProcess.restype=ctypes.c_void_p
-    candidates=[]
-    CALLBACK=ctypes.WINFUNCTYPE(ctypes.c_bool,ctypes.c_void_p,ctypes.c_void_p)
-    def visit(hwnd,_):
-        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd): return True
-        pid=ctypes.c_uint(); user32.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
-        handle=kernel32.OpenProcess(0x1000,False,pid.value)  # QUERY_LIMITED_INFORMATION
-        if not handle: return True
-        try:
-            size=ctypes.c_uint(32768); image=ctypes.create_unicode_buffer(size.value)
-            if QueryFullProcessImageNameW(handle,0,image,ctypes.byref(size)) and Path(image.value).name.lower()=="chatgpt.exe":
-                candidates.append(hwnd)
-        finally:
-            kernel32.CloseHandle(handle)
-        return True
-    user32.EnumWindows(CALLBACK(visit),None)
-    return bool(candidates and user32.SetForegroundWindow(candidates[0]))
-
-def native_composer_clear():
-    """Explicit editor-only recovery; never touches the saved delivery journal.
-
-    The PowerShell owner verifies the exact ChatGPT window and composer and
-    returns a distinct no-send receipt. Run this from a HUD worker thread.
+    Preserve all saved outputs and journal evidence; no GUI text field is
+    cleared, focused, read or submitted by this maintenance action.
     """
     import desktop_native_relay as native
-    status=native.get_status()
-    if status.get("native_running") and status.get("phase")=="DELIVERING":
-        raise RuntimeError("COMPOSER_CLEAR_REFUSE_DURING_NATIVE_DELIVERY")
-    script=Path(__file__).resolve().parent/"tools"/"Send-ChatGPT-DesktopHeartbeat.ps1"
-    if not script.is_file():raise RuntimeError("Native ChatGPT composer helper unavailable")
-    powershell="powershell.exe"
-    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
-    proc=subprocess.run([powershell,"-NoLogo","-NoProfile","-ExecutionPolicy","Bypass",
-                         "-STA","-File",str(script),"-ClearComposerOnly"],
-                        cwd=str(script.parent),capture_output=True,text=True,
-                        encoding="utf-8",errors="replace",timeout=20,check=False,
-                        creationflags=flags)
-    if proc.returncode or "RESULT=COMPOSER_CLEARED_NO_SEND" not in proc.stdout:
-        diagnostic=next((line.partition("=")[2] for line in proc.stdout.splitlines()
-                         if line.startswith("HEARTBEAT_ERROR=")),None)
-        raise RuntimeError((diagnostic or "COMPOSER_CLEAR_NOT_CONFIRMED")[:180])
-    return "COMPOSER_CLEARED_NO_SEND"
-
-
-def native_force_clear_all(*, composer_focused: bool) -> dict:
-    """Operator-confirmed destructive reset with two independent receipts.
-
-    Composer focus/keyboard verification is best-effort; old outbox results
-    are closed by the active runner even if ChatGPT's UIA readback fails.
-    Neither path sends a message, reexecutes an action or deletes results.
-    """
-    import desktop_native_relay as native
-    composer="SKIPPED_CHATGPT_NOT_FOCUSED"
-    if composer_focused:
-        try:
-            composer=native_composer_clear()
-        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-            composer="NOT_CONFIRMED: " + str(exc)[:150]
     request_id=native.request_force_clear_pending()
-    try:
-        receipt=native.wait_force_clear_receipt(request_id, timeout=15.0)
-    except (RuntimeError, ValueError, OSError) as exc:
-        raise RuntimeError(
-            "OUTBOX_CLEAR_UNCONFIRMED_REQUEST="+request_id+
-            " COMPOSER="+composer+" "+str(exc)[:100]) from exc
-    return {"composer":composer, "receipt":receipt}
+    receipt=native.wait_force_clear_receipt(request_id,timeout=15.0)
+    return {"composer":"NOT_TOUCHED","receipt":receipt}
 
 
 def native_delivery_control(command,action_id=None):
@@ -571,7 +572,7 @@ def run_ui():
     clear_queue_var=tk.BooleanVar(value=False)
     clear_queue_check=tk.Checkbutton(force_frame,text="CLEAR QUEUE",variable=clear_queue_var,font=("Segoe UI",8,"bold"),bg=PANEL,fg=WARN,activebackground=PANEL,activeforeground=WARN,selectcolor=PANEL,highlightthickness=0,padx=7,cursor="hand2")
     clear_queue_check.grid(row=0,column=1,sticky="w",padx=(7,0))
-    force_command_btn=tk.Button(force_frame,text="FORCE RESEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
+    force_command_btn=tk.Button(force_frame,text="FORCE SEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_command_btn.grid(row=1,column=0,sticky="w")
     force_abort_btn=tk.Button(force_frame,text="ABORT SEND",font=("Segoe UI",8,"bold"),bg="#3c4043",fg=FG,activebackground="#5f6368",activeforeground=FG,bd=0,highlightthickness=0,padx=8,pady=1,cursor="hand2")
     force_abort_btn.grid(row=1,column=1,sticky="w",padx=(7,0))
@@ -667,7 +668,7 @@ def run_ui():
                                activeforeground=FG,bd=0,padx=9,pady=2,cursor="hand2")
     debug_routes_btn.pack(side="left")
     debug_status=tk.Label(settings_frame,
-                          text="Ctrl+C in ChatGPT/Notepad, then SEND COPIED TEXT.",
+                          text="Copy text from any app, then SEND COPIED TEXT.",
                           font=("Segoe UI",8),bg=PANEL,fg=MUTED,anchor="w",
                           justify="left",wraplength=W-35)
     debug_status.pack(fill="x",pady=(1,0))
@@ -886,24 +887,21 @@ def run_ui():
     def native_action_id():
         snap=native_view.get("snap") or {}
         return str(snap.get("action") or "").removeprefix("LAST ").removeprefix("CURRENT ").strip()
-    def show_force_command():
-        aid=native_action_id()
-        if not native_mode() or not aid or aid=='-':return
-        # This resubmits a saved result, not a CMD command.  A prior receipt
-        # may have reached the conversation even when the journal says failed.
-        if not messagebox.askyesno("Force Resend",
-            "Resend saved result " + aid + "?\n\n"
-            "This can duplicate a result already received by ChatGPT and may "
-            "overwrite an existing ChatGPT draft. Reconcile a known receipt "
-            "instead. Continue only if the result was not delivered.",
-            parent=root):
-            return
-        if not focus_chatgpt_for_forced_delivery():
-            messagebox.showerror("Force Resend","ChatGPT could not be brought to the foreground. No delivery retry was started.",parent=root)
-            return
-        # Let Windows finish foreground activation before the child sender
-        # performs its independent foreground verification.
-        root.after(180,lambda:native_delivery_control("force-delivery",aid))
+    last_send_target={"hwnd":0,"seen":0.0}
+    manual_send={"id":None,"since":0.0,"result":None}
+    def force_send_selected():
+        # One-shot request to the selected foreground app, never a resend.
+        # Keep operator-selected focus while runner owns the actual send.
+        snap=native_view.get("snap") or {}
+        if manual_send["id"] and manual_send["result"] is None:
+            return  # The same HUD must not launch overlapping requests.
+        try:
+            manual_send["id"]=force_send_to_last_foreground(snap,last_send_target)
+            manual_send["since"]=time.monotonic()
+            manual_send["result"]=None
+        except (RuntimeError,ValueError,OSError) as exc:
+            messagebox.showwarning("FORCE SEND",str(exc)[:250],parent=root)
+
     # FORCE CLEAR is the operator's explicit terminal reset, not a resend.
     # Preserve executed commands, stored results and every audited disposition.
     clear_results=queue.Queue()
@@ -911,23 +909,20 @@ def run_ui():
     def force_clear_composer():
         snap=native_view.get("snap") or {}
         if not native_mode() or clear_busy["value"] or snap.get("native_phase")=="DELIVERING":return
-        if not messagebox.askyesno("Force Clear — Discard Pending Work",
-                "Discard the current unsent ChatGPT composer text?\n\n"
-                "Also close ALL unresolved native result deliveries as ABORTED, "
-                "including held/uncertain results? This cannot be undone.\n\n"
-                "Executed commands, saved results and delivery evidence remain "
-                "in the audit journal. Nothing will be resent. Continue?",
+        if not messagebox.askyesno("Force Clear — Close Pending Outputs",
+                "Mark ALL unresolved Courier deliveries as ABORTED?\n\n"
+                "This cannot be undone. No application's text field will be "
+                "focused, cleared or modified.\n\n"
+                "Saved outputs and delivery evidence remain in the journal. "
+                "Nothing will be resent. Continue?",
                 parent=root):
             return
-        # Foreground focus is needed for the editor-only keyboard attempt.
-        # A failed focus must NOT prevent the separately confirmed outbox reset.
-        chatgpt_focused=focus_chatgpt_for_forced_delivery()
+        # Force Clear never touches external applications.
         clear_busy["value"]=True
         force_clear_btn.configure(state="disabled",text="CLEARING…")
         def worker():
             try:
-                clear_results.put(("ok",native_force_clear_all(
-                    composer_focused=chatgpt_focused)))
+                clear_results.put(("ok",native_force_clear_all()))
             except Exception as exc:
                 clear_results.put(("error",str(exc)[-300:]))
         threading.Thread(target=worker,name="courier-force-clear",daemon=True).start()
@@ -941,7 +936,7 @@ def run_ui():
         clear_queue_var.set(False)
         if native_mode() and messagebox.askyesno("Clear Entire Queue","Delete all pending native delivery records and holds?\nExecuted command results are retained.",parent=root):
             native_delivery_control("clear-pending-deliveries")
-    force_command_btn.configure(command=show_force_command)
+    force_command_btn.configure(command=force_send_selected)
     force_clear_btn.configure(command=force_clear_composer)
     force_abort_btn.configure(command=force_abort)
     clear_queue_check.configure(command=clear_pending_queue)
@@ -1025,10 +1020,18 @@ def run_ui():
             go_state["waiting"]=(kind=="waiting")
             if kind=="error":
                 messagebox.showerror("Command Courier GO",error,parent=root)
-            # A historical held ChatGPT receipt is secondary status, never
+            # A historical held delivery receipt is secondary status, never
             # a modal interruption to the courier's active forwarder.
         if native_mode() and not courier_state["queried"]:
             request_courier_status()
+        remember_external_foreground(last_send_target)
+        if manual_send["id"] and manual_send["result"] is None:
+            import desktop_native_relay as native
+            receipt=read_json(native.FORCE_SEND_RECEIPTS /
+                              (manual_send["id"]+".json"),None)
+            if isinstance(receipt,dict) and receipt.get("id")==manual_send["id"]:
+                manual_send["result"]=str(receipt.get("result") or "UNKNOWN")
+                manual_send["since"]=time.monotonic()
         snap=snapshot()
         if snap.get('native_mode'):
             native_view["snap"]=snap
@@ -1069,12 +1072,24 @@ def run_ui():
             force_clear_btn.configure(text="CLEARING…" if clear_busy["value"] else "FORCE CLEAR",
                                       state="disabled" if clear_busy["value"] or
                                             snap.get("native_phase")=="DELIVERING" else "normal")
-            force_command_btn.configure(state='normal' if delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled')
+            # FORCE SEND stays visible after a clear; no phantom saved
+            # output is created. Never permit a second manual click while
+            # the first request is awaiting its real journal receipt.
+            sending=bool(manual_send["id"] and manual_send["result"] is None)
+            force_command_btn.configure(
+                text="SENDING…" if sending else "FORCE SEND",
+                state='normal' if snap["online"] and armed and
+                      not snap.get("native_off") and not sending else 'disabled',
+                bg="#174ea6" if snap.get("force_send_action") else "#3c4043")
             force_abort_btn.configure(state='normal' if delivery_phase in ('READY','PRE_SUBMIT_FAILED') else 'disabled')
             clear_queue_check.configure(state='normal')
             title.configure(text=snap['title'],fg=colors.get(snap.get('title_phase',snap['title']),GOOD))
             relay.configure(text=snap['backend']); browser.configure(text=snap['browser'])
-            phase.configure(text=snap['phase']); action.configure(text=snap['action'][:86])
+            manual_report=(manual_send["result"] if manual_send["id"] and
+                           time.monotonic()-manual_send["since"]<15 else None)
+            phase.configure(text=("FORCE SEND • "+manual_report) if manual_report
+                            else snap['phase'])
+            action.configure(text=snap['action'][:86])
             preview.configure(text=snap['preview']); set_details(snap['exact'])
             root.after(1000,refresh)
             return

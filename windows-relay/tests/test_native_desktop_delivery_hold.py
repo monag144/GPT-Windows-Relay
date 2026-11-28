@@ -292,14 +292,14 @@ class DeliveryFailureHoldTests(unittest.TestCase):
                 native.acknowledge_confirmed_receipt(self.id, receipt)
         self.assertEqual(wr.State(native.STATE).outbound_lookup(self.id)["phase"], "READY")
 
-    def test_receipt_request_processed_before_any_chatgpt_uia_scan(self):
+    def test_receipt_request_processed_before_any_explicit_output_claim(self):
         source=(ROOT/"desktop_native_relay.py").read_text(encoding="utf-8")
         self.assertIn('"queue-confirmed-receipt"',source)
         self.assertIn("request_confirmed_receipt(args.action_id, args.receipt)",source)
         self.assertIn("reconcile_receipt_requests(state)",source)
         runner=source.split("def runner():",1)[1].split("HUD_MODE =",1)[0]
         self.assertLess(runner.index("reconcile_receipt_requests(state)"),
-                        runner.index("candidates = read_scan(require_app=True)"))
+                        runner.index("reconcile_explicit_output_requests(state)"))
         reconcile=source.split("def reconcile_receipt_requests(state: wr.State):",1)[1].split(
             "def acknowledge_confirmed_receipt",1)[0]
         self.assertNotIn("subprocess.run(",reconcile)

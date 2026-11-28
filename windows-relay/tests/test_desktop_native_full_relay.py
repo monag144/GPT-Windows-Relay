@@ -49,7 +49,7 @@ class NativeDesktopTests(unittest.TestCase):
     def test_first_install_persistent_native_arming(self):
         first = native.configuration()
         self.assertTrue(first["armed"])
-        self.assertTrue(first["trust_visible_desktop_packets"])
+        self.assertFalse(first["trust_visible_desktop_packets"])
         native.update_control("stop")
         self.assertFalse(native.configuration()["armed"])
         self.assertTrue(native.stop_requested())
@@ -58,23 +58,25 @@ class NativeDesktopTests(unittest.TestCase):
         native.update_control("off")
         self.assertTrue(native.configuration()["off"])
 
-    def test_scanner_packet_transport_is_validated_and_redacted_by_default(self):
-        wire = packet()
-        encoded = base64.b64encode(wire.encode()).decode()
-        rows = "\n".join([
-            "CHATGPT_DESKTOP_CANDIDATE_MONITOR_V1",
-            "CANDIDATE_ID=NATIVE-TEST-001",
-            "CANDIDATE_PACKET_B64=" + encoded,
-            "CANDIDATE_ID=WRONG-TEST-ID",
-            "CANDIDATE_PACKET_B64=" + encoded,
-        ])
-        output = SimpleNamespace(returncode=0, stdout=rows, stderr="")
-        with mock.patch.object(native.shutil, "which", return_value="powershell.exe"), \
-             mock.patch.object(native.subprocess, "run", return_value=output) as runner:
-            found = native.read_scan()
-        self.assertEqual(found, [("NATIVE-TEST-001", wire)])
-        self.assertIn("-EmitPackets", runner.call_args.args[0])
-        self.assertNotIn("127.0.0.1", str(runner.call_args))
+    def test_explicit_output_intake_replaces_transcript_scanner(self):
+        state=self.state()
+        aid="COURIER-NATIVE-TEST-001"
+        for field, value in {
+            "OUTPUT_REQUESTS":self.folder/"explicit-output-requests",
+            "OUTPUT_RECEIPTS":self.folder/"explicit-output-receipts",
+        }.items():
+            patch=mock.patch.object(native,field,value)
+            patch.start()
+            self.addCleanup(patch.stop)
+        with mock.patch.object(native,"execute_with_stop") as execute, \
+             mock.patch.object(native.subprocess,"run") as process:
+            native.queue_explicit_output("Hello independent destination",aid=aid)
+            self.assertEqual(native.reconcile_explicit_output_requests(state),1)
+        execute.assert_not_called()
+        process.assert_not_called()
+        self.assertEqual(state.outbound_lookup(aid)["wire_format"],"plain_text")
+        self.assertEqual(state.outbound_lookup(aid)["phase"],"READY")
+        self.assertNotIn("read_scan(",(Path(native.__file__).read_text(encoding="utf-8")))
 
     def test_process_persists_once_and_queues_native_result(self):
         state = self.state()

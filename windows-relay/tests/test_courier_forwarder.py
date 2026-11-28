@@ -274,21 +274,15 @@ class TextForwarderTests(unittest.TestCase):
         with self.assertRaisesRegex(f.ForwardingError, "ROUTE_ID_INVALID"):
             f.tick(self.home, enabled=True)
 
-    def test_native_runner_routes_before_chatgpt_scanner(self):
+    def test_native_runner_routes_without_any_conversation_scanner(self):
         native = (ROOT / "desktop_native_relay.py").read_text(encoding="utf-8")
-        scan = native.index("candidates = read_scan(require_app=True)")
-        forward = native.index("report = forwarder.tick(HOME, enabled=True)")
-        worker = native.index("threading.Thread(target=forward_worker")
-        self.assertLess(forward, scan)
-        self.assertLess(worker, scan)
-        self.assertIn("name=\"command-courier-text-forwarder\"", native)
-        self.assertIn('else "FORWARDING_NO_CHATGPT" if forward_report["active"]', native)
-        self.assertIn('if policy["armed"] and policy["auto_send"]:', native)
-        self.assertIn("NATIVE_TEXT_ROUTE_ERROR=", native)
-        hud = (ROOT / "hud.py").read_text(encoding="utf-8")
-        self.assertIn("Text routes ACTIVE • foreground destination optional", hud)
-        coordinator = (ROOT / "command_courier.py").read_text(encoding="utf-8")
-        self.assertIn('"FORWARDING_NO_CHATGPT"', coordinator)
+        self.assertIn("report = forwarder.tick(HOME, enabled=True)",native)
+        self.assertIn("threading.Thread(target=forward_worker",native)
+        self.assertIn("reconcile_explicit_output_requests(state)",native)
+        self.assertNotIn("read_scan(",native)
+        self.assertNotIn("SCANNING_CHATGPT_APP",native)
+        self.assertIn('if policy["armed"] and policy["auto_send"]:',native)
+        self.assertIn("NATIVE_TEXT_ROUTE_ERROR=",native)
 
 
 if __name__ == "__main__":

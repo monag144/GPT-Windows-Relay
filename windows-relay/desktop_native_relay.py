@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Independent native ChatGPT Windows relay.
+"""Universal Command Courier: operator-supplied output, foreground-field delivery.
 
-The browser integration, browser bridge.json, port 8766 and Firefox extension
-are not used. State, arming, execution journal and result delivery are native.
-Operator acceptance of desktop accessibility as an instruction source is explicit.
+No third-party conversation scanning, inferred instructions or application
+allowlist is permitted in the active native runner. The original execution
+journal is retained for historical results and exact-once delivery.
 """
 from __future__ import annotations
 import argparse
@@ -30,8 +30,6 @@ import courier_forwarder as forwarder
 
 ROOT = Path(__file__).resolve().parent
 TOOLS = ROOT / "tools"
-SCANNER = TOOLS / "Watch-ChatGPT-ActionCandidates.ps1"
-SENDER = TOOLS / "Send-ChatGPT-DesktopHeartbeat.ps1"
 FOREGROUND_SENDER = TOOLS / "Send-Foreground-TextResult.ps1"
 HOME = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "GPTWindowsRelayDesktop"
 CONFIG = HOME / "desktop-control.json"
@@ -43,8 +41,11 @@ DELIVERY_HOLDS = HOME / "delivery-holds"
 RECEIPT_REQUESTS = HOME / "receipt-reconciliations"
 FORCE_CLEAR_REQUESTS = HOME / "force-clear-requests"
 FORCE_CLEAR_RECEIPTS = HOME / "force-clear-receipts"
-SOURCE_RE = re.compile(r"^CANDIDATE_(ID|PACKET_B64)=")
-MAX_TRANSPORT_BYTES = 100_000
+FORCE_SEND_REQUESTS = HOME / "force-send-requests"
+FORCE_SEND_RECEIPTS = HOME / "force-send-receipts"
+OUTPUT_REQUESTS = HOME / "explicit-output-requests"
+OUTPUT_RECEIPTS = HOME / "explicit-output-receipts"
+MAX_EXPLICIT_OUTPUT_BYTES = 16000
 
 
 def note(*parts):
@@ -64,7 +65,7 @@ def configuration() -> dict:
         # The operator explicitly requested persistent native arming.
         write_json(CONFIG, {"version": 1, "armed": True, "off": False,
                             "auto_send": False,
-                            "trust_visible_desktop_packets": True})
+                            "trust_visible_desktop_packets": False})
     data = json.loads(CONFIG.read_text(encoding="utf-8"))
     # Add the HUD policy flag without invalidating an existing native install.
     if "auto_send" not in data:
@@ -73,7 +74,7 @@ def configuration() -> dict:
     if (data.get("version") != 1 or type(data.get("armed")) is not bool
             or type(data.get("off")) is not bool
             or type(data.get("auto_send")) is not bool
-            or data.get("trust_visible_desktop_packets") is not True):
+            or type(data.get("trust_visible_desktop_packets")) is not bool):
         raise RuntimeError("DESKTOP_CONFIG_INVALID")
     return data
 
@@ -215,6 +216,8 @@ def get_status() -> dict:
         "last_result": live.get("last_result"),
         "delivery_blocked": live.get("delivery_blocked", False),
         "last_delivery_error": live.get("last_delivery_error"),
+        "destination_category": live.get("destination_category"),
+        "runner_source_sha256": live.get("runner_source_sha256"),
         "last_delivery_stage": live.get("last_delivery_stage"),
         "runner_error_type": live.get("runner_error_type"),
         "runner_error_stage": live.get("runner_error_stage"),
@@ -222,53 +225,6 @@ def get_status() -> dict:
     }
 
 
-def read_scan(*, require_app: bool = False) -> list[tuple[str, str]]:
-    if not SCANNER.exists():
-        raise RuntimeError("NATIVE_UIA_SCANNER_MISSING")
-    ps = shutil.which("powershell.exe")
-    if not ps:
-        raise RuntimeError("WINDOWS_POWERSHELL_MISSING")
-    cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass",
-           "-File", str(SCANNER), "-WatchSeconds", "2",
-           "-IntervalSeconds", "1", "-EmitPackets"]
-    proc = subprocess.run(cmd, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=25)
-    if proc.returncode:
-        raise RuntimeError("UIA_SCANNER_EXIT_%s: %s" % (proc.returncode, proc.stderr[-300:]))
-    if require_app:
-        # At Windows sign-in the ChatGPT app/editor can start later than the
-        # engine. Never treat an absent app as an empty accepted baseline:
-        # old packets could otherwise be mistaken for newly issued commands.
-        report = set(proc.stdout.splitlines())
-        ready = "CHATGPT_APP_FOUND=True" in report
-        document_rows = [x for x in report if x.startswith("DOCUMENT_READS=")]
-        try:
-            documents = int(document_rows[0].partition("=")[2]) if len(document_rows) == 1 else 0
-        except ValueError:
-            documents = 0
-        if not ready or documents < 1:
-            raise RuntimeError("NATIVE_CHATGPT_APP_NOT_READY")
-    items = []
-    current_id = None
-    for line in proc.stdout.splitlines():
-        if not SOURCE_RE.match(line):
-            continue
-        if line.startswith("CANDIDATE_ID="):
-            current_id = line.removeprefix("CANDIDATE_ID=")
-        elif line.startswith("CANDIDATE_PACKET_B64=") and current_id is not None:
-            encoded = line.removeprefix("CANDIDATE_PACKET_B64=")
-            if len(encoded) > MAX_TRANSPORT_BYTES * 2:
-                current_id = None
-                continue
-            try:
-                packet = base64.b64decode(encoded, validate=True).decode("utf-8")
-                action = wr.extract(packet)
-                if action.id == current_id:
-                    items.append((current_id, packet))
-            except (ValueError, UnicodeError, wr.RelayError):
-                pass
-            current_id = None
-    return items
 
 
 def kill_process_tree(pid: int):
@@ -341,8 +297,124 @@ def process_packet(packet: str, state: wr.State):
     status_update(phase="RESULT_READY", last_result=result["status"])
 
 
+def queue_explicit_output(text: str, *, source: str = "explicit-file", aid: str | None = None) -> str:
+    """Local file/clipboard/API result intake; only the running owner journals.
+
+    No command execution, transcript reading, UI automation, or direct
+    State() mutation occurs in this client-side function.
+    """
+    if source not in {"explicit-file","explicit-clipboard","authorized-api"}:
+        raise ValueError("OUTPUT_SOURCE_INVALID")
+    if (not isinstance(text,str) or not text.strip()
+            or "\x00" in text or len(text.encode("utf-8")) > MAX_EXPLICIT_OUTPUT_BYTES):
+        raise ValueError("OUTPUT_TEXT_INVALID")
+    if aid is None:
+        aid = "COURIER-" + uuid.uuid4().hex
+    if not isinstance(aid,str) or not wr.ID_RE.fullmatch(aid):
+        raise ValueError("OUTPUT_ACTION_ID_INVALID")
+    request_path = OUTPUT_REQUESTS / (wr.safe_result_filename(aid))
+    if (request_path.exists() or request_path.with_suffix(".claimed").exists()
+            or (OUTPUT_RECEIPTS / request_path.name).exists()):
+        raise ValueError("OUTPUT_ID_ALREADY_QUEUED")
+    OUTPUT_REQUESTS.mkdir(parents=True,exist_ok=True)
+    write_json(request_path, {
+        "version":1,"kind":"EXPLICIT_OUTPUT","id":aid,
+        "source":source,"text":text,
+        "text_sha256":hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "queued_utc":utc(),
+    })
+    note("COURIER_EXPLICIT_OUTPUT_QUEUED="+aid, "BYTES="+str(len(text.encode("utf-8"))))
+    return aid
+
+
+def queue_output_file(file_path: str, *, aid: str | None = None) -> str:
+    """Read ONLY a deliberately named local UTF-8 .txt source file."""
+    path = Path(file_path)
+    if path.is_symlink() or not path.is_file() or path.suffix.lower() != ".txt":
+        raise ValueError("OUTPUT_SOURCE_MUST_BE_LOCAL_TXT_FILE")
+    if path.stat().st_size > MAX_EXPLICIT_OUTPUT_BYTES:
+        raise ValueError("OUTPUT_SOURCE_TOO_LARGE")
+    return queue_explicit_output(path.read_text(encoding="utf-8"),
+                                 source="explicit-file",aid=aid)
+
+
+def reconcile_explicit_output_requests(state: wr.State) -> int:
+    """Single native journal owner consumes explicitly queued local text."""
+    if not OUTPUT_REQUESTS.is_dir():
+        return 0
+    processed=0
+    for path in sorted(OUTPUT_REQUESTS.glob("*.json"))[:24]:
+        if path.is_symlink():
+            continue
+        claimed=path.with_suffix(".claimed")
+        aid=path.stem
+        outcome="REJECTED"
+        try:
+            # Remove the pending entry atomically before any journal write.
+            path.replace(claimed)
+            request=json.loads(claimed.read_text(encoding="utf-8"))
+            if not isinstance(request,dict):
+                raise ValueError("OUTPUT_INVALID_REQUEST")
+            aid=request.get("id")
+            if (not isinstance(aid,str) or not wr.ID_RE.fullmatch(aid)
+                    or path.name!=wr.safe_result_filename(aid)):
+                raise ValueError("OUTPUT_INVALID_REQUEST_ID")
+            raw_text=request.get("text")
+            if (request.get("version")!=1 or
+                    request.get("kind")!="EXPLICIT_OUTPUT" or request.get("id")!=aid or
+                    request.get("source") not in
+                    {"explicit-file","explicit-clipboard","authorized-api"} or
+                    not isinstance(raw_text,str) or not raw_text.strip() or
+                    len(raw_text.encode("utf-8")) > MAX_EXPLICIT_OUTPUT_BYTES or
+                    request.get("text_sha256")!=hashlib.sha256(raw_text.encode("utf-8")).hexdigest()):
+                raise ValueError("OUTPUT_INVALID_REQUEST")
+            created=state.enqueue_text_output(aid, raw_text, source=request["source"])
+            outcome="READY" if created else "ALREADY_QUEUED"
+            processed+=1
+            note("COURIER_EXPLICIT_OUTPUT="+outcome, "ID="+aid)
+        except (OSError,ValueError,wr.RelayError) as exc:
+            note("COURIER_EXPLICIT_OUTPUT=REJECTED","ID="+aid,
+                 "ERROR="+type(exc).__name__)
+        finally:
+            if claimed.is_file():
+                OUTPUT_RECEIPTS.mkdir(parents=True,exist_ok=True)
+                write_json(OUTPUT_RECEIPTS / path.name, {
+                    "id":aid,"result":outcome,"finished_utc":utc(),
+                })
+                claimed.unlink(missing_ok=True)
+    return processed
+
+
 def outbox_result(state: wr.State, aid: str) -> tuple[Path, str]:
-    source = wr.read_outbound_wire_result(state, aid)
+    delivery=state.outbound_lookup(aid)
+    source=wr.read_outbound_wire_result(state, aid)
+    if delivery and delivery.get("wire_format") == "plain_text":
+        # Plain text remains byte-for-byte identical to the supplied source.
+        # Receipt is bound in a sidecar, never injected into the destination.
+        digest=hashlib.sha256(source.encode("utf-8")).hexdigest()
+        if digest != delivery.get("text_sha256"):
+            raise RuntimeError("COURIER_PLAINTEXT_HASH_MISMATCH")
+        OUTBOX.mkdir(parents=True,exist_ok=True)
+        path=OUTBOX / (wr.safe_result_filename(aid).removesuffix(".json")+".txt")
+        meta=path.with_suffix(".receipt.json")
+        if meta.is_file():
+            saved=json.loads(meta.read_text(encoding="utf-8"))
+            if (saved.get("id")!=aid or saved.get("text_sha256")!=digest or
+                    not re.fullmatch(r"NATIVE-RECEIPT-[0-9a-f]{32}",
+                                     str(saved.get("receipt") or ""))):
+                raise RuntimeError("COURIER_PLAINTEXT_RECEIPT_MISMATCH")
+        elif path.is_file():
+            raise RuntimeError("COURIER_ORPHANED_OUTBOX_DO_NOT_RESEND")
+        else:
+            saved={"id":aid,"text_sha256":digest,
+                   "receipt":"NATIVE-RECEIPT-"+uuid.uuid4().hex}
+            write_json(meta,saved)
+        if path.is_file():
+            if path.read_text(encoding="utf-8") != source:
+                raise RuntimeError("COURIER_EXISTING_OUTBOX_MISMATCH")
+        else:
+            path.write_text(source,encoding="utf-8")
+        return path,saved["receipt"]
     # A unique receipt proves a newly rendered result, not merely an old
     # command or previous mention of the action ID.
     marker = "NATIVE-RECEIPT-" + uuid.uuid4().hex
@@ -380,6 +452,17 @@ def _verify_saved_receipt_binding(aid: str, receipt: str):
     path = OUTBOX / (wr.safe_result_filename(aid).removesuffix(".json") + ".txt")
     if not path.is_file():
         raise RuntimeError("NATIVE_RECEIPT_ACK_OUTBOX_MISSING")
+    sidecar = path.with_suffix(".receipt.json")
+    if sidecar.is_file():
+        try:
+            row=json.loads(sidecar.read_text(encoding="utf-8"))
+            digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("NATIVE_RECEIPT_ACK_PLAINTEXT_INVALID") from exc
+        if (row.get("id")!=aid or row.get("receipt")!=receipt
+                or row.get("text_sha256")!=digest):
+            raise RuntimeError("NATIVE_RECEIPT_ACK_PLAINTEXT_MISMATCH")
+        return
     try:
         wire = path.read_text(encoding="utf-8")
         if (len(wire) > 250000 or not wire.startswith(wr.RO)
@@ -391,6 +474,119 @@ def _verify_saved_receipt_binding(aid: str, receipt: str):
     if (not isinstance(payload, dict) or payload.get("id") != aid
             or payload.get("native_delivery_receipt") != receipt):
         raise RuntimeError("NATIVE_RECEIPT_ACK_BINDING_MISMATCH")
+
+
+def request_force_send(aid: str, foreground_hwnd: int) -> str:
+    """Request ONE manual dispatch of a saved, still-eligible result.
+
+    This does not open a second journal writer or execute an instruction.
+    The running singleton verifies the saved phase and the exact previously
+    focused foreground window before invoking the existing delivery owner.
+    """
+    if not isinstance(aid, str) or not wr.ID_RE.fullmatch(aid):
+        raise ValueError("FORCE_SEND_ACTION_ID_INVALID")
+    if type(foreground_hwnd) is not int or not (0 < foreground_hwnd <= 0xFFFFFFFFFFFFFFFF):
+        raise ValueError("FORCE_SEND_WINDOW_INVALID")
+    if not runner_active():
+        raise RuntimeError("FORCE_SEND_REQUIRES_RUNNING_SINGLETON")
+    cfg = configuration()
+    if not cfg["armed"] or cfg["off"]:
+        raise RuntimeError("FORCE_SEND_REQUIRES_ARMED_RUNNER")
+    request_id = uuid.uuid4().hex
+    FORCE_SEND_REQUESTS.mkdir(parents=True, exist_ok=True)
+    write_json(FORCE_SEND_REQUESTS / (request_id + ".json"), {
+        "id": request_id, "kind": "FORCE_SEND", "action_id": aid,
+        "foreground_hwnd": foreground_hwnd, "expires_epoch": time.time() + 45.0,
+    })
+    note("NATIVE_FORCE_SEND=QUEUED", "REQUEST=" + request_id, "ACTION=" + aid)
+    return request_id
+
+
+def current_foreground_hwnd() -> int:
+    """Read-only foreground identity, patchable for synthetic offline tests."""
+    if os.name != "nt":
+        return 0
+    import ctypes
+    ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
+    return int(ctypes.windll.user32.GetForegroundWindow() or 0)
+
+
+def reconcile_force_send_requests(state: wr.State) -> int:
+    """The singleton consumes manual sends before normal automatic delivery.
+
+    A request is claimed on disk before calling the sender, so a crash does
+    not resurrect the mouse click. The durable outbound journal is the
+    final authority on whether any message may be inserted or submitted.
+    """
+    if not FORCE_SEND_REQUESTS.is_dir():
+        return 0
+    processed = 0
+    for path in sorted(FORCE_SEND_REQUESTS.glob("*.json")):
+        claimed = path.with_suffix(".claimed")
+        request_id = path.stem
+        aid = ""
+        outcome = "REJECTED"
+        try:
+            if path.is_symlink() or not re.fullmatch(r"[0-9a-f]{32}", request_id):
+                raise ValueError("FORCE_SEND_REQUEST_INVALID_PATH")
+            req = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(req, dict) or req.get("id") != request_id or req.get("kind") != "FORCE_SEND":
+                raise ValueError("FORCE_SEND_REQUEST_INVALID")
+            aid = req.get("action_id")
+            hwnd = req.get("foreground_hwnd")
+            deadline = req.get("expires_epoch")
+            if not isinstance(aid, str) or not wr.ID_RE.fullmatch(aid):
+                raise ValueError("FORCE_SEND_ACTION_ID_INVALID")
+            if type(hwnd) is not int or hwnd <= 0 or type(deadline) not in (int, float):
+                raise ValueError("FORCE_SEND_REQUEST_FIELDS_INVALID")
+            # Atomic claim must precede all side effects; never replay a
+            # claimed request after a process crash.
+            path.replace(claimed)
+            if time.time() > deadline:
+                outcome = "EXPIRED_NO_SEND"
+            elif stop_requested():
+                outcome = "DISARMED_NO_SEND"
+            else:
+                foreground = current_foreground_hwnd()
+                if foreground != hwnd:
+                    outcome = "WINDOW_CHANGED_NO_SEND"
+                else:
+                    record = state.outbound_lookup(aid)
+                    phase = record.get("phase") if isinstance(record, dict) else None
+                    if not isinstance(record, dict) or record.get("has_attachments") is not False:
+                        outcome = "NO_ELIGIBLE_RESULT"
+                    elif phase == "READY" and not delivery_held(aid):
+                        deliver(state, aid, manual=True)
+                        outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                        if outcome == "READY": outcome = "NO_TEXT_FIELD"
+                        elif outcome == "SEND_PENDING": outcome = "SEND_NOT_AVAILABLE"
+                    elif (phase == "SEND_PENDING"
+                          and int(record.get("submit_only_attempt_count", 0) or 0) == 0):
+                        recover_submit_only(state, aid, manual=True)
+                        outcome = str((state.outbound_lookup(aid) or {}).get("phase") or "UNKNOWN")
+                        if outcome == "READY": outcome = "NO_TEXT_FIELD"
+                        elif outcome == "SEND_PENDING": outcome = "SEND_NOT_AVAILABLE"
+                    else:
+                        # ABORTED, SUBMITTED, TEXT_INSERTED, uncertain or held
+                        # are NOT authorized by a Force Send click.
+                        outcome = "NO_ELIGIBLE_RESULT"
+            note("NATIVE_FORCE_SEND=" + outcome, "ACTION=" + aid, "REQUEST=" + request_id)
+            processed += 1
+        except (OSError, ValueError, RuntimeError, wr.RelayError) as exc:
+            note("NATIVE_FORCE_SEND=REJECTED", "ERROR=" + type(exc).__name__,
+                 "REQUEST=" + request_id)
+        finally:
+            if claimed.is_file():
+                FORCE_SEND_RECEIPTS.mkdir(parents=True, exist_ok=True)
+                write_json(FORCE_SEND_RECEIPTS / (request_id + ".json"), {
+                    "id": request_id, "action_id": aid, "result": outcome,
+                    "finished_utc": utc(),
+                })
+                claimed.unlink(missing_ok=True)
+            elif path.is_file() and not path.is_symlink():
+                # Invalid requests must not be retried every loop.
+                path.rename(path.with_suffix(".rejected"))
+    return processed
 
 
 def request_force_clear_pending() -> str:
@@ -577,7 +773,7 @@ def acknowledge_confirmed_receipt(aid: str, receipt: str):
     return after
 
 
-def deliver(state: wr.State, aid: str):
+def deliver(state: wr.State, aid: str, *, manual: bool = False):
     if stop_requested() or delivery_held(aid):
         return
     delivery = state.outbound_lookup(aid)
@@ -586,21 +782,22 @@ def deliver(state: wr.State, aid: str):
     if delivery.get("has_attachments") is not False:
         note("NATIVE_ATTACHMENT_RESULT_FILE_ONLY=" + aid)
         return
+    if delivery_force_clear_path(aid).is_file():
+        raise RuntimeError("LEGACY_CHATGPT_FORCE_DELIVERY_DISABLED")
     path, marker = outbox_result(state, aid)
     state.claim_outbound_delivery(aid)  # SUBMITTING persisted before click.
     note("NATIVE_DELIVERY_ATTEMPT=" + aid)
-    status_update(phase="DELIVERING", last_action=aid)
+    status_update(phase="DELIVERING", last_action=aid,
+                  destination_category=None)
     ps = shutil.which("powershell.exe")
-    force_clear_composer = delivery_force_clear_path(aid).is_file()
-    # Normal egress is app-neutral: the result is already owned by this relay.
-    # Explicit legacy FORCE RESEND remains bound to the original ChatGPT
-    # destination rather than taking over whichever application has focus.
-    sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER
+    sender_script = FOREGROUND_SENDER
     cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-STA",
            "-File", str(sender_script), "-NativeResultPath", str(path),
            "-NativeActionId", aid, "-NativeReceiptMarker", marker]
-    if force_clear_composer:
-        cmd.append("-ForceClearComposer")
+    if delivery.get("wire_format") == "plain_text":
+        cmd.append("-PlainText")
+    if manual:
+        cmd.append("-ManualForceSend")
     phase = "SUBMIT_UNCERTAIN"
     error_code = "SENDER_NO_RECEIPT"
     stage = "STARTING"
@@ -610,6 +807,12 @@ def deliver(state: wr.State, aid: str):
             errors="replace", timeout=70,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         output = response.stdout
+        for line in output.splitlines():
+            if line.startswith("DESTINATION_CATEGORY="):
+                category=line.partition("=")[2]
+                if category in {"MESSAGE_COMPOSER","TEXT_EDITOR"}:
+                    status_update(destination_category=category)
+                    note("NATIVE_DESTINATION_CATEGORY="+category)
         for line in output.splitlines():
             if line.startswith("SENDER_STAGE="):
                 stage_label = line.partition("=")[2]
@@ -666,8 +869,7 @@ def deliver(state: wr.State, aid: str):
         error_code = type(exc).__name__
         note("NATIVE_DELIVERY_EXCEPTION=" + error_code)
     finally:
-        if force_clear_composer:
-            delivery_force_clear_path(aid).unlink(missing_ok=True)
+        pass
     # Persist the durable outbound phase before any native-only hold update.
     state.finish_outbound_delivery(aid, phase)
     state.record_outbound_sender_diagnostic(
@@ -694,12 +896,12 @@ def deliver(state: wr.State, aid: str):
     note("NATIVE_DELIVERY_PHASE=" + phase, "ID=" + aid)
 
 
-def recover_submit_only(state: wr.State, aid: str):
-    """One bounded saved-draft submit retry, never command execution."""
+def recover_submit_only(state: wr.State, aid: str, *, manual: bool = False):
+    """At most one saved-draft Send click; never retry ambiguous submissions or EXEC."""
     if stop_requested():
         return
     record = state.outbound_lookup(aid)
-    if (not record or record.get("phase") not in {"SEND_PENDING", "SUBMIT_UNCERTAIN"}
+    if (not record or record.get("phase") != "SEND_PENDING"
             or int(record.get("submit_only_attempt_count", 0) or 0) >= 1
             or record.get("has_attachments") is not False):
         return
@@ -718,6 +920,10 @@ def recover_submit_only(state: wr.State, aid: str):
                "-File", str(FOREGROUND_SENDER), "-NativeResultPath", str(path),
                "-NativeActionId", aid, "-NativeReceiptMarker", marker,
                "-SubmitExistingOnly"]
+        if record.get("wire_format") == "plain_text":
+            cmd.append("-PlainText")
+        if manual:
+            cmd.append("-ManualForceSend")
         response = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=70,
@@ -785,15 +991,15 @@ def runner():
         if state.outbound_owner != "windows":
             state.data["outbound_owner"] = "windows"
             state.save()
-        note("NATIVE_CHATGPT_DESKTOP_RELAY_V1")
-        note("MODE=INDEPENDENT_NATIVE_DESKTOP_NO_BROWSER_EXTENSION")
+        note("NATIVE_UNIVERSAL_COMMAND_COURIER_V2")
+        note("MODE=EXPLICIT_OUTPUT_GENERIC_FOREGROUND_NO_TRANSCRIPT_SCANNER")
         note("CMD_PYTHON_POWERSHELL_BASE64=SUPPORTED")
         note("PERSISTENT_ARM=" + str(configuration()["armed"]).upper())
-        status_update(pid=os.getpid(), phase="BASELINING")
-        # Keep the singleton alive at sign-in even if ChatGPT starts later.
-        # Establish the first baseline only after its UIA document is ready.
-        seen = set()
-        baseline_ready = False
+        status_update(pid=os.getpid(), phase="IDLE",
+                      runner_source_sha256=hashlib.sha256(
+                          Path(__file__).read_bytes()).hexdigest())
+        # Explicit local request files, not third-party UI transcripts,
+        # are the only automatic source of new output.
         next_foreground_probe = 0.0
         next_submit_only_probe = 0.0
         # This worker has its own journal lock and does not use ChatGPT UIA.
@@ -829,6 +1035,9 @@ def runner():
             # Manual FORCE CLEAR is applied by the same journal owner before
             # scanning new instructions or claiming any outbound delivery.
             reconcile_force_clear_requests(state)
+            # Manual FORCE SEND consumes one receipt-bound queued result and
+            # works independently of Auto Send, without any EXEC replay.
+            reconcile_force_send_requests(state)
             # Send-only retry of a saved chat draft, never a command replay.
             policy = configuration()
             if (policy["armed"] and policy["auto_send"] and not stop_requested()
@@ -841,9 +1050,7 @@ def runner():
                 except (RuntimeError, ValueError, wr.RelayError, OSError) as exc:
                     note("NATIVE_SUBMIT_ONLY_LOOP_ERROR=" + type(exc).__name__,
                          str(exc)[:120])
-            # The output queue is INDEPENDENT of ChatGPT's packet scanner:
-            # a pending result can be inserted into focused Notepad or another
-            # foreground editor even when the ChatGPT app is closed.
+            # Deliver the saved output into the verified foreground app.
             policy = configuration()
             if (policy["armed"] and policy["auto_send"] and not stop_requested()
                     and time.monotonic() >= next_foreground_probe):
@@ -857,71 +1064,28 @@ def runner():
                 except (RuntimeError, ValueError, wr.RelayError, OSError) as exc:
                     note("NATIVE_FOREGROUND_DELIVERY_ERROR=" + type(exc).__name__,
                          str(exc)[:120])
-            forward_report = dict(forward_activity)
-            runner_stage = "SCANNING_CHATGPT_APP"
+            runner_stage = "QUEUING_EXPLICIT_OUTPUT"
             try:
-                candidates = read_scan(require_app=True)
-                if not baseline_ready:
-                    seen.update(aid for aid, _ in candidates)
-                    baseline_ready = True
-                    note("NATIVE_BASELINE_COMMANDS_SUPPRESSED=" + str(len(candidates)))
-                    status_update(pid=os.getpid(), phase="BASELINED",
-                                  runner_error_type=None, runner_error_stage=None)
-                    time.sleep(1)
-                    continue
-                cfg = configuration()
+                cfg=configuration()
                 if state.armed != cfg["armed"]:
                     state.set_armed(cfg["armed"])
                 if cfg["armed"] and not stop_requested():
-                    runner_stage = "PROCESSING_NEW_INSTRUCTIONS"
-                    for aid, packet in candidates:
-                        if aid in seen:
-                            continue
-                        seen.add(aid)
-                        try:
-                            process_packet(packet, state)
-                        except (ValueError, wr.RelayError, OSError) as exc:
-                            note("NATIVE_ACTION_ERROR=" + aid, type(exc).__name__, str(exc)[:150])
-                    # Result delivery is now owned by the independent
-                    # foreground-output pass above; do not run it a second
-                    # time inside ChatGPT's input-scanner branch.
-                else:
-                    # Commands seen while stopped must never auto-execute on
-                    # a later arm, even if the app still displays them.
-                    seen.update(aid for aid, _ in candidates)
+                    reconcile_explicit_output_requests(state)
                 if not cfg["armed"]:
-                    display_phase = "DISARMED"
+                    display_phase="DISARMED"
                 else:
-                    prior = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
-                    display_phase = ("AWAITING_TEXT_FIELD"
-                                     if prior.get("phase") == "AWAITING_TEXT_FIELD"
-                                     else "DELIVERY_BLOCKED" if prior.get("delivery_blocked")
-                                     and prior.get("last_result") == "PRE_SUBMIT_FAILED"
-                                     else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
-                                     else "IDLE")
-                status_update(pid=os.getpid(), phase=display_phase,
-                              runner_error_type=None, runner_error_stage=None)
-            except RuntimeError as exc:
-                if str(exc) == "NATIVE_CHATGPT_APP_NOT_READY":
-                    baseline_ready = False
-                    # The independent text route can continue; unavailable
-                    # ChatGPT must not make the entire courier appear stopped.
-                    pending_phase = (json.loads(STATUS.read_text(encoding="utf-8"))
-                                     if STATUS.is_file() else {})
-                    phase = ("AWAITING_TEXT_FIELD"
-                             if pending_phase.get("phase") == "AWAITING_TEXT_FIELD"
-                             else "FORWARDING_NO_CHATGPT" if forward_report["active"]
-                             else "WAITING_FOR_CHATGPT_APP")
-                    status_update(pid=os.getpid(), phase=phase,
-                                  runner_error_type=None, runner_error_stage=None)
-                else:
-                    note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
-                    status_update(pid=os.getpid(), phase="ERROR",
-                                  runner_error_type=type(exc).__name__,
-                                  runner_error_stage=runner_stage)
-            except Exception as exc:
-                note("NATIVE_LOOP_ERROR=" + type(exc).__name__, str(exc)[:200])
-                status_update(pid=os.getpid(), phase="ERROR",
+                    prior=json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
+                    display_phase=("AWAITING_TEXT_FIELD"
+                                   if prior.get("phase")=="AWAITING_TEXT_FIELD"
+                                   else "DELIVERY_BLOCKED" if prior.get("delivery_blocked")
+                                   and prior.get("last_result")=="PRE_SUBMIT_FAILED"
+                                   else "DELIVERY_UNCERTAIN" if prior.get("delivery_blocked")
+                                   else "IDLE")
+                status_update(pid=os.getpid(),phase=display_phase,
+                              runner_error_type=None,runner_error_stage=None)
+            except (OSError,ValueError,RuntimeError,wr.RelayError) as exc:
+                note("COURIER_OUTPUT_INTAKE_ERROR="+type(exc).__name__)
+                status_update(pid=os.getpid(),phase="ERROR",
                               runner_error_type=type(exc).__name__,
                               runner_error_stage=runner_stage)
             time.sleep(1)
@@ -934,7 +1098,7 @@ HUD_MODE = HOME / 'hud-mode.json'
 
 def select_original_hud():
     """Route the existing top-right hud.py to this desktop transport."""
-    write_json(HUD_MODE, {'version': 1, 'transport': 'native-chatgpt-app'})
+    write_json(HUD_MODE, {'version': 1, 'transport': 'native-foreground'})
     note('NATIVE_HUD=ORIGINAL_TOP_RIGHT_SELECTED')
 
 def launch_runner_if_absent():
@@ -984,13 +1148,42 @@ def main():
                                  "clear-pending-deliveries",
                                  "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
                                  "acknowledge-receipt", "queue-confirmed-receipt",
-                                 "queue-force-clear-pending"))
+                                 "queue-force-clear-pending",
+                                 "queue-output-file","queue-output-clipboard",
+                                 "queue-output-stdin"))
     parser.add_argument("action_id", nargs="?")
     parser.add_argument("receipt", nargs="?")
+    parser.add_argument("--file", dest="output_file", default=None)
+    parser.add_argument("--id", dest="output_id", default=None)
 
     args = parser.parse_args()
     if args.command == "run":
         return runner()
+    if args.command == "queue-output-file":
+        if not args.output_file:
+            raise SystemExit("queue-output-file requires --file PATH")
+        queue_output_file(args.output_file,aid=args.output_id)
+        return 0
+    if args.command == "queue-output-stdin":
+        # A local custom app/API caller can pipe UTF-8 result bytes here.
+        # No command execution and no third-party conversation reading.
+        raw=sys.stdin.buffer.read(MAX_EXPLICIT_OUTPUT_BYTES+1)
+        if len(raw)>MAX_EXPLICIT_OUTPUT_BYTES:
+            raise SystemExit("OUTPUT_STDIN_TOO_LARGE")
+        queue_explicit_output(raw.decode("utf-8",errors="strict"),
+                              source="authorized-api",aid=args.output_id)
+        return 0
+    if args.command == "queue-output-clipboard":
+        import tkinter as tk
+        root=tk.Tk()
+        root.withdraw()
+        try:
+            copied=root.clipboard_get()
+        finally:
+            root.destroy()
+        queue_explicit_output(copied,source="explicit-clipboard",
+                              aid=args.output_id)
+        return 0
     if args.command == "acknowledge-receipt":
         if not args.action_id or not args.receipt:
             raise SystemExit("acknowledge-receipt requires action ID and confirmed receipt")
@@ -1010,10 +1203,7 @@ def main():
         release_failed_delivery(wr.State(STATE), args.action_id)
         return 0
     if args.command == "force-delivery":
-        if not args.action_id:
-            raise SystemExit("force-delivery requires an action ID")
-        release_failed_delivery(wr.State(STATE), args.action_id, force_clear_composer=True)
-        return 0
+        raise SystemExit("LEGACY_CHATGPT_FORCE_RESEND_DISABLED_USE_HUD_FORCE_SEND")
     if args.command == "abort-delivery":
         if not args.action_id: raise SystemExit("abort-delivery requires an action ID")
         abort_failed_delivery(wr.State(STATE), args.action_id)

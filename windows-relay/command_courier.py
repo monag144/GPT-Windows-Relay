@@ -42,7 +42,7 @@ def runtime_mode() -> str:
         return DISABLED
     except (ValueError, OSError):
         raise RuntimeError("COURIER_EXISTING_HUD_MODE_UNREADABLE")
-    return NATIVE if marker.get("transport") == "native-chatgpt-app" else DISABLED
+    return NATIVE if marker.get("transport") in {"native-foreground", "native-chatgpt-app"} else DISABLED
 
 
 def select_runtime(value: str):

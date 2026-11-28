@@ -1,0 +1,28 @@
+name: PCE20 Windows Relay offline validation
+
+on:
+  push:
+    branches:
+      - fix/pce20-single-send-no-duplicate-20261122
+  pull_request:
+    branches:
+      - wip/windows-relay-rebuilt-resynced-2047-101026
+
+permissions:
+  contents: read
+
+jobs:
+  windows-unittests:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Windows Relay offline unit tests
+        run: python -m unittest discover -s windows-relay\tests -p "test_*.py" -v
+      - name: Consumer offline unit tests
+        run: python -m unittest discover -s consumer\tests -p "test_*.py" -v

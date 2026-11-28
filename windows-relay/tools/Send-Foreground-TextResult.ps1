@@ -7,7 +7,9 @@ param(
     [Parameter(Mandatory=$true)][string]$NativeResultPath,
     [Parameter(Mandatory=$true)][string]$NativeActionId,
     [Parameter(Mandatory=$true)][string]$NativeReceiptMarker,
-    [switch]$SubmitExistingOnly
+    [switch]$SubmitExistingOnly,
+    [switch]$ManualForceSend,
+    [switch]$PlainText
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -44,12 +46,6 @@ public static class CourierForegroundInput {
             keys[i*2+1].U.ki.dwFlags=0x0004|0x0002;
         }
         return SendInput((uint)keys.Length,keys,Marshal.SizeOf(typeof(INPUT)));
-    }
-    public static uint TypeEnter(){
-        INPUT[] keys=new INPUT[2];
-        keys[0].type=1; keys[0].U.ki.wVk=0x0D;
-        keys[1].type=1; keys[1].U.ki.wVk=0x0D; keys[1].U.ki.dwFlags=0x0002;
-        return SendInput(2,keys,Marshal.SizeOf(typeof(INPUT)));
     }
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
@@ -97,16 +93,67 @@ function Test-EligibleEditor($window,$node){
     }
 }
 
+function Test-IsSelfOrChild($node,$parent){
+    # Focus may live on a child text node inside the writable editor.
+    if($null -eq $node -or $null -eq $parent){return $false}
+    try{
+        $id=($parent.GetRuntimeId() -join ',')
+        $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
+        $cursor=$node
+        for($depth=0;$depth -lt 60 -and $null -ne $cursor;$depth++){
+            if(($cursor.GetRuntimeId() -join ',') -ceq $id){return $true}
+            $cursor=$walker.GetParent($cursor)
+        }
+    }catch{}
+    return $false
+}
+
+function Test-EditorOwnsFocus($editor){
+    try{
+        $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
+        return ($null -ne $focused -and $focused.Current.HasKeyboardFocus -and
+                -not $focused.Current.IsPassword -and
+                (Test-IsSelfOrChild $focused $editor))
+    }catch{return $false}
+}
+
+function Resolve-FocusedEditor($window,$focused){
+    # Prefer operator-selected field, even with a focused Text/Custom child.
+    if($null -eq $focused){return $null}
+    try{
+        if(-not $focused.Current.HasKeyboardFocus -or $focused.Current.IsPassword -or
+           $focused.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button){
+            return $null
+        }
+        $windowId=($window.GetRuntimeId() -join ',')
+        $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
+        $cursor=$focused
+        for($depth=0;$depth -lt 60 -and $null -ne $cursor;$depth++){
+            if(($cursor.GetRuntimeId() -join ',') -ceq $windowId){break}
+            if(Test-EligibleEditor $window $cursor){
+                # A whole-page Document is not proof that its focused
+                # child is an input field.
+                $rect=$cursor.Current.BoundingRectangle
+                $root=$window.Current.BoundingRectangle
+                $pageWide=([string]$cursor.Current.ControlType.ProgrammaticName -eq
+                    'ControlType.Document' -and
+                    $rect.Width -gt ($root.Width * 0.75) -and
+                    $rect.Height -gt ($root.Height * 0.65))
+                if(-not $pageWide){return $cursor}
+            }
+            $cursor=$walker.GetParent($cursor)
+        }
+    }catch{}
+    return $null
+}
+
 function Focus-CandidateEditor($window,$editor,[IntPtr]$handle){
     if([CourierForegroundInput]::GetForegroundWindow() -ne $handle){return $false}
-    $expected=($editor.GetRuntimeId() -join ',')
     try{
         $editor.SetFocus()
         Start-Sleep -Milliseconds 100
     }catch{}
-    $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
-    if($null -ne $focused -and $focused.Current.HasKeyboardFocus -and
-       ($focused.GetRuntimeId() -join ',') -ceq $expected){return $true}
+    if(Test-EditorOwnsFocus $editor){return $true}
 
     # Some Electron/Scintilla editors do not honor UIA SetFocus. Click the
     # center of the VERIFIED editor, not any screen coordinate guessed from
@@ -130,27 +177,39 @@ function Focus-CandidateEditor($window,$editor,[IntPtr]$handle){
     }
     Start-Sleep -Milliseconds 120
     if([CourierForegroundInput]::GetForegroundWindow() -ne $handle){return $false}
-    $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
-    return ($null -ne $focused -and $focused.Current.HasKeyboardFocus -and
-            ($focused.GetRuntimeId() -join ',') -ceq $expected)
+    return (Test-EditorOwnsFocus $editor)
 }
 
 function Get-ForegroundEditable {
+    # Diagnostic stages are metadata only: no window title, app name, editor
+    # content or conversation text is collected.
+    $script:targetProbe='BEGIN'
+    $script:targetProbePid=0
+    $script:targetProbeEditorRoles=0
+    $script:targetProbeEligible=0
     $hwnd=[CourierForegroundInput]::GetForegroundWindow()
-    if($hwnd -eq [IntPtr]::Zero){return $null}
+    if($hwnd -eq [IntPtr]::Zero){
+        $script:targetProbe='NO_FOREGROUND_WINDOW';return $null
+    }
+    $procId=[uint32]0
+    [void][CourierForegroundInput]::GetWindowThreadProcessId($hwnd,[ref]$procId)
+    $script:targetProbePid=[int]$procId
+    $script:targetProbe='WINDOW_OBSERVED'
     $window=[System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
-    if($null -eq $window){return $null}
+    if($null -eq $window){
+        $script:targetProbe='UIA_WINDOW_NOT_AVAILABLE';return $null
+    }
     # Terminal text panes must not execute result-body code as keystrokes.
     $proc=Get-Process -Id ([int]$window.Current.ProcessId) -ErrorAction SilentlyContinue
     if($proc -and $proc.ProcessName -match
        '^(?i:cmd|powershell|pwsh|windowsterminal|openconsole|conhost|wt)$'){
+        $script:targetProbe='TERMINAL_FOREGROUND_BLOCKED'
         return $null
     }
     $focused=[System.Windows.Automation.AutomationElement]::FocusedElement
     $editor=$null
-    if(Test-EligibleEditor $window $focused){
-        $editor=$focused
-    }else{
+    $editor=Resolve-FocusedEditor $window $focused
+    if($null -eq $editor){
         # Do not demand an already-clicked composer. Discover a single
         # visible writable Edit/Document target from the FOREGROUND app.
         $all=New-Object System.Collections.ArrayList
@@ -159,28 +218,47 @@ function Get-ForegroundEditable {
             [System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.Condition]::TrueCondition)
         foreach($node in $descendants){
+            try{
+                if(([string]$node.Current.ControlType.ProgrammaticName) -in @('ControlType.Edit','ControlType.Document')){
+                    $script:targetProbeEditorRoles++
+                }
+            }catch{}
             if(-not (Test-EligibleEditor $window $node)){continue}
+            $script:targetProbeEligible++
             [void]$all.Add($node)
-            if([string]$node.Current.Name -match
-               '(?i)ask chatgpt|ask anything|message|prompt|compose|write.*message'){
+            $label=([string]$node.Current.Name)+' '+([string]$node.Current.AutomationId)
+            if($label -match '(?i)ask(?:\s+\w+){0,3}|message|prompt|compose|reply|chat.?input|write.*message|text.?entry'){
                 [void]$named.Add($node)
             }
         }
         if($named.Count -eq 1){$editor=$named[0]}
         elseif($all.Count -eq 1){$editor=$all[0]}
-        else{return $null}  # Ambiguous fields: never type into a guess.
-        if(-not (Focus-CandidateEditor $window $editor $hwnd)){return $null}
+        else{
+            $script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count+'_NAMED_'+$named.Count)
+            return $null
+        }  # Ambiguous fields: never type into a guess.
+        if(-not (Focus-CandidateEditor $window $editor $hwnd)){
+            $script:targetProbe='EDITOR_FOCUS_FAILED'
+            return $null
+        }
         $script:autoFocused=$true
     }
-    if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd -or
-       -not $editor.Current.HasKeyboardFocus){return $null}
+    if([CourierForegroundInput]::GetForegroundWindow() -ne $hwnd){
+        $script:targetProbe='FOREGROUND_CHANGED_BEFORE_READ';return $null
+    }
+    if(-not (Test-EditorOwnsFocus $editor)){
+        $script:targetProbe='EDITOR_NOT_FOCUSED_BEFORE_READ';return $null
+    }
     $value=$null
     $text=$null
     $hasValue=$editor.TryGetCurrentPattern(
         [System.Windows.Automation.ValuePattern]::Pattern,[ref]$value)
     $hasText=$editor.TryGetCurrentPattern(
         [System.Windows.Automation.TextPattern]::Pattern,[ref]$text)
-    if($hasValue -and $value.Current.IsReadOnly){return $null}
+    if($hasValue -and $value.Current.IsReadOnly){
+        $script:targetProbe='EDITOR_READ_ONLY';return $null
+    }
+    $script:targetProbe='ELIGIBLE'
     return @{window=$window;editor=$editor;handle=$hwnd;
              runtimeId=($editor.GetRuntimeId() -join ',');
              value=$value;text=$text;hasValue=$hasValue;hasText=$hasText}
@@ -207,7 +285,19 @@ function Read-EditorText($target){
     return $value
 }
 
+function Test-PlainOwnText($value){
+    # Normalize only line presentation; never accept a partial prefix or
+    # appended unrelated draft as the saved payload.
+    $expected=($script:wire -replace '\s+',' ').Trim()
+    $actual=([string]$value -replace '\s+',' ').Trim()
+    return ($expected.Length -gt 0 -and $actual -ceq $expected)
+}
+
 function Test-EditorContainsMarker($target,[string]$marker){
+    if($PlainText){
+        try{return (Test-PlainOwnText (Read-EditorText $target))}
+        catch{return $false}
+    }
     # UIA patterns are queried fresh after each input batch; React editors
     # can replace their underlying UIA elements during an update.
     $node=$target.editor
@@ -246,7 +336,42 @@ function Test-EditorContainsMarker($target,[string]$marker){
 function Test-EmptyOrPlaceholder([string]$value){
     if([string]::IsNullOrWhiteSpace($value)){return $true}
     return ($value.Trim() -match
-            '^(?i:ask chatgpt|ask anything|ask a question|message|type a message|send a message|write a message)$')
+            '^(?i:ask anything|ask a question|message(?:\s+(?:[#@][^\r\n]{1,70}|in\s+[^\r\n]{1,70}))?|type a message|send a message|write a message)(?:\.\.\.)?$')
+}
+
+function Test-EditorIsCertainlyEmpty($target){
+    # All foreground apps obey the same empty-field rule, even Notepad.
+    # Every exposed readable pattern must agree that no user text exists.
+    # Unknown, stale or inaccessible values fail closed; no keyboard input.
+    $observed=0
+    try{
+        Assert-CurrentTarget $target
+        if($target.hasValue){
+            $pattern=$null
+            if(-not $target.editor.TryGetCurrentPattern(
+                [System.Windows.Automation.ValuePattern]::Pattern,[ref]$pattern)){
+                return $false
+            }
+            if($pattern.Current.IsReadOnly){return $false}
+            $observed++
+            if(-not [string]::IsNullOrWhiteSpace([string]$pattern.Current.Value)){
+                return $false
+            }
+        }
+        if($target.hasText){
+            $pattern=$null
+            if(-not $target.editor.TryGetCurrentPattern(
+                [System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){
+                return $false
+            }
+            $observed++
+            if(-not [string]::IsNullOrWhiteSpace([string]$pattern.DocumentRange.GetText(-1))){
+                return $false
+            }
+        }
+        Assert-CurrentTarget $target
+    }catch{return $false}
+    return ($observed -gt 0)
 }
 
 function Assert-CurrentTarget($target){
@@ -254,8 +379,7 @@ function Assert-CurrentTarget($target){
         throw 'FOREGROUND_TARGET_CHANGED_DURING_INPUT'
     }
     $fresh=[System.Windows.Automation.AutomationElement]::FocusedElement
-    if($null -eq $fresh -or -not $fresh.Current.HasKeyboardFocus -or
-       ($fresh.GetRuntimeId() -join ',') -cne $target.runtimeId){
+    if($null -eq $fresh -or -not (Test-EditorOwnsFocus $target.editor)){
         throw 'FOCUSED_EDITOR_CHANGED_DURING_INPUT'
     }
     if($fresh.Current.IsPassword -or -not $fresh.Current.IsEnabled){
@@ -264,17 +388,29 @@ function Assert-CurrentTarget($target){
 }
 
 function Find-SendButton($target){
+    # Generic Send capability: Name, HelpText or AutomationId on a visible
+    # enabled button. An icon-only Custom control requires InvokePattern.
+    # No guessing when several controls qualify.
     $candidates=New-Object System.Collections.ArrayList
     $nodes=$target.window.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
         [System.Windows.Automation.Condition]::TrueCondition)
     foreach($node in $nodes){
         try{
-            if($node.Current.ControlType -ne
-               [System.Windows.Automation.ControlType]::Button){continue}
+            $role=[string]$node.Current.ControlType.ProgrammaticName
+            if($role -notin @('ControlType.Button','ControlType.Custom')){continue}
             if($node.Current.IsOffscreen -or -not $node.Current.IsEnabled){continue}
-            if([string]$node.Current.Name -notmatch '^(?i:send|send message|send prompt|submit)$'){
-                continue
+            $label=([string]$node.Current.Name).Trim()
+            $help=([string]$node.Current.HelpText).Trim()
+            $id=([string]$node.Current.AutomationId).Trim()
+            $named=($label -match '^(?i:send(?: a)?(?: message| prompt| reply| now)?|submit(?: message)?|post message)(?:\s*\([^)]*\))?$' -or
+                    $help -match '^(?i:send(?: a)?(?: message| prompt| reply| now)?|submit(?: message)?|post message)(?:\s*\([^)]*\))?$')
+            $identified=($id -match '^(?i:send(?:[-_]?(?:button|message|prompt|reply))?|message[-_]?send(?:[-_]?button)?|chat[-_]?send(?:[-_]?button)?|submit[-_]?button)$')
+            if(-not ($named -or $identified)){continue}
+            if($role -eq 'ControlType.Custom'){
+                $invoke=$null
+                if(-not $node.TryGetCurrentPattern(
+                    [System.Windows.Automation.InvokePattern]::Pattern,[ref]$invoke)){continue}
             }
             $bounds=$node.Current.BoundingRectangle
             if($bounds.Width -lt 8 -or $bounds.Height -lt 8){continue}
@@ -286,23 +422,8 @@ function Find-SendButton($target){
 }
 
 function Test-TranscriptMarker($target,$nonce){
-    $nodes=$target.window.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    foreach($node in $nodes){
-        try{
-            if($node.Current.ControlType -ne
-               [System.Windows.Automation.ControlType]::Document){continue}
-            if($node.Current.IsOffscreen){continue}
-            $pattern=$null
-            if(-not $node.TryGetCurrentPattern(
-                    [System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){continue}
-            if($null -ne $pattern.DocumentRange.FindText($nonce,$false,$false)){
-                return $true
-            }
-        }catch{}
-    }
-    return $false
+    # Never confuse the editor or its document ancestors with sent messages.
+    return (Test-ConversationReceiptNotComposer $target $nonce)
 }
 
 function Assert-RunnerAllowed {
@@ -314,42 +435,46 @@ function Assert-RunnerAllowed {
     }
     $configPath=Join-Path $env:LOCALAPPDATA 'GPTWindowsRelayDesktop\desktop-control.json'
     $config=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if(-not $config.armed -or $config.off -or -not $config.auto_send){
+    if(-not $config.armed -or $config.off -or
+       (-not $config.auto_send -and -not $ManualForceSend)){
         throw 'OPERATOR_AUTO_SEND_NOT_ARMED'
     }
 }
 
 
 function Test-ConversationReceiptNotComposer($target,[string]$marker){
-    # A chat's writable composer can itself be ControlType.Document. Never
-    # mistake its own draft for an already posted conversation message.
+    # The receipt is sidecar-bound for unmodified raw output, not embedded.
+    # Short identical snippets cannot establish an independent chat receipt.
+    $expected=($script:wire -replace '\s+',' ').Trim()
+    if($PlainText -and $expected.Length -lt 16){return $false}
+    # Chat messages may appear as Text nodes or Document controls.
+    # Exclude editor, descendants and ancestors from receipt evidence.
     $nodes=$target.window.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
         [System.Windows.Automation.Condition]::TrueCondition)
     foreach($node in $nodes){
         try{
-            if($node.Current.ControlType -ne
-               [System.Windows.Automation.ControlType]::Document){continue}
+            $role=[string]$node.Current.ControlType.ProgrammaticName
+            if($role -notin @('ControlType.Document','ControlType.Text')){continue}
             if($node.Current.IsOffscreen){continue}
-            if(($node.GetRuntimeId() -join ',') -ceq $target.runtimeId){continue}
-            # A parent Document can aggregate an editable child. It is
-            # never independent evidence of a posted conversation message.
-            $cursor=$target.editor
-            $ownsComposer=$false
-            $id=($node.GetRuntimeId() -join ',')
-            $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
-            for($depth=0;$depth -lt 60 -and $null -ne $cursor;$depth++){
-                if(($cursor.GetRuntimeId() -join ',') -ceq $id){
-                    $ownsComposer=$true
-                    break
+            if((Test-IsSelfOrChild $node $target.editor) -or
+               (Test-IsSelfOrChild $target.editor $node)){continue}
+            if($PlainText){
+                $shown=[string]$node.Current.Name
+                $view=$null
+                if($node.TryGetCurrentPattern(
+                    [System.Windows.Automation.TextPattern]::Pattern,[ref]$view)){
+                    $shown=[string]$view.DocumentRange.GetText(-1)
                 }
-                $cursor=$walker.GetParent($cursor)
+                if((Test-PlainOwnText $shown)){return $true}
+                continue
             }
-            if($ownsComposer){continue}
-            $t=$null
-            if(-not $node.TryGetCurrentPattern(
-                [System.Windows.Automation.TextPattern]::Pattern,[ref]$t)){continue}
-            if($null -ne $t.DocumentRange.FindText($marker,$false,$false)){
+            if($role -eq 'ControlType.Text' -and
+               ([string]$node.Current.Name).Contains($marker)){return $true}
+            $pattern=$null
+            if($node.TryGetCurrentPattern(
+                [System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern) -and
+               $null -ne $pattern.DocumentRange.FindText($marker,$false,$false)){
                 return $true
             }
         }catch{}
@@ -358,6 +483,10 @@ function Test-ConversationReceiptNotComposer($target,[string]$marker){
 }
 
 function Test-ExactOwnDraft($target,[string]$marker){
+    if($PlainText){
+        try{return (Test-PlainOwnText (Read-EditorText $target))}
+        catch{return $false}
+    }
     if(-not (Test-EditorContainsMarker $target $marker)){return $false}
     # Do not submit a mixed human draft: both frame delimiters and the
     # matching unique receipt must be visible in the same writable editor.
@@ -375,30 +504,33 @@ function Test-ExactOwnDraft($target,[string]$marker){
     }catch{return $false}
 }
 
-function Test-ChatGPTSubmissionTarget($target){
-    # Auto-resend is *only* for a proven native ChatGPT composer. Other
-    # editors (including Notepad and terminals) never receive Enter.
+function Get-EditorCategory($target){
+    # UIA capability category ONLY. No app/process name, URL, chat ID or
+    # vendor decides whether this is a message composer or plain text editor.
     try{
-        $proc=Get-Process -Id ([int]$target.window.Current.ProcessId) -ErrorAction Stop
-        if($proc.ProcessName -ine 'ChatGPT'){return $false}
-        $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
-        return ($kind -in @('ControlType.Edit','ControlType.Document'))
-    }catch{return $false}
+        $label=([string]$target.editor.Current.Name)+' '+
+               ([string]$target.editor.Current.AutomationId)+' '+
+               ([string]$target.editor.Current.HelpText)
+        if($label -match '(?i)\b(ask|message|reply|compose|prompt|chat.?input|write.*message)\b'){
+            return 'MESSAGE_COMPOSER'
+        }
+        if($null -ne (Find-SendButton $target)){return 'MESSAGE_COMPOSER'}
+    }catch{}
+    return 'TEXT_EDITOR'
+}
+
+function Test-MessagingComposerTarget($target){
+    return ((Get-EditorCategory $target) -eq 'MESSAGE_COMPOSER')
 }
 
 function Invoke-ExistingDraftSubmit($target,$send){
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    $type=[string]$target.editor.Current.ControlType.ProgrammaticName
-    if($type -eq 'ControlType.Edit' -or $null -eq $send){
-        # Named native ChatGPT composer and exact own receipt are
-        # independently required by the caller. No blind Enter.
-        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_BEGIN'
-        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
-            throw 'SUBMIT_ONLY_ENTER_INCOMPLETE'
-        }
-        Write-Output 'SENDER_STAGE=SUBMIT_ONLY_ENTER_COMPLETED'
-        return
+    # Recover only through a uniquely identified Send control in this foreground app.
+    # Enter is not a Send-button substitute and must never create another post.
+    if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}
+    if(-not $send.Current.IsEnabled -or $send.Current.IsOffscreen){
+        throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_READY'
     }
     $bounds=$send.Current.BoundingRectangle
     $root=$target.window.Current.BoundingRectangle
@@ -417,6 +549,8 @@ function Invoke-ExistingDraftSubmit($target,$send){
         if(-not [CourierForegroundInput]::SetCursorPos($x,$y)){
             throw 'SUBMIT_ONLY_CURSOR_MOVE_FAILED'
         }
+        Assert-RunnerAllowed
+        Assert-CurrentTarget $target
         [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
         Start-Sleep -Milliseconds 70
         [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
@@ -427,8 +561,10 @@ function Invoke-ExistingDraftSubmit($target,$send){
 }
 
 function Recover-ExistingChatDraft($target,[string]$marker){
-    # Never reconcile a receipt from the active non-ChatGPT editor.
-    if(-not (Test-ChatGPTSubmissionTarget $target)){
+    # Only a recognized message field or explicitly exposed Send control
+    # qualifies; no text reinsertion, command replay or Enter fallback.
+    if(-not (Test-MessagingComposerTarget $target) -and
+       $null -eq (Find-SendButton $target)){
         Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NOT_NATIVE_CHAT_COMPOSER'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         return
@@ -450,7 +586,7 @@ function Recover-ExistingChatDraft($target,[string]$marker){
         return
     }
     # Before another Enter, allow a previously initiated send to settle.
-    # A slow ChatGPT response must not trigger an immediate duplicate.
+    # Slow recipient delivery must not trigger an immediate duplicate.
     for($settle=0;$settle -lt 10;$settle++){
         Start-Sleep -Milliseconds 250
         if(-not (Test-EditorContainsMarker $target $marker)){
@@ -464,9 +600,9 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             return
         }
     }
-    # A valid draft can be sent at most twice in this invocation: the
-    # original input is NEVER retyped or passed to any process executor.
-    for($attempt=1;$attempt -le 2;$attempt++){
+    # At most ONE actual Send-button activation for this saved result.
+    # Any unconfirmed outcome stays uncertain; never auto-press Send again.
+    for($attempt=1;$attempt -le 1;$attempt++){
         if(-not (Test-ExactOwnDraft $target $marker)){
             Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
             return
@@ -479,12 +615,11 @@ function Recover-ExistingChatDraft($target,[string]$marker){
             return
         }
         $send=Find-SendButton $target
-        $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
-        $name=[string]$target.editor.Current.Name
-        if($null -eq $send -and $name -notmatch
-            '(?i)ask chatgpt|ask anything|message|prompt|compose'){
+        if($null -eq $send){
+            # No Send click occurred; keep SEND_PENDING and try only after
+            # the application exposes one verified Send control.
             Write-Output 'SENDER_STAGE=SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'
-            Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
             return
         }
         Write-Output ('SENDER_STAGE=SUBMIT_ONLY_ATTEMPT_'+$attempt)
@@ -512,8 +647,8 @@ function Recover-ExistingChatDraft($target,[string]$marker){
                 return
             }
         }
-        # Retry another Send ONLY if the exact original receipt is STILL
-        # visible in the composer, and no transcript receipt appeared.
+        # The send-control activation has an ambiguous outcome. Do not
+        # retry, even when UIA still shows the draft and no receipt.
     }
     Write-Output 'SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED'
     Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
@@ -534,32 +669,58 @@ try{
         throw 'FOREIGN_RESULT_PATH_MISMATCH'
     }
     $raw=[IO.File]::ReadAllBytes($NativeResultPath)
-    if($raw.Length -lt 30 -or $raw.Length -gt 180000){
+    if($raw.Length -lt 1 -or $raw.Length -gt $(if($PlainText){16000}else{180000})){
         throw 'FOREIGN_RESULT_SIZE_INVALID'
     }
     $utf8=New-Object System.Text.UTF8Encoding($false,$true)
     $script:wire=$utf8.GetString($raw)
-    if(-not $script:wire.StartsWith('[GPT_WINDOWS_RESULT]') -or
-       -not $script:wire.TrimEnd().EndsWith('[/GPT_WINDOWS_RESULT]')){
-        throw 'FOREIGN_RESULT_FRAME_INVALID'
-    }
-    $payload=$script:wire.Substring('[GPT_WINDOWS_RESULT]'.Length)
-    $payload=$payload.Substring(0,$payload.LastIndexOf('[/GPT_WINDOWS_RESULT]')) | ConvertFrom-Json
-    if($payload.id -cne $NativeActionId -or
-       $payload.native_delivery_receipt -cne $NativeReceiptMarker){
-        throw 'FOREIGN_RESULT_ID_RECEIPT_MISMATCH'
+    if($PlainText){
+        # Verify the outbox source ID, sidecar receipt and exact SHA-256.
+        # The destination receives only text; no invisible tracking footer.
+        $sidecar=[IO.Path]::ChangeExtension($NativeResultPath,'.receipt.json')
+        $meta=Get-Content -LiteralPath $sidecar -Raw -Encoding UTF8 | ConvertFrom-Json
+        $hasher=[Security.Cryptography.SHA256]::Create()
+        try{
+            $digest=[BitConverter]::ToString($hasher.ComputeHash($raw)).Replace('-','').ToLowerInvariant()
+        }finally{$hasher.Dispose()}
+        if($meta.id -cne $NativeActionId -or
+           $meta.receipt -cne $NativeReceiptMarker -or
+           $meta.text_sha256 -cne $digest){
+            throw 'FOREIGN_PLAINTEXT_RECEIPT_OR_CONTENT_MISMATCH'
+        }
+    }else{
+        if(-not $script:wire.StartsWith('[GPT_WINDOWS_RESULT]') -or
+           -not $script:wire.TrimEnd().EndsWith('[/GPT_WINDOWS_RESULT]')){
+            throw 'FOREIGN_RESULT_FRAME_INVALID'
+        }
+        $payload=$script:wire.Substring('[GPT_WINDOWS_RESULT]'.Length)
+        $payload=$payload.Substring(0,$payload.LastIndexOf('[/GPT_WINDOWS_RESULT]')) | ConvertFrom-Json
+        if($payload.id -cne $NativeActionId -or
+           $payload.native_delivery_receipt -cne $NativeReceiptMarker){
+            throw 'FOREIGN_RESULT_ID_RECEIPT_MISMATCH'
+        }
     }
     Assert-RunnerAllowed
     # An unavailable or non-UIA window is simply not an eligible text field.
     # The result stays queued; it must not become a permanent failed delivery.
     try{$target=Get-ForegroundEditable}
-    catch{$target=$null}
+    catch{
+        $script:targetProbe='UIA_PROBE_EXCEPTION_'+$_.Exception.GetType().Name
+        $target=$null
+    }
     if($null -eq $target){
+        # PID + bounded stage only. Never disclose window title or field data.
+        Write-Output ('SENDER_TARGET_DIAGNOSTIC='+[string]$script:targetProbe)
+        Write-Output ('SENDER_TARGET_PID='+[string]$script:targetProbePid)
+        Write-Output ('SENDER_EDITOR_ROLES='+[string]$script:targetProbeEditorRoles)
+        Write-Output ('SENDER_ELIGIBLE_FIELDS='+[string]$script:targetProbeEligible)
         Write-Output 'SENDER_STAGE=AWAITING_FOREGROUND_TEXT_FIELD'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
     }
     if($script:autoFocused){Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'}
+    $targetCategory=Get-EditorCategory $target
+    Write-Output ('DESTINATION_CATEGORY='+$targetCategory)
     Write-Output 'SENDER_STAGE=FOREGROUND_TEXT_FIELD_FOUND'
     if($SubmitExistingOnly){
         Recover-ExistingChatDraft $target $NativeReceiptMarker
@@ -569,8 +730,8 @@ try{
     $sendBefore=Find-SendButton $target
     if(Test-EditorContainsMarker $target $NativeReceiptMarker){
         Write-Output 'SENDER_STAGE=RESULT_ALREADY_IN_EDIT_FIELD'
-        if(Test-ChatGPTSubmissionTarget $target){
-            # A restored unsent ChatGPT draft is NOT a delivered message.
+        if(Test-MessagingComposerTarget $target){
+            # A restored unsent message draft is NOT a delivered message.
             # Recovery can only submit it after a strict saved-frame check.
             Write-Output 'SENDER_STAGE=CHAT_DRAFT_PENDING_SEND'
             Write-Output 'RESULT=CHAT_SEND_PENDING'
@@ -579,40 +740,27 @@ try{
         }
         exit 0
     }
-    # When a chat has an enabled Send control BEFORE our insertion, it
-    # already contains someone else's draft. Defer without touching it.
-    if($null -ne $sendBefore){
-        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
+    # This rule applies to every writable editor, not just chat.
+    # A disabled/always-enabled Send control is not emptiness evidence.
+    # Never append to Notepad, a messenger draft, or an uncertain UIA field.
+    $allowSubmit=Test-EditorIsCertainlyEmpty $target
+    if(-not $allowSubmit){
+        Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY'
         Write-Output 'RESULT=FOREGROUND_NO_TARGET'
         exit 0
-    }
-    $allowSubmit=Test-EmptyOrPlaceholder $before
-    if($target.hasText){
-        try{
-            $allowSubmit=($allowSubmit -and
-                         (Test-EmptyOrPlaceholder ([string]$target.text.DocumentRange.GetText(-1))))
-        }catch{}
     }
     # For a named chat composer, a busy draft isn't an output target. The
     # unrelated text must not be submitted with our result.
-    $isChatComposer=(([string]$target.editor.Current.Name -match
-                     '(?i)ask chatgpt|ask anything|message|prompt|compose|chat') -or
-                     (Test-ChatGPTSubmissionTarget $target))
-    if($isChatComposer -and -not $allowSubmit){
-        Write-Output 'SENDER_STAGE=CHAT_EDITOR_HAS_UNRELATED_DRAFT'
-        Write-Output 'RESULT=FOREGROUND_NO_TARGET'
-        exit 0
-    }
+    # Destination category is derived from the actual text-field capabilities,
+    # never the running process or a specific AI/chat provider.
+    $isChatComposer=($targetCategory -eq 'MESSAGE_COMPOSER')
     $requiredSize=if([IntPtr]::Size -eq 8){40}else{28}
     if([CourierForegroundInput]::InputSize() -ne $requiredSize){
         throw 'FOREGROUND_INPUT_STRUCT_SIZE_INVALID'
     }
-    # Chat textbox newlines may act as Enter and send partial JSON.
-    # Collapse frame whitespace only in Edit controls; Document preserves it.
-    $inputText=$script:wire
-    if([string]$target.editor.Current.ControlType.ProgrammaticName -eq 'ControlType.Edit'){
-        $inputText=$inputText.Replace("`r",' ').Replace("`n",' ')
-    }
+    # CR/LF keystrokes can submit partial results in rich chat editors.
+    # Insert one compact line regardless of which foreground app is selected.
+    $inputText=$script:wire.Replace("`r",' ').Replace("`n",' ')
     Assert-CurrentTarget $target
     $inputStarted=$true
     # Chunk large Unicode writes while checking exact focused editor.
@@ -653,6 +801,7 @@ try{
     if(-not $matched){throw 'FOREGROUND_INSERTION_NOT_VERIFIED'}
     Write-Output 'SENDER_STAGE=TEXT_INSERTION_VERIFIED'
     $send=if($allowSubmit){Find-SendButton $target}else{$null}
+    $isChatComposer=($isChatComposer -or $null -ne $send)
     if($null -eq $send){
         if($isChatComposer){
             # In a known chat composer, typed != submitted. The native
@@ -666,48 +815,48 @@ try{
     }
     Assert-RunnerAllowed
     Assert-CurrentTarget $target
-    $kind=[string]$target.editor.Current.ControlType.ProgrammaticName
-    if($kind -eq 'ControlType.Edit'){
-        # Enter submits only when the same foreground window exposes
-        # exactly one enabled Send/Submit control. Notepad Documents and
-        # terminal editors are not eligible for this shortcut.
-        Write-Output 'SENDER_STAGE=SUBMIT_KEY_BEGIN'
-        Write-Output 'UIA_GUARDED_SUBMIT_ENTER_BEGIN'
-        $submitStarted=$true
-        if([CourierForegroundInput]::TypeEnter() -ne [uint32]2){
-            throw 'FOREGROUND_SUBMIT_ENTER_INCOMPLETE'
-        }
-        Write-Output 'SENDER_STAGE=SUBMIT_KEY_COMPLETED'
-    }else{
-        # A rich Document uses an explicit Send control instead of Enter,
-        # which can insert a newline rather than submit.
-        $box=$send.Current.BoundingRectangle
-        $rootBox=$target.window.Current.BoundingRectangle
-        $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
-        $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
-        if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
-           $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
-            throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
-        }
-        $cursor=New-Object CourierForegroundInput+POINT
-        if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
-            throw 'FOREGROUND_CURSOR_UNAVAILABLE'
-        }
-        Write-Output 'SENDER_STAGE=CLICK_BEGIN'
-        Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
-        $submitStarted=$true
-        try{
-            if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
-                throw 'FOREGROUND_SEND_CURSOR_FAILURE'
-            }
-            [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
-            Start-Sleep -Milliseconds 70
-            [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
-        }finally{
-            [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
-        }
-        Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
+    # Every application's Send is guarded by an exact saved frame and an
+    # independently absent posted receipt; never blind-press Enter.
+    if(-not (Test-ExactOwnDraft $target $NativeReceiptMarker)){
+        Write-Output 'SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME'
+        Write-Output 'RESULT=CHAT_SEND_PENDING'
+        exit 0
     }
+    if(Test-ConversationReceiptNotComposer $target $NativeReceiptMarker){
+        Write-Output 'SENDER_STAGE=CHAT_TRANSCRIPT_ALREADY_HAS_RECEIPT'
+        Write-Output 'RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND'
+        exit 5
+    }
+    # Initial submission and send-only recovery use the same explicit
+    # Send control.  Never treat Enter as a substitute for clicking Send.
+    $box=$send.Current.BoundingRectangle
+    $rootBox=$target.window.Current.BoundingRectangle
+    $cx=[int][Math]::Round(($box.Left+$box.Right)/2)
+    $cy=[int][Math]::Round(($box.Top+$box.Bottom)/2)
+    if($cx -lt $rootBox.Left -or $cx -ge $rootBox.Right -or
+       $cy -lt $rootBox.Top -or $cy -ge $rootBox.Bottom){
+        throw 'FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW'
+    }
+    $cursor=New-Object CourierForegroundInput+POINT
+    if(-not [CourierForegroundInput]::GetCursorPos([ref]$cursor)){
+        throw 'FOREGROUND_CURSOR_UNAVAILABLE'
+    }
+    Write-Output 'SENDER_STAGE=CLICK_BEGIN'
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN'
+    $submitStarted=$true
+    try{
+        if(-not [CourierForegroundInput]::SetCursorPos($cx,$cy)){
+            throw 'FOREGROUND_SEND_CURSOR_FAILURE'
+        }
+        Assert-CurrentTarget $target
+        [CourierForegroundInput]::mouse_event([uint32]2,0,0,0,[UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 70
+        [CourierForegroundInput]::mouse_event([uint32]4,0,0,0,[UIntPtr]::Zero)
+    }finally{
+        [void][CourierForegroundInput]::SetCursorPos($cursor.X,$cursor.Y)
+    }
+    Write-Output 'UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED'
+    Write-Output 'SENDER_STAGE=CLICK_COMPLETED'
     $confirmed=$false
     for($i=0;$i -lt 50;$i++){
         Start-Sleep -Milliseconds 200
@@ -734,6 +883,19 @@ try{
     if($reason -notmatch '^[A-Z0-9_]{3,90}$'){$reason='FOREGROUND_UNCLASSIFIED_ERROR'}
     Write-Output ('HEARTBEAT_ERROR='+$reason)
     if(-not $inputStarted){
+        # These failures occur before ANY mouse-down, so a later attempt
+        # may still click this same verified draft without risking a retry
+        # of a click that might already have reached the destination.
+        if($SubmitExistingOnly -and $reason -in @(
+            'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED',
+            'SUBMIT_ONLY_SEND_CONTROL_NOT_READY',
+            'SUBMIT_ONLY_BUTTON_OUTSIDE_WINDOW',
+            'SUBMIT_ONLY_CURSOR_UNAVAILABLE',
+            'SUBMIT_ONLY_CURSOR_MOVE_FAILED')){
+            Write-Output 'SENDER_STAGE=SUBMIT_ONLY_NO_CLICK_CONFIRMED'
+            Write-Output 'RESULT=FOREGROUND_NO_TARGET'
+            exit 0
+        }
         if($reason -in @('FOREGROUND_TARGET_CHANGED_DURING_INPUT',
                         'FOCUSED_EDITOR_CHANGED_DURING_INPUT',
                         'OPERATOR_AUTO_SEND_NOT_ARMED',

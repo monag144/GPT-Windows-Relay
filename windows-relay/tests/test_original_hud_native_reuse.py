@@ -40,18 +40,19 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("auto-send-on", NATIVE)
         self.assertIn("auto-send-off", NATIVE)
         self.assertIn('policy["armed"] and policy["auto_send"] and not stop_requested()', NATIVE)
-        self.assertIn("sender_script = SENDER if force_clear_composer else FOREGROUND_SENDER", NATIVE)
-        self.assertIn("FORCE RESEND", HUD)
+        self.assertIn("sender_script = FOREGROUND_SENDER", NATIVE)
+        self.assertIn("FORCE SEND", HUD)
+        self.assertNotIn("FOCUS FOR SEND", HUD)
         self.assertIn("ABORT SEND", HUD)
-        self.assertIn("Reconcile a known receipt", HUD)
-        self.assertIn("messagebox.askyesno(\"Force Resend\"", HUD)
         self.assertIn("CLEAR QUEUE", HUD)
         self.assertIn("abort-delivery", NATIVE)
         self.assertIn("clear-pending-deliveries", NATIVE)
-        self.assertIn("force-delivery", NATIVE)
-        self.assertIn('native_delivery_control("force-delivery",aid)', HUD)
-        self.assertIn("def focus_chatgpt_for_forced_delivery():", HUD)
-        self.assertIn("ChatGPT could not be brought to the foreground", HUD)
+        # Legacy CLI remains isolated from HUD. It must never be a button
+        # that re-injects an already-saved result into the composer.
+        self.assertNotIn('native_delivery_control("force-delivery",aid)', HUD)
+        self.assertIn("def force_send_selected():", HUD)
+        self.assertNotIn("def focus_chatgpt_for_forced_delivery():", HUD)
+        self.assertIn("Select a text field in the destination app", HUD)
 
     def test_armed_execution_ready_with_held_delivery_not_mislabeled_failed_engine(self):
         # The engine can ingest NEW actions while a prior outbound result is
@@ -59,7 +60,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("title='READY'", HUD)
         self.assertIn("phase=='DELIVERY_BLOCKED' and delivery_blocked", HUD)
         self.assertIn("'title_phase':title", HUD)
-        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '", HUD)
+        self.assertIn("phase_line='COURIER OUTBOX HELD • '", HUD)
         self.assertIn("'native_delivery_phase':delivery_phase", HUD)
         self.assertIn("DELIVERY BLOCKED: ", HUD)
         self.assertIn("Pending deliveries closed as ABORTED", HUD)
@@ -70,43 +71,28 @@ class OriginalHUDReuseTests(unittest.TestCase):
     def test_historical_outbox_failures_do_not_override_running_engine_ready(self):
         self.assertIn("outstanding_count=(sum(",HUD)
         self.assertIn("'outbound_unresolved_count':outstanding_count",HUD)
-        self.assertIn("CHATGPT OUTBOX HISTORY • ",HUD)
+        self.assertIn("COURIER OUTBOX HISTORY • ",HUD)
         self.assertIn("title='READY'",HUD)
         self.assertIn("'title_phase':title",HUD)
         self.assertIn('go_state["ready"]=(kind in ("ok","held"))',HUD)
         self.assertIn('bg="#188038" if armed and not snap.get("native_off")',HUD)
         self.assertNotIn('GO • HELD',HUD)
         self.assertNotIn('READY • HELD',HUD)
-        self.assertIn("phase_line='CHATGPT OUTBOX HELD • '",HUD)
+        self.assertIn("phase_line='COURIER OUTBOX HELD • '",HUD)
         self.assertIn("DELIVERY BLOCKED:",HUD)
 
-    def test_force_clear_resets_outbox_and_composer_independently(self):
+    def test_force_clear_only_resets_courier_journal_not_application_composer(self):
         self.assertIn('force_clear_btn=tk.Button(force_frame,text="FORCE CLEAR"',HUD)
-        self.assertIn('force_clear_btn.grid(row=0,column=0',HUD)
         self.assertIn('force_abort_btn.grid(row=1,column=1',HUD)
         self.assertIn('force_command_btn.grid(row=1,column=0',HUD)
         self.assertIn('force_clear_btn.configure(command=force_clear_composer)',HUD)
-        self.assertIn('force_abort_btn.configure(command=force_abort)',HUD)
-        self.assertIn('native_composer_clear()',HUD)
-        self.assertIn('"-ClearComposerOnly"',HUD)
-        self.assertIn('name="courier-force-clear",daemon=True',HUD)
-        self.assertIn('Discard the current unsent ChatGPT composer text?',HUD)
-        self.assertIn('Executed commands, saved results and delivery evidence remain',HUD)
-        self.assertIn("ALL unresolved native result deliveries as ABORTED",HUD)
-        self.assertIn('force_clear_btn.configure(text="CLEARING…"',HUD)
-        clear_handler=HUD.split('    def force_clear_composer():',1)[1].split('    def force_abort():',1)[0]
-        for forbidden in ('force-delivery','abort-delivery','clear-pending-deliveries',
-                          'release_failed_delivery','SetValue('):
-            self.assertNotIn(forbidden,clear_handler)
-        clear_backend=HUD.split('def native_composer_clear():',1)[1].split('def native_delivery_control(',1)[0]
-        self.assertIn('RESULT=COMPOSER_CLEARED_NO_SEND',clear_backend)
         self.assertIn('native.request_force_clear_pending()',HUD)
-        self.assertIn('native.wait_force_clear_receipt(request_id, timeout=15.0)',HUD)
-        self.assertIn('Outbox Reset; Composer Not Confirmed',HUD)
-        self.assertIn('composer_focused=chatgpt_focused',HUD)
-        self.assertIn('"-ClearComposerOnly"',clear_backend)
-        self.assertNotIn('"-NativeResultPath"',clear_backend)
-        self.assertNotIn('"-ForceClearComposer"',clear_backend)
+        self.assertIn('native.wait_force_clear_receipt(request_id,timeout=15.0)',HUD)
+        self.assertIn("Nothing will be resent. Continue?",HUD)
+        self.assertIn('"composer":"NOT_TOUCHED"',HUD)
+        self.assertNotIn('def native_composer_clear():',HUD)
+        self.assertNotIn("focus_chatgpt_for_forced_delivery()",HUD)
+        self.assertNotIn("ClearComposerOnly",HUD)
 
     def test_native_arm_and_big_go_preserve_original_hud_controls(self):
         self.assertIn("'native_armed':armed, 'native_off':off",HUD)
@@ -143,12 +129,12 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn('"FORWARDING_NO_CHATGPT","AWAITING_TEXT_FIELD",', HUD)
         self.assertIn('"WAITING_FOR_CHATGPT_APP") or', HUD)
         self.assertIn('bg="#188038" if armed and not snap.get("native_off") else "#3c4043"',HUD)
-        self.assertIn("CHATGPT OUTBOX HELD",HUD)
+        self.assertIn("COURIER OUTBOX HELD",HUD)
 
     def test_recovery_buttons_follow_actual_last_delivery_phase(self):
         self.assertIn("'native_delivery_phase':delivery_phase",HUD)
         self.assertIn("delivery_phase=snap.get('native_delivery_phase')",HUD)
-        self.assertIn("delivery_phase=='PRE_SUBMIT_FAILED' else 'disabled'",HUD)
+        self.assertIn('force_command_btn.configure(state=',HUD)
         self.assertIn("delivery_phase in ('READY','PRE_SUBMIT_FAILED')",HUD)
         self.assertNotIn("force_command_btn.configure(state='normal');",HUD)
 
@@ -190,7 +176,7 @@ class OriginalHUDReuseTests(unittest.TestCase):
         self.assertIn("Get-CimInstance Win32_Process", RECONCILE)
         self.assertIn("StringComparison]::OrdinalIgnoreCase", RECONCILE)
         self.assertIn("ORIGINAL_HUD_FILE=hud.py", RECONCILE)
-        self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_CHATGPT_APP", RECONCILE)
+        self.assertIn("ORIGINAL_HUD_TRANSPORT=NATIVE_FOREGROUND", RECONCILE)
         self.assertIn("$label+'_ALREADY_EXITED_PID='", RECONCILE)
         self.assertIn("$label+'_STOP_FAILED_PID='", RECONCILE)
         self.assertIn("ORIGINAL_HUD_VISIBLE_WINDOW_COUNT=", RECONCILE)

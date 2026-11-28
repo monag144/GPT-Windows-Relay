@@ -102,7 +102,7 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(native.get_status()["last_result"], "TEXT_INSERTED")
         args = invoke.call_args.args[0]
         self.assertIn(str(native.FOREGROUND_SENDER), args)
-        self.assertNotIn(str(native.SENDER), args)
+        self.assertNotIn("-ForceClearComposer", args)
         self.assertEqual(native.get_status()["phase"], "IDLE")
 
     def test_chat_submitted_only_with_send_and_transcript_receipt(self):
@@ -144,30 +144,32 @@ class ForegroundResultTests(unittest.TestCase):
                          "FOREIGN_RESULT_PATH_MISMATCH")
         self.assertTrue(native.delivery_held(self.aid))
 
-    def test_explicit_legacy_force_resend_remains_charged_to_chatgpt_adapter(self):
-        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\n")
+    def test_legacy_chatgpt_only_force_resend_disabled(self):
         native.DELIVERY_HOLDS.mkdir(parents=True, exist_ok=True)
         native.delivery_force_clear_path(self.aid).write_text("{}")
-        with which, process as call:
-            native.deliver(self.state, self.aid)
-        args = call.call_args.args[0]
-        self.assertIn(str(native.SENDER), args)
-        self.assertIn("-ForceClearComposer", args)
-        self.assertNotIn(str(native.FOREGROUND_SENDER), args)
+        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\\n")
+        with which, process as sender:
+            with self.assertRaisesRegex(RuntimeError,"LEGACY_CHATGPT_FORCE_DELIVERY_DISABLED"):
+                native.deliver(self.state, self.aid)
+        sender.assert_not_called()
+        self.assertEqual(self.state.outbound_lookup(self.aid)["phase"],"READY")
 
     def test_source_changes_make_output_independent_from_chatgpt_scanner(self):
         owner = NATIVE.split("def runner():", 1)[1].split("HUD_MODE =", 1)[0]
         self.assertIn("FOREGROUND_SENDER", NATIVE)
         self.assertIn("state.defer_outbound_delivery(aid)", NATIVE)
         self.assertIn("next_foreground_probe = time.monotonic() + 2.0", owner)
-        self.assertLess(owner.index("for aid in state.list_claimable_outbound_ids()"),
-                        owner.index("candidates = read_scan(require_app=True)"))
+        self.assertIn("reconcile_explicit_output_requests(state)",owner)
+        self.assertNotIn("read_scan(",owner)
+        self.assertNotIn("process_packet(",owner)
+        self.assertNotIn("SCANNING_CHATGPT_APP",owner)
         self.assertEqual(owner.count("for aid in state.list_claimable_outbound_ids()"), 1)
         self.assertIn("AWAITING_TEXT_FIELD", owner)
         self.assertIn("TEXT_INSERTED", NATIVE)
         self.assertIn("creationflags=getattr(subprocess, \"CREATE_NO_WINDOW\", 0)", NATIVE)
         hud = (ROOT / "hud.py").read_text(encoding="utf-8")
-        self.assertIn("Foreground text field • auto-detect • no configured input", hud)
+        self.assertIn("Foreground field: automatic detection • ", hud)
+        self.assertIn("Detected field: ", hud)
         self.assertIn("OUTPUT QUEUED • waiting for focused text field", hud)
         self.assertIn("elif phase=='AWAITING_TEXT_FIELD': title='READY'", hud)
         cli = (ROOT / "command_courier.py").read_text(encoding="utf-8")
@@ -195,7 +197,13 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertNotIn("\n}\n){\n", SENDER)
         self.assertIn("AWAITING_TEXT_FIELD", NATIVE)
         self.assertNotIn("Get-ChatGPTWindow", SENDER)
+        generic_path=SENDER.split("function Get-ForegroundEditable {",1)[1].split(
+            "function Read-EditorText(",1)[0]
         self.assertNotIn("ProcessName -ieq 'ChatGPT'", SENDER)
+        self.assertIn("function Get-EditorCategory($target){", SENDER)
+        self.assertIn("DESTINATION_CATEGORY=", SENDER)
+        self.assertIn("MESSAGE_COMPOSER", SENDER)
+        self.assertIn("TEXT_EDITOR", SENDER)
         self.assertNotIn("VK_RETURN", SENDER)
         self.assertNotIn("SendKeys", SENDER)
         self.assertNotIn("subprocess.run(", SENDER)
@@ -212,8 +220,12 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("SetCursorPos", SENDER)
         self.assertIn("if($named.Count -eq 1)", SENDER)
         self.assertIn("elseif($all.Count -eq 1)", SENDER)
-        self.assertIn("else{return $null}  # Ambiguous fields", SENDER)
-        self.assertIn("Test-EligibleEditor $window $focused", SENDER)
+        # Ambiguous candidate sets must still fail closed, but the sender
+        # now records their count before refusing to select a field.
+        self.assertIn("else{", SENDER)
+        self.assertIn("$script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count", SENDER)
+        self.assertIn("return $null", SENDER)
+        self.assertIn("$editor=Resolve-FocusedEditor $window $focused", SENDER)
         self.assertIn("IsPassword", SENDER)
         self.assertIn("Read-EditorText $target", SENDER)
         # A diagnostic from inside a PowerShell function would corrupt its
@@ -223,22 +235,82 @@ class ForegroundResultTests(unittest.TestCase):
             "Write-Output 'SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED'\n    }\n    if(",
             SENDER)
 
-    def test_chat_send_enter_only_after_unique_enabled_send_control(self):
-        self.assertIn("public static uint TypeEnter()", SENDER)
-        self.assertIn("keys[0].U.ki.wVk=0x0D", SENDER)
+    def test_selected_nested_editable_wins_before_auto_focus(self):
+        # Discord/Telegram and other Electron apps may focus a child node.
+        # Resolve the already-selected Edit/Document ancestor before trying
+        # any other field in the foreground window.
+        resolver=SENDER.split("function Resolve-FocusedEditor(",1)[1].split(
+            "function Focus-CandidateEditor(",1)[0]
+        self.assertIn("Test-EligibleEditor $window $cursor", resolver)
+        self.assertIn("if(-not $pageWide){return $cursor}", resolver)
+        self.assertIn("if($null -eq $focused){return $null}", resolver)
+        self.assertIn("ControlType]::Button", resolver)
+        self.assertIn("$editor=Resolve-FocusedEditor $window $focused", SENDER)
+        self.assertIn("function Test-IsSelfOrChild(", SENDER)
+        self.assertIn("Test-EditorOwnsFocus $editor", SENDER)
+        self.assertIn("Test-EditorOwnsFocus $target.editor", SENDER)
+        # Ambiguous candidate sets must still fail closed, but the sender
+        # now records their count before refusing to select a field.
+        self.assertIn("else{", SENDER)
+        self.assertIn("$script:targetProbe=('EDITOR_MATCH_COUNT_'+$all.Count", SENDER)
+        self.assertIn("return $null", SENDER)
+
+    def test_generic_send_button_semantics_and_no_enter_fallback(self):
+        sender=SENDER.split("function Find-SendButton(",1)[1].split(
+            "function Test-TranscriptMarker(",1)[0]
+        self.assertIn("ControlType.Button", sender)
+        self.assertIn("ControlType.Custom", sender)
+        self.assertIn("$node.Current.Name", sender)
+        self.assertIn("$node.Current.HelpText", sender)
+        self.assertIn("$node.Current.AutomationId", sender)
+        self.assertIn("InvokePattern", sender)
+        self.assertIn("if($candidates.Count -eq 1)", sender)
+        self.assertNotIn("TypeEnter()", SENDER)
+        self.assertIn("for($attempt=1;$attempt -le 1;$attempt++)", SENDER)
+        self.assertIn("RESULT=CHAT_SEND_PENDING", SENDER)
+
+    def test_generic_receipt_excludes_composer_and_chat_partial_frames(self):
+        receipt=SENDER.split("function Test-ConversationReceiptNotComposer(",1)[1].split(
+            "function Test-ExactOwnDraft(",1)[0]
+        self.assertIn("ControlType.Document", receipt)
+        self.assertIn("ControlType.Text", receipt)
+        self.assertIn("Test-IsSelfOrChild $node $target.editor", receipt)
+        self.assertIn("Test-IsSelfOrChild $target.editor $node", receipt)
+        self.assertIn("([string]$node.Current.Name).Contains($marker)", receipt)
+        self.assertIn("$inputText=$script:wire.Replace(", SENDER)
+        self.assertNotIn("if($isChatComposer -or", SENDER)
+        self.assertIn("Replace(", SENDER)
+        self.assertIn("Test-ExactOwnDraft $target $NativeReceiptMarker", SENDER)
+        self.assertNotIn("TypeEnter()", SENDER)
+
+    def test_chat_send_button_requires_full_saved_draft_and_never_enters(self):
+        # Even the FIRST chat delivery must click the app's explicit Send button:
+        # a typed result alone is not a submission and Enter is not recovery.
+        self.assertNotIn("TypeEnter()", SENDER)
         self.assertIn("function Find-SendButton(", SENDER)
         self.assertIn("$send=if($allowSubmit){Find-SendButton $target}else{$null}", SENDER)
         self.assertIn("if($null -eq $send){", SENDER)
-        self.assertIn("RESULT=TEXT_INSERTED_VERIFIED", SENDER)
-        self.assertIn("if($kind -eq 'ControlType.Edit'){", SENDER)
-        self.assertIn("[CourierForegroundInput]::TypeEnter() -ne [uint32]2", SENDER)
-        self.assertIn("UIA_GUARDED_SUBMIT_ENTER_BEGIN", SENDER)
-        self.assertIn("SENDER_STAGE=SUBMIT_KEY_COMPLETED", SENDER)
+        self.assertIn("RESULT=CHAT_SEND_PENDING", SENDER)
+        self.assertIn("Test-ExactOwnDraft $target $NativeReceiptMarker", SENDER)
+        self.assertIn("SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME", SENDER)
+        self.assertIn("Test-ConversationReceiptNotComposer $target $NativeReceiptMarker", SENDER)
+        self.assertIn("SENDER_STAGE=CHAT_TRANSCRIPT_ALREADY_HAS_RECEIPT", SENDER)
         self.assertLess(SENDER.index("if($null -eq $send){"),
-                        SENDER.index("if($kind -eq 'ControlType.Edit'){"))
+                        SENDER.index("SENDER_STAGE=CHAT_DRAFT_WAITING_FOR_EXACT_FRAME"))
+        self.assertLess(SENDER.index("CHAT_DRAFT_WAITING_FOR_EXACT_FRAME"),
+                        SENDER.index("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN"))
         self.assertIn("FOREGROUND_SEND_OUTSIDE_ACTIVE_WINDOW", SENDER)
         self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN", SENDER)
+        self.assertIn("UIA_GUARDED_SEND_BUTTON_CLICK_COMPLETED", SENDER)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
+
+    def test_persistently_enabled_send_button_does_not_block_empty_selected_composer(self):
+        # Telegram/Discord can expose enabled Send even with an empty field.
+        # The old early return rejected that valid target before injection.
+        self.assertNotIn("if($null -ne $sendBefore){", SENDER)
+        self.assertIn("$allowSubmit=Test-EditorIsCertainlyEmpty $target", SENDER)
+        self.assertIn("if(-not $allowSubmit){", SENDER)
+        self.assertIn("FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY", SENDER)
 
     def test_electron_typing_recognized_without_stale_value_pattern(self):
         self.assertIn("function Test-EditorContainsMarker(", SENDER)
@@ -247,18 +319,18 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("EDITOR_SEND_ENABLEMENT_VERIFIED", SENDER)
         self.assertIn("$sendBefore=Find-SendButton $target", SENDER)
         self.assertIn("$null -eq $sendBefore", SENDER)
-        self.assertIn("CHAT_EDITOR_HAS_UNRELATED_DRAFT", SENDER)
+        self.assertIn("FOREGROUND_EDITOR_NOT_VERIFIABLY_EMPTY", SENDER)
         self.assertIn("RESULT=FOREGROUND_NO_TARGET", SENDER)
         self.assertIn("Test-TranscriptMarker $target $NativeReceiptMarker", SENDER)
         self.assertIn("Test-EditorContainsMarker $target $NativeReceiptMarker){continue}", SENDER)
         self.assertIn("FOREGROUND_INSERTION_NOT_VERIFIED", SENDER)
 
-    def test_guarded_enter_submitted_receipt_updates_native_journal(self):
+    def test_guarded_click_submitted_receipt_updates_native_journal(self):
         which, process = self.sender(
             "SENDER_STAGE=FOREGROUND_EDITOR_AUTOFOCUSED\n"
             "SENDER_STAGE=EDITOR_SEND_ENABLEMENT_VERIFIED\n"
-            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
-            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "SENDER_STAGE=CLICK_BEGIN\n"
+            "UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN\n"
             "SENDER_STAGE=CONFIRMED_IN_CONVERSATION\n"
             "RESULT=HEARTBEAT_SUBMITTED\n"
         )
@@ -271,10 +343,10 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(native.get_status()["last_delivery_stage"],
                          "CONFIRMED_IN_CONVERSATION")
 
-    def test_guarded_enter_unconfirmed_is_not_replayed(self):
+    def test_guarded_click_unconfirmed_is_not_replayed(self):
         which, process = self.sender(
-            "SENDER_STAGE=SUBMIT_KEY_BEGIN\n"
-            "UIA_GUARDED_SUBMIT_ENTER_BEGIN\n"
+            "SENDER_STAGE=CLICK_BEGIN\n"
+            "UIA_GUARDED_SEND_BUTTON_CLICK_BEGIN\n"
             "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n", 5
         )
         with which, process as invoked:
@@ -294,13 +366,13 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn('phase = "SEND_PENDING"', NATIVE)
         self.assertIn("SEND_PENDING", (ROOT/"hud.py").read_text(encoding="utf-8"))
         self.assertIn("SEND_PENDING", (ROOT/"windows_relay.py").read_text(encoding="utf-8"))
-        self.assertIn("def recover_submit_only(state: wr.State, aid: str):", NATIVE)
+        self.assertIn("def recover_submit_only(state: wr.State, aid: str, *, manual: bool = False):", NATIVE)
         self.assertIn('"-SubmitExistingOnly"', NATIVE)
 
     def test_existing_own_chat_draft_is_pending_not_falsely_delivered(self):
         prelude=SENDER.split("if(Test-EditorContainsMarker $target $NativeReceiptMarker){",1)[1].split(
             "# When a chat has an enabled Send control BEFORE our insertion",1)[0]
-        self.assertIn("Test-ChatGPTSubmissionTarget $target",prelude)
+        self.assertIn("Test-MessagingComposerTarget $target",prelude)
         self.assertIn("SENDER_STAGE=CHAT_DRAFT_PENDING_SEND",prelude)
         self.assertIn("RESULT=CHAT_SEND_PENDING",prelude)
         self.assertIn("RESULT=TEXT_INSERTED_VERIFIED",prelude)
@@ -343,7 +415,7 @@ class ForegroundResultTests(unittest.TestCase):
         args = invoked.call_args.args[0]
         self.assertIn("-SubmitExistingOnly", args)
         self.assertIn(str(native.FOREGROUND_SENDER), args)
-        self.assertNotIn(str(native.SENDER), args)
+        self.assertNotIn("-ForceClearComposer", args)
         record = self.state.outbound_lookup(self.aid)
         self.assertEqual(record["phase"], "SUBMITTED")
         self.assertEqual(record["attempt_count"], 1)
@@ -367,23 +439,24 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(self.state.lookup(self.aid)["status"], "OK")
 
     def test_send_only_uncertain_is_not_retried_or_reexecuted(self):
+        # The first Send may have succeeded even without a visible receipt.
+        # Neither the background worker nor the direct helper may press again.
         self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
         self.state.save()
-        which, process = self.sender(
-            "SENDER_STAGE=SUBMIT_ONLY_RETRY_EXHAUSTED\n"
-            "RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND\n")
+        self.assertEqual(self.state.list_claimable_submit_retries(), [])
+        which, process = self.sender("RESULT=HEARTBEAT_SUBMITTED\n")
         with which, process as invoked, \
              mock.patch.object(native, "process_packet") as no_exec:
             native.recover_submit_only(self.state, self.aid)
             native.recover_submit_only(self.state, self.aid)
-        invoked.assert_called_once()
+        invoked.assert_not_called()
         no_exec.assert_not_called()
         delivery = self.state.outbound_lookup(self.aid)
         self.assertEqual(delivery["phase"], "SUBMIT_UNCERTAIN")
-        self.assertEqual(delivery["submit_only_attempt_count"], 1)
+        self.assertEqual(delivery.get("submit_only_attempt_count", 0), 0)
 
     def test_previously_visible_receipt_does_not_send_duplicate(self):
-        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SUBMIT_UNCERTAIN"
+        self.state.data["outbound_deliveries"][self.aid]["phase"] = "SEND_PENDING"
         self.state.save()
         which, process = self.sender(
             "SENDER_STAGE=SUBMIT_ONLY_ALREADY_IN_TRANSCRIPT\n"
@@ -399,7 +472,8 @@ class ForegroundResultTests(unittest.TestCase):
     def test_submit_only_mode_is_receipt_bound_and_never_types_payload(self):
         self.assertIn("[switch]$SubmitExistingOnly", SENDER)
         self.assertIn("function Test-ExactOwnDraft(", SENDER)
-        self.assertIn("function Test-ChatGPTSubmissionTarget(", SENDER)
+        self.assertIn("function Test-MessagingComposerTarget(", SENDER)
+        self.assertNotIn("function Test-ChatGPTSubmissionTarget(", SENDER)
         self.assertIn("function Recover-ExistingChatDraft(", SENDER)
         self.assertIn("Test-ConversationReceiptNotComposer $target $marker", SENDER)
         self.assertIn("function Test-ConversationReceiptNotComposer(", SENDER)
@@ -407,9 +481,15 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertIn("if($SubmitExistingOnly){", SENDER)
         self.assertIn("Recover-ExistingChatDraft $target $NativeReceiptMarker", SENDER)
         self.assertIn("RESULT=HEARTBEAT_DELIVERY_UNCERTAIN_DO_NOT_RESEND", SENDER)
-        self.assertIn("for($attempt=1;$attempt -le 2;$attempt++)", SENDER)
-        self.assertIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
-        self.assertIn("$proc.ProcessName -ine 'ChatGPT'", SENDER)
+        self.assertIn("for($attempt=1;$attempt -le 1;$attempt++)", SENDER)
+        click_helper = SENDER.split("function Invoke-ExistingDraftSubmit(",1)[1].split(
+            "function Recover-ExistingChatDraft(",1)[0]
+        self.assertNotIn("TypeEnter()", click_helper)
+        self.assertIn("if($null -eq $send){throw 'SUBMIT_ONLY_SEND_CONTROL_NOT_IDENTIFIED'}", click_helper)
+        self.assertNotIn("Get-Process -Id ([int]$target.window.Current.ProcessId)", SENDER)
+        self.assertIn("function Get-EditorCategory($target){", SENDER)
+        self.assertIn("if(-not (Test-MessagingComposerTarget $target) -and", SENDER)
+        self.assertIn("$null -eq (Find-SendButton $target)", SENDER)
         submit_helper = SENDER.split("function Recover-ExistingChatDraft(",1)[1].split(
             "$script:autoFocused=$false",1)[0]
         self.assertNotIn("TypeUnicode(", submit_helper)
@@ -437,6 +517,9 @@ class ForegroundResultTests(unittest.TestCase):
         self.assertEqual(self.state.list_claimable_submit_retries(),[])
         d=self.state.data["outbound_deliveries"][self.aid]
         d["phase"]="TEXT_INSERTED"
+        self.state.save()
+        self.assertEqual(self.state.list_claimable_submit_retries(),[])
+        d["phase"]="SUBMIT_UNCERTAIN"
         self.state.save()
         self.assertEqual(self.state.list_claimable_submit_retries(),[])
         d["phase"]="SUBMITTED"
