@@ -36,14 +36,22 @@ if(Test-Path -LiteralPath $stateFile){
 }
 Write-Output ('QUALIFIED_HEAD='+$gitHead)
 Write-Output 'RESTART_PLAN=STOP_NATIVE_RELOAD_ORIGINAL_HUD_START_NATIVE_VERIFY_HASH'
-# No running test process may be terminated. All tests must succeed before this point.
-& $python -m unittest discover -s (Join-Path $project 'windows-relay\tests') -p 'test_*.py' 2>&1 | Out-Null
-if($LASTEXITCODE -ne 0){throw 'WIN_RELAY_SUITE_FAILED_NO_RESTART'}
-Push-Location (Join-Path $project 'consumer')
-try{
-    & $python -m unittest discover -s tests -p 'test_*.py' 2>&1 | Out-Null
-    if($LASTEXITCODE -ne 0){throw 'CONSUMER_SUITE_FAILED_NO_RESTART'}
-}finally{Pop-Location}
+# Collect stderr inside Python rather than letting Windows PowerShell 5.1
+# convert unittest progress on stderr into a terminating NativeCommandError.
+# This entire qualification stage MUST complete before any stop/restart.
+$verify=Join-Path $project 'windows-relay\tools\verify_universal_courier_release.py'
+if(-not(Test-Path -LiteralPath $verify -PathType Leaf)){
+    throw 'OFFLINE_VERIFICATION_HELPER_MISSING_NO_RESTART'
+}
+$testReport=@(& $python -B $verify)
+$testExit=$LASTEXITCODE
+foreach($line in $testReport){Write-Output $line}
+if($testExit -ne 0){
+    throw ('OFFLINE_SUITES_FAILED_NO_RESTART_EXIT='+$testExit)
+}
+if($testReport -notcontains 'OFFLINE_QUALIFICATION=PASS'){
+    throw 'OFFLINE_TEST_RECEIPT_MISSING_NO_RESTART'
+}
 Write-Output 'OFFLINE_SUITES=PASS'
 # First disable automatic sending, then stop the old singleton gracefully.
 & $python -B $native auto-send-off | Out-Null
@@ -81,7 +89,10 @@ foreach($proc in $candidates){
 }
 Write-Output ('OLD_CANONICAL_HUDS_CLOSED='+$candidates.Count)
 & $python -B $native hud-mode | Out-Null
-& $python -B $native arm | Out-Null
+# arm only updates a policy JSON file; it does NOT start the singleton.
+# restart starts the verified source after the old lock was released.
+& $python -B $native restart | Out-Null
+if($LASTEXITCODE -ne 0){throw 'NEW_NATIVE_RESTART_COMMAND_FAILED'}
 & $python -B $native check-running | Out-Null
 if($LASTEXITCODE -ne 10){throw 'NEW_NATIVE_NOT_RUNNING'}
 $expectedHash=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
