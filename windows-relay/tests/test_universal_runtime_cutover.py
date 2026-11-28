@@ -19,8 +19,9 @@ class UniversalCutoverTests(unittest.TestCase):
     def test_cutover_is_guarded_by_test_pass_and_exact_source_hash(self):
         self.assertIn("SOURCE_HEAD_MISMATCH",CUTOVER)
         self.assertIn("TRACKED_WORKTREE_DIRTY_REFUSE_ACTIVATION",CUTOVER)
-        self.assertIn("WIN_RELAY_SUITE_FAILED_NO_RESTART",CUTOVER)
-        self.assertIn("CONSUMER_SUITE_FAILED_NO_RESTART",CUTOVER)
+        self.assertIn("verify_universal_courier_release.py",CUTOVER)
+        self.assertIn("OFFLINE_SUITES_FAILED_NO_RESTART_EXIT=",CUTOVER)
+        self.assertIn("OFFLINE_TEST_RECEIPT_MISSING_NO_RESTART",CUTOVER)
         self.assertIn("INFLIGHT_DELIVERY_REFUSE_RESTART",CUTOVER)
         self.assertIn("OLD_NATIVE_STOPPED=TRUE",CUTOVER)
         self.assertIn("NEW_NATIVE_SOURCE_HASH=",CUTOVER)
