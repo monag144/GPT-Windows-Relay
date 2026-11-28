@@ -219,8 +219,7 @@ function Get-ForegroundEditable {
             [System.Windows.Automation.Condition]::TrueCondition)
         foreach($node in $descendants){
             try{
-                if(([string]$node.Current.ControlType.ProgrammaticName) -in
-                   @('ControlType.Edit','ControlType.Document')){
+                if(([string]$node.Current.ControlType.ProgrammaticName) -in @('ControlType.Edit','ControlType.Document')){
                     $script:targetProbeEditorRoles++
                 }
             }catch{}
