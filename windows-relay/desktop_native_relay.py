@@ -1137,7 +1137,8 @@ def main():
                                  "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
                                  "acknowledge-receipt", "queue-confirmed-receipt",
                                  "queue-force-clear-pending",
-                                 "queue-output-file","queue-output-clipboard"))
+                                 "queue-output-file","queue-output-clipboard",
+                                 "queue-output-stdin"))
     parser.add_argument("action_id", nargs="?")
     parser.add_argument("receipt", nargs="?")
     parser.add_argument("--file", dest="output_file", default=None)
@@ -1150,6 +1151,15 @@ def main():
         if not args.output_file:
             raise SystemExit("queue-output-file requires --file PATH")
         queue_output_file(args.output_file,aid=args.output_id)
+        return 0
+    if args.command == "queue-output-stdin":
+        # A local custom app/API caller can pipe UTF-8 result bytes here.
+        # No command execution and no third-party conversation reading.
+        raw=sys.stdin.buffer.read(MAX_EXPLICIT_OUTPUT_BYTES+1)
+        if len(raw)>MAX_EXPLICIT_OUTPUT_BYTES:
+            raise SystemExit("OUTPUT_STDIN_TOO_LARGE")
+        queue_explicit_output(raw.decode("utf-8",errors="strict"),
+                              source="authorized-api",aid=args.output_id)
         return 0
     if args.command == "queue-output-clipboard":
         import tkinter as tk
