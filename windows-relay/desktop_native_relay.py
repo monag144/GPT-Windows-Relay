@@ -65,7 +65,7 @@ def configuration() -> dict:
         # The operator explicitly requested persistent native arming.
         write_json(CONFIG, {"version": 1, "armed": True, "off": False,
                             "auto_send": False,
-                            "trust_visible_desktop_packets": True})
+                            "trust_visible_desktop_packets": False})
     data = json.loads(CONFIG.read_text(encoding="utf-8"))
     # Add the HUD policy flag without invalidating an existing native install.
     if "auto_send" not in data:
@@ -74,7 +74,7 @@ def configuration() -> dict:
     if (data.get("version") != 1 or type(data.get("armed")) is not bool
             or type(data.get("off")) is not bool
             or type(data.get("auto_send")) is not bool
-            or data.get("trust_visible_desktop_packets") is not True):
+            or type(data.get("trust_visible_desktop_packets")) is not bool):
         raise RuntimeError("DESKTOP_CONFIG_INVALID")
     return data
 
@@ -1132,13 +1132,32 @@ def main():
                                  "clear-pending-deliveries",
                                  "hud-mode", "status", "check-running", "retry-delivery", "force-delivery",
                                  "acknowledge-receipt", "queue-confirmed-receipt",
-                                 "queue-force-clear-pending"))
+                                 "queue-force-clear-pending",
+                                 "queue-output-file","queue-output-clipboard"))
     parser.add_argument("action_id", nargs="?")
     parser.add_argument("receipt", nargs="?")
+    parser.add_argument("--file", dest="output_file", default=None)
+    parser.add_argument("--id", dest="output_id", default=None)
 
     args = parser.parse_args()
     if args.command == "run":
         return runner()
+    if args.command == "queue-output-file":
+        if not args.output_file:
+            raise SystemExit("queue-output-file requires --file PATH")
+        queue_output_file(args.output_file,aid=args.output_id)
+        return 0
+    if args.command == "queue-output-clipboard":
+        import tkinter as tk
+        root=tk.Tk()
+        root.withdraw()
+        try:
+            copied=root.clipboard_get()
+        finally:
+            root.destroy()
+        queue_explicit_output(copied,source="explicit-clipboard",
+                              aid=args.output_id)
+        return 0
     if args.command == "acknowledge-receipt":
         if not args.action_id or not args.receipt:
             raise SystemExit("acknowledge-receipt requires action ID and confirmed receipt")
