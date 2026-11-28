@@ -1082,7 +1082,7 @@ HUD_MODE = HOME / 'hud-mode.json'
 
 def select_original_hud():
     """Route the existing top-right hud.py to this desktop transport."""
-    write_json(HUD_MODE, {'version': 1, 'transport': 'native-chatgpt-app'})
+    write_json(HUD_MODE, {'version': 1, 'transport': 'native-foreground'})
     note('NATIVE_HUD=ORIGINAL_TOP_RIGHT_SELECTED')
 
 def launch_runner_if_absent():
