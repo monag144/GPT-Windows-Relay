@@ -39,8 +39,8 @@ def suite(name,where,args):
     if not ok:
         # Print concise failure IDs and exception messages, not the entire
         # source excerpt (a 20KB assertion can obscure the useful diagnosis).
-        failures=re.findall(r"^(?:FAIL|ERROR):[^\\r\\n]+",out,re.M)
-        causes=re.findall(r"^(?:AssertionError|SyntaxError|ModuleNotFoundError|RuntimeError):[^\\r\\n]{0,250}",out,re.M)
+        failures=re.findall(r"^(?:FAIL|ERROR):[^\r\n]+",out,re.M)
+        causes=re.findall(r"^(?:AssertionError|SyntaxError|ModuleNotFoundError|RuntimeError):[^\r\n]{0,250}",out,re.M)
         print(name+"_FAILING_TESTS="+" | ".join(failures[:12]),flush=True)
         print(name+"_ASSERTIONS="+" | ".join(causes[:12]),flush=True)
         if not failures and not causes:
